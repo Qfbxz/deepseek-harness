@@ -1,4 +1,4 @@
-import { clientBundle } from '../../../shared/tsdown.client.ts'
+import { clientBundle } from '../../shared/tsdown.client.ts'
 
 export default clientBundle('@linxin666/dsh-client-ui-skin-miku', ['src/index.ts'])
 
