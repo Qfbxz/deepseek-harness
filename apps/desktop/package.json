@@ -8,9 +8,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tests/tsconfig.json",
-    "dev": "pnpm --workspace-root run build && pnpm rebuild electron && electron .",
-    "package": "pnpm --workspace-root run build && node --import tsx scripts/stage-runtime.ts && pnpm rebuild electron && electron-builder --dir",
-    "dist": "pnpm --workspace-root run build && node --import tsx scripts/stage-runtime.ts && pnpm rebuild electron && electron-builder",
+    "dev": "pnpm --workspace-root run build && node node_modules/electron/install.js && electron .",
+    "package": "pnpm --workspace-root run build && node --import tsx scripts/stage-runtime.ts && node node_modules/electron/install.js && electron-builder --dir",
+    "dist": "pnpm --workspace-root run build && node --import tsx scripts/stage-runtime.ts && node node_modules/electron/install.js && electron-builder",
     "dist:mac": "node --import tsx scripts/release-mac.ts"
   },
   "license": "MIT",
