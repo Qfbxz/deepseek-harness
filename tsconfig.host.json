@@ -96,6 +96,9 @@
   // suffixes are mutually exclusive, so each aggregate excludes the other's
   // and the package test glob above needs no per-file entry.
   "exclude": [
+    // Vendored community plugins build and test themselves; they stay out of
+    // the first-party aggregate programs.
+    "packages/community/**",
     "packages/client/*/src/**",
     "packages/*/*/tests/**/*.client.ts",
     "packages/*/*/tests/**/*.client.tsx",
