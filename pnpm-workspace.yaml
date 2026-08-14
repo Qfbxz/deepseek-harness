@@ -72,6 +72,9 @@ allowBuilds:
   # (both fall back to pure JS when skipped, but building them is harmless).
   ssh2: true
   cpu-features: true
+  # The Electron runtime binary download (respect ELECTRON_MIRROR on
+  # restricted networks).
+  electron: true
 
 minimumReleaseAgeExclude:
   # Fresh pi-ai releases carry the model catalog updates that are the whole
