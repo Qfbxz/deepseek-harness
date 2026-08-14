@@ -21,6 +21,7 @@ needed), and they keep their upstream `@linxin666` package names.
 | `skins/*` | `@linxin666/dsh-skin-*` / `dsh-client-ui-skin-center` | 同上 `packages/skins/*` | 0.1.12 |
 | `dshmarket/` | `dshmarket` | [dsh-market/dsh-market](https://github.com/dsh-market/dsh-market) | 1.0.3 |
 | `dsh-find-plugin/` | `dsh-find-plugin` | [awesome-dsh-plugin/dsh-find-plugin](https://github.com/awesome-dsh-plugin/dsh-find-plugin) | 0.3.6 |
+| `dsh-skill-manager/` | `dsh-skill-manager-ytxue` | [YTxue/dsh-skill-manager](https://github.com/YTxue/dsh-skill-manager) | 0.6.0 |
 
 Vendored 2026-08-14 from the upstream default branch (upstream license: Apache-2.0,
 see each package directory). Peer APIs (`@deepseek-ai/dsh-*`, cordis, react)
