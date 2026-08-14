@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="t">
+  <title id="t">dsh-market (mono)</title>
+  <!-- single-color glyph, transparent background; set currentColor via CSS or edit fill -->
+  <g fill="currentColor">
+    <rect x="24" y="24" width="80" height="8" rx="4"/>
+    <path d="M24 32h26.7v2a13.3 13.3 0 0 1-26.7 0z"/>
+    <path d="M50.7 32h26.6v2a13.3 13.3 0 0 1-26.6 0z" opacity=".78"/>
+    <path d="M77.3 32h26.7v2a13.3 13.3 0 0 1-26.7 0z"/>
+    <path d="M28 66h4v-4h6v4h8v-4h6v4h4a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4H28a4 4 0 0 1-4-4V70a4 4 0 0 1 4-4z"/>
+    <path d="M28 96h4v-4h6v4h8v-4h6v4h4a4 4 0 0 1 4 4v2a4 4 0 0 1-4 4H28a4 4 0 0 1-4-4v-2a4 4 0 0 1 4-4z"/>
+    <path d="M72 96h4v-4h6v4h8v-4h6v4h4a4 4 0 0 1 4 4v2a4 4 0 0 1-4 4H72a4 4 0 0 1-4-4v-2a4 4 0 0 1 4-4z"/>
+    <path d="M76 56h4v-4h6v4h8v-4h6v4h4a4 4 0 0 1 4 4v12a4 4 0 0 1-4 4H76a4 4 0 0 1-4-4V60a4 4 0 0 1 4-4z" opacity=".92"/>
+    <rect x="70" y="82" width="36" height="4" rx="2" opacity=".35"/>
+  </g>
+</svg>
