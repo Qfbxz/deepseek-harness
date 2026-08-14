@@ -16,7 +16,10 @@ function isBuildFaceClient(value: unknown): boolean {
 export default defineConfig(({ env }) => {
   const client = isBuildFaceClient(env?.DSH_BUILD_FACE)
   return {
-    workspace: ['vendor/*', 'packages/*/*', 'apps/cli'],
+    // Vendored community packages build themselves (install-time prepares,
+    // dshmarket via build:community, dsh-find-plugin prebuilt); they do not
+    // follow the lib/types entry layout this workspace build expects.
+    workspace: ['vendor/*', 'packages/*/*', '!packages/community/*', 'apps/cli'],
     entry: client ? '' : ['lib/types/{index,invariant,startup}.js'],
     outDir: 'lib',
     format: ['esm'],
