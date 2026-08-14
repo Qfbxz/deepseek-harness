@@ -75,6 +75,11 @@ const OVERRIDES: Record<string, { license?: string; repo?: string }> = {
   '@modelcontextprotocol/server-filesystem': { license: 'MIT / Apache-2.0', repo: 'https://github.com/modelcontextprotocol/servers' },
   // No repository field in the published manifest.
   'node-addon-require-builtin': { repo: 'https://www.npmjs.com/package/node-addon-require-builtin' },
+  // Community-plugin transitive deps: not hoisted to the workspace root, so
+  // the store walk cannot read their manifests.
+  'ssh2': { license: 'MIT', repo: 'https://github.com/mscdex/ssh2' },
+  'cpu-features': { license: 'MIT', repo: 'https://github.com/ron-lio/cpu-features' },
+  'cloudflared': { license: 'MIT', repo: 'https://github.com/JacobLinCool/cloudflared' },
 }
 
 /**

@@ -7,7 +7,7 @@
  * inlined with auto-injected <style data-plugin>). The client entry is
  * auto-detected at src/client/index.ts by the preset.
  */
-import { clientBundle } from '../../shared/tsdown.client.ts'
+import { clientBundle } from '../shared/tsdown.client.ts'
 
 export default clientBundle('@linxin666/dsh-client-ui-aionui-panel', ['src/index.ts'], {
   libExternal: ['@deepseek-ai/dsh-system-prompt'],

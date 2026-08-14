@@ -1,4 +1,4 @@
-import { clientBundle, mobileBundle } from '../../shared/tsdown.client.ts'
+import { clientBundle, mobileBundle } from '../shared/tsdown.client.ts'
 
 /**
  * Consumer-side build for git installs (the `prepare` script): transpile

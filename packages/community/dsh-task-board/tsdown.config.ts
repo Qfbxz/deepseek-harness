@@ -10,7 +10,7 @@
  * Node-half entries point at src (tsdown compiles TS directly), so the build
  * needs no separate tsc emit for runtime artifacts.
  */
-import { clientBundle } from '../../shared/tsdown.client.ts'
+import { clientBundle } from '../shared/tsdown.client.ts'
 
 export default clientBundle('@linxin666/dsh-client-ui-task-board', ['src/index.ts', 'src/invariant.ts'], {
   libExternal: ['@deepseek-ai/dsh-settings'],
