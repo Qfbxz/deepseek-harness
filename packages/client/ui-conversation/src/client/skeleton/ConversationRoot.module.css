@@ -4,6 +4,7 @@
    a 2px active bar. */
 
 .root {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -25,11 +26,55 @@
   --dsh-composer-dock-inset: 8px;
 }
 
+:global(html[data-dsh-desktop-platform='win32']) .root {
+  --dsh-windows-caption-controls-width: 138px;
+}
+
+.desktopTitlebarDragRegion {
+  display: none;
+}
+
+:global(html[data-dsh-desktop='true']) .desktopTitlebarDragRegion {
+  display: block;
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 1;
+  height: var(--dsh-desktop-titlebar-inset, 40px);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+:global(html[data-dsh-desktop-platform='win32']) .desktopTitlebarDragRegion {
+  right: var(--dsh-windows-caption-controls-width);
+}
+
 .header {
   position: relative;
+  z-index: 2;
   flex: none;
   padding: 12px 28px 0 20px;
   border-bottom: 1px solid transparent;
+}
+
+:global(html[data-dsh-desktop='true']) .header {
+  -webkit-app-region: drag;
+}
+
+:global(html[data-dsh-desktop-platform='win32']) .header {
+  padding: 0 0 0 20px;
+  -webkit-app-region: no-drag;
+}
+
+:global(html[data-dsh-desktop='true']) .header button:not(:disabled),
+:global(html[data-dsh-desktop='true']) .header a,
+:global(html[data-dsh-desktop='true']) .header input,
+:global(html[data-dsh-desktop='true']) .header select,
+:global(html[data-dsh-desktop='true']) .header textarea,
+:global(html[data-dsh-desktop='true']) .header [role='button'],
+:global(html[data-dsh-desktop='true']) .header [role='link'],
+:global(html[data-dsh-desktop='true']) .header [role='tab'],
+:global(html[data-dsh-desktop='true']) .header [contenteditable='true'] {
+  -webkit-app-region: no-drag;
 }
 
 .header::after {
@@ -55,6 +100,13 @@
   align-items: center;
   gap: 0;
   min-height: 32px;
+}
+
+:global(html[data-dsh-desktop-platform='win32']) .titleRow {
+  min-height: var(--dsh-desktop-titlebar-inset, 44px);
+  padding-right: calc(var(--dsh-windows-caption-controls-width) + 20px);
+  box-sizing: border-box;
+  -webkit-app-region: drag;
 }
 
 .titleCluster {
