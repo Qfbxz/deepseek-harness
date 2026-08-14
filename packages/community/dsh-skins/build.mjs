@@ -30,8 +30,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const ROOT = path.resolve(__dirname, '..', '..')
-const SOURCE_DIR = path.join(ROOT, 'packages', 'skins')
+const SOURCE_DIR = path.join(__dirname, '..', 'skins')
 const OUT_DIR = path.join(__dirname, 'skins')
 
 /** Read and parse a JSON file, returning null when missing/unreadable. */
