@@ -62,7 +62,7 @@
     "cordis.patch.yml"
   ],
   "devDependencies": {
-    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/cordis": "workspace:^",
     "@types/node": "^26.2.0",
     "typescript": "^7.0.2"
   },
