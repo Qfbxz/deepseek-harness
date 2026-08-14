@@ -1,6 +1,9 @@
 /** Supervise the loopback Web Host used by the first desktop application. */
 
 import { spawn, type ChildProcessByStdio } from 'node:child_process'
+import { readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
 import type { Readable } from 'node:stream'
 
 const READINESS_PREFIX = 'dsh web: '
@@ -272,6 +275,25 @@ function streamAdapter(stream: NodeJS.ReadableStream): HostChild['stdout'] {
 }
 
 /**
+ * Tool directories a GUI launch cannot see: Finder/Dock apps inherit launchd's
+ * minimal PATH, so the newest nvm node, Homebrew, and /usr/local stay invisible
+ * to the Host's plugin tooling (pnpm for `dsh plugin`, shells for agents).
+ * Existing PATH entries keep their precedence after these prefixes.
+ */
+function augmentHostPath(path: string | undefined): string {
+  const prefixes: string[] = ['/opt/homebrew/bin', '/usr/local/bin']
+  const nvmRoot = join(homedir(), '.nvm/versions/node')
+  try {
+    const versions = readdirSync(nvmRoot).sort()
+    const newest = versions.at(-1)
+    if (newest !== undefined) prefixes.unshift(join(nvmRoot, newest, 'bin'))
+  } catch { /* no nvm installation */ }
+  const current = path ?? ''
+  const seen = new Set(current.split(':').filter(Boolean))
+  return [...prefixes.filter(p => !seen.has(p)), ...current.split(':')].filter(Boolean).join(':')
+}
+
+/**
  * Spawn the production Web Host on an OS-assigned loopback port.
  * @param options - Node runtime, built CLI and process environment.
  * @returns The child handle consumed by {@link createHostSupervisor}.
@@ -280,9 +302,10 @@ export function spawnDshWeb(options: SpawnDshWebOptions): HostChild {
   const env = options.electronRunAsNode
     ? { ...options.env, ELECTRON_RUN_AS_NODE: '1' }
     : options.env
+  const envWithPath = { ...env, PATH: augmentHostPath(env.PATH) }
   const process = spawn(options.nodeExecutable, ['--expose-internals', options.cliEntry, 'web', '--host', '127.0.0.1', '--port', '0'], {
     cwd: options.cwd,
-    env,
+    env: envWithPath,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   })
