@@ -53,7 +53,8 @@
       "notarize": true,
       "target": [
         "dir"
-      ]
+      ],
+      "identity": null
     },
     "win": {
       "icon": "build/icon.png",
