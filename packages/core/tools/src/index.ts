@@ -461,6 +461,10 @@ export interface ToolRuntimeScheduler {
 
 /**
  * Scheduler entry point omitted from the generated named service API.
+ * Registered through the global symbol registry (`Symbol.for`) so duplicate
+ * package copies — profile-installed plugin dependencies resolve their own —
+ * share one identity with the host copy; a per-module `Symbol()` gives each
+ * copy a distinct key and cross-copy scheduler lookup reads `undefined`.
  * @internal
  */
 export const TOOL_RUNTIME_SCHEDULER: unique symbol = Symbol.for('@deepseek-ai/dsh-tools.scheduler')

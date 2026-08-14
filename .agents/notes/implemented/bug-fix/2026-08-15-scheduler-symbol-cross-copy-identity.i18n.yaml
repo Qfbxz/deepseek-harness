@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-15-scheduler-symbol-cross-copy-identity.md
+2026-08-15-scheduler-symbol-cross-copy-identity.md: 27911994aa978c22b3a9336b3d5d12473e8eb299
+2026-08-15-scheduler-symbol-cross-copy-identity.zh.md: 56fc442b2511116f12755593d3b9c87803429aab
