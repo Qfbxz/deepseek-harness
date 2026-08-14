@@ -64,6 +64,10 @@ allowBuilds:
   # electron-builder resolves the optional Squirrel target even though this app
   # does not select it. Its install script only copies a bundled 7-Zip binary.
   electron-winstaller: false
+  # The community dsh-ssh plugin pulls cloudflared, whose postinstall downloads
+  # a tunnel binary from GitHub and stalls on restricted networks; the tunnel
+  # feature is optional and CLOUDFLARED_BIN can point at a manual binary.
+  cloudflared: false
 
 minimumReleaseAgeExclude:
   # Fresh pi-ai releases carry the model catalog updates that are the whole
