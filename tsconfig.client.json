@@ -33,6 +33,9 @@
   // belongs to the host aggregate, which excludes this program's `*.client.*`
   // in turn. `exclude` wins over `include`, so the test glob above stays broad.
   "exclude": [
+    // Vendored community plugins build and test themselves; they stay out of
+    // the first-party aggregate programs.
+    "packages/community/**",
     "packages/client/*/tests/**/*.host.spec.ts"
   ],
   "references": [
