@@ -39,7 +39,7 @@ afterEach(() => {
 const t = makeTranslate(zh, commonZh)
 
 describe('ReasoningRow', () => {
-  it('follows the latest streaming line, scrolls to its end, then restores the settled first line', () => {
+  it('mounts expanded and follows the latest streaming line once collapsed', () => {
     const view = render(
       <AssistantMarkdown
         t={t}
@@ -48,6 +48,13 @@ describe('ReasoningRow', () => {
       />,
     )
     expect(view.getByText('运行中')).toBeTruthy()
+    // Expanded by default: the full reasoning body renders, not the summary.
+    expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('true')
+    expect(view.getByText(/Newest reasoning tokens/)).toBeTruthy()
+
+    // Collapse to the summary line; it follows the streaming tail.
+    fireEvent.click(view.getByText('Think'))
+    expect(view.getByRole('button').getAttribute('aria-expanded')).toBe('false')
     const summary = view.getByText('Newest reasoning tokens')
     Object.defineProperties(summary, {
       scrollWidth: { configurable: true, value: 300 },
@@ -82,7 +89,7 @@ describe('ReasoningRow', () => {
     expect(summary.hasAttribute('data-follow-end')).toBe(false)
   })
 
-  it('expands from either Think or the reasoning summary', () => {
+  it('toggles from either Think or the reasoning summary', () => {
     const view = render(
       <AssistantMarkdown
         t={t}
@@ -91,6 +98,8 @@ describe('ReasoningRow', () => {
       />,
     )
     const row = view.getByRole('button')
+    // Settled rows mount collapsed; the streaming expansion has ended.
+    expect(row.getAttribute('aria-expanded')).toBe('false')
 
     fireEvent.click(view.getByText('Inspect the session'))
     expect(row.getAttribute('aria-expanded')).toBe('true')
