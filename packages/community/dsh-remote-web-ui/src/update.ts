@@ -314,7 +314,7 @@ export async function checkUpdates(deps: UpdateCheckDeps): Promise<UpdateStatus>
   // lives outside every profile (e.g. a repo checkout wired through
   // link-profile.mjs) is a local dev install pnpm cannot update.
   const profile = findProfile(manifestPath)
-  const profileManifest = profile === undefined ? undefined : readManifest(join(profile.dir, "package.json"))
+  const profileManifest = profile === undefined ? undefined : readManifest(join(profile.dir, 'package.json'))
   const linked = profile === undefined
     || isLinkedSpec((profileManifest?.dependencies as Record<string, DependencySpec> | undefined)?.[anchor])
   if (profile === undefined) {
@@ -395,10 +395,14 @@ const OUTPUT_CAP = 16 * 1024
  */
 export function runUpdate(deps: UpdateRunDeps): Promise<UpdateRunResult> {
   return new Promise((resolve) => {
-    const child = (deps.spawnImpl ?? spawn)('pnpm', ['update', ...deps.packages], {
-      cwd: deps.profileDir,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    // `@latest` re-resolves the dist-tag and rewrites the saved specifier:
+    // a bare `pnpm update` honors an exact pin ("0.1.14") and no-ops with
+    // "Already up to date" while the registry has moved on.
+    const child = (deps.spawnImpl ?? spawn)('pnpm',
+      ['update', ...deps.packages.map(name => `${name}@latest`)], {
+        cwd: deps.profileDir,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
     let output = ''
     const append = (chunk: Buffer): void => {
       output += chunk.toString('utf8')
