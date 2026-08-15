@@ -1,11 +1,9 @@
-/* Session stats row: 12/20 tertiary text under the flow, aligned to the
-   shared message column axis (--dsh-chat-content-width). */
+/* Session stats strip: 12/20 tertiary text under the flow, aligned to the
+   shared message column axis (--dsh-chat-content-width). Two rows — activity,
+   then billing — so no group is ever elided; a row wraps within the column
+   instead of clipping. */
 
 .root {
-  /* Block, not flex: text-overflow only elides a block's inline content, so
-     an overlong line ends in … instead of a mid-glyph clip. */
-  display: block;
-  text-align: center;
   max-width: var(--dsh-chat-content-width);
   width: 100%;
   margin: 0 auto;
@@ -14,9 +12,11 @@
   font-size: 12px;
   line-height: 20px;
   color: var(--dsw-alias-label-tertiary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+.row {
+  text-align: center;
+  white-space: normal;
 }
 
 .sep {
