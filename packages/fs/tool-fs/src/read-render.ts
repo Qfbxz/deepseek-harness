@@ -94,7 +94,13 @@ function stripCarriageReturn(line: string): string {
 
 function finish(acc: WindowAccumulator, request: ReadWindow, displayPath: string): WindowResult {
   if (!acc.truncatedByBytes && request.offset > acc.totalLines && !(acc.totalLines === 0 && request.offset === 1)) {
-    throw new FsError(`offset ${request.offset} is out of range for "${displayPath}" (${acc.totalLines} lines)`, 'FS_NOT_FOUND')
+    // The count alone leaves the next move implicit; name it — a stale offset
+    // (file shrank, or a spill file was misremembered) recovers by re-reading
+    // within range, and the count already says what range is valid.
+    throw new FsError(
+      `offset ${request.offset} is out of range for "${displayPath}" (${acc.totalLines} lines) — the file is shorter than the requested start; re-read with offset ≤ ${acc.totalLines} or without an offset to read from the top`,
+      'FS_NOT_FOUND',
+    )
   }
   return { lines: acc.lines, totalLines: acc.totalLines, truncatedByBytes: acc.truncatedByBytes }
 }

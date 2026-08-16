@@ -291,6 +291,15 @@ describe('default deployment (with dsh-fs-observation-policy)', () => {
       statSpy.mockRestore()
     })
 
+    it('an offset past EOF names the valid range and the re-read remedy', async () => {
+      await call('write', { file_path: 'small.txt', content: 'one\ntwo\nthree\n' })
+      const result = await call('read', { file_path: 'small.txt', offset: 400 })
+      expect(result.isError).toBe(true)
+      expect(result.error).toMatchObject({ info: { code: 'FS_NOT_FOUND' } })
+      expect(text(result)).toContain('offset 400 is out of range')
+      expect(text(result)).toContain('re-read with offset ≤ 3')
+    })
+
     it('a missing read still stats once and its recovery write stats zero times', async () => {
       const statSpy = vi.spyOn(ctx.fs, 'stat')
       const missing = await call('read', { file_path: 'missing.txt' })
