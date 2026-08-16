@@ -23,7 +23,9 @@
   gap: 10px;
   width: 100%;
   max-width: calc(var(--dsh-composer-card-max-width) - 4 * var(--dsh-composer-dock-inset));
-  height: 36px;
+  /* Grows only with the multi-line edit form; the running objective stays
+     a single ellipsized line at this minimum. */
+  min-height: 36px;
   margin: 0 auto;
   padding: 4px 5px 4px 12px;
   border: 1px solid var(--dsw-alias-border-l1);
@@ -71,18 +73,29 @@
 
 /* ---- Inline edit form ---- */
 
+/* A multi-line textarea: long objectives edit across wrapped lines (the
+   component auto-grows it up to five rows). Enter saves, Shift+Enter breaks
+   a line. The bar itself has no fixed height, so the edit form grows it. */
 .objectiveInput {
+  box-sizing: border-box;
   flex: 1;
   min-width: 0;
-  height: 26px;
-  padding: 0 8px;
+  min-height: 26px;
+  padding: 3px 8px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 6px;
   background: var(--dsw-alias-bg-base);
+  font-family: inherit;
   font-size: 13px;
   line-height: 20px;
   color: var(--dsw-alias-label-primary);
   outline: none;
+  resize: none;
+  overflow-y: auto;
+  /* The bar is an elevated surface (--dsw-specific-tip); the scrollable
+     textarea rebinds the scrollbar tokens to its layer. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
 .objectiveInput:focus {

@@ -81,14 +81,23 @@ export function GoalBar({ goal, onEdit, onPause, onResume, onClear, t }: GoalBar
     return (
       <div className={css.dock} data-goal-bar>
         <div className={css.bar}>
-          <input
+          <textarea
             className={css.objectiveInput}
-            type="text"
             aria-label={t('objective.aria')}
             value={draft}
-            onChange={(e) => { setDraft(e.target.value) }}
+            rows={2}
+            onChange={(e) => {
+              setDraft(e.target.value)
+              // Auto-grow with the draft so long objectives edit without an
+              // inner scrollbar, capped at five lines.
+              e.target.style.height = 'auto'
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 5 * 20 + 16)}px`
+            }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') void handleEdit()
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
+                e.preventDefault()
+                void handleEdit()
+              }
               if (e.key === 'Escape') setEditing(false)
             }}
             autoFocus
