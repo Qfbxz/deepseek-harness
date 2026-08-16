@@ -296,6 +296,10 @@ describe('default deployment (with dsh-fs-observation-policy)', () => {
       const missing = await call('read', { file_path: 'missing.txt' })
       expect(missing.isError).toBe(true)
       expect(missing.error).toMatchObject({ info: { code: 'FS_NOT_FOUND' } })
+      // The absence verdict carries the recovery rule: create with write
+      // directly (a new file needs no prior read), so a create-intent slice
+      // does not waste a round discovering that.
+      expect(text(missing)).toContain('write it directly')
       expect(statSpy).toHaveBeenCalledTimes(1)
 
       statSpy.mockClear()

@@ -206,6 +206,14 @@ function prepareFailure(
 }
 
 /**
+ * Remediation hint appended to a program-body parse failure. A bare V8
+ * message like `Expected ',', got '<eof>'` carries no location (the source
+ * is a synthetic function body), so without this the model cannot tell a
+ * broken tool call from broken program text.
+ */
+const SYNTAX_HINT = ' — the program body failed to parse before any code ran; fix the syntax, or move complex logic into a file written first and keep this body minimal'
+
+/**
  * Prepare a thrown program value without sending an unbounded stack or
  * string across the worker port.
  * @param error - the value thrown by the program.
@@ -220,8 +228,14 @@ export function prepareException(
 ): Omit<DoneMessage, 'type'> {
   let message: string
   try {
-    const detail: unknown = error instanceof CapturedError ? error.stack ?? error.message : error
+    // A program-body SyntaxError's stack carries only synthetic-function frames
+    // (no source location), so the message plus the remediation hint says more
+    // than the stack does.
+    const detail: unknown = error instanceof SyntaxError
+      ? error.message
+      : error instanceof CapturedError ? error.stack ?? error.message : error
     message = typeof detail === 'string' ? detail : String(detail)
+    if (error instanceof SyntaxError) message += SYNTAX_HINT
   } catch {
     message = 'program threw an unrenderable value'
   }

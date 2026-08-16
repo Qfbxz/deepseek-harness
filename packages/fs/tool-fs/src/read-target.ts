@@ -25,7 +25,15 @@ export async function resolveRegularReadTarget(
   const info = await ctx.fs.stat(target, exec.signal)
   if (info === undefined) {
     ctx.emit('fs/observed', target, { kind: 'absent' }, exec)
-    throw new FsError(`cannot read "${target.displayPath}": not found`, 'FS_NOT_FOUND')
+    // Absence is half the time intent, not error: task slices that call for a
+    // NEW document reach this branch first. Say the recovery rule — verify the
+    // path against the session workspace, or create the file with write
+    // directly (a fresh write needs no prior read) — instead of a bare verdict
+    // that reads as a dead end.
+    throw new FsError(
+      `cannot read "${target.displayPath}": not found — verify the path (it resolves against the session workspace); if this file is to be created, write it directly (a new file needs no prior read)`,
+      'FS_NOT_FOUND',
+    )
   }
   if (info.type !== 'file') {
     throw new FsError(`cannot read "${target.displayPath}": not a regular file`, 'FS_NOT_REGULAR_FILE')

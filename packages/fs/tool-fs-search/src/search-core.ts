@@ -141,6 +141,16 @@ function classifyRunFailure(toolName: string, exitCode: number, stderrText: stri
       'SEARCH_FAILED',
     )
   }
+  // An IO error names its target in rg's stderr ("<path>: IO error for operation
+  // on <path>: No such file or directory"). Keep the excerpt — the path is the
+  // actionable part — but say what to DO about it, since a raw rg line reads
+  // like an internal fault rather than "check the path you passed".
+  if (/IO error for operation on/i.test(stderr)) {
+    return new SearchError(
+      `${toolName} search failed (exit ${exitCode}): ${stderr} — the search target does not exist or is inaccessible; check the path (it resolves against the session workspace), then retry`,
+      'SEARCH_FAILED',
+    )
+  }
   return new SearchError(`${toolName} search failed (exit ${exitCode})${stderr.length > 0 ? `: ${stderr}` : ''}`, 'SEARCH_FAILED')
 }
 
