@@ -1,0 +1,33 @@
+{
+  "name": "dsh-desktop-shell",
+  "description": "Minimal Electron shell that wraps the official dsh Web Host. No vendored runtime, no bundled community plugins — spawns `dsh --profile web` (PATH) and loads the loopback URL into a sandboxed window.",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac --arm64 --dir",
+    "package:mac": "electron-builder --mac --arm64"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "ai.deepseek.harness.shell",
+    "productName": "DeepSeek Harness Shell",
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "identity": null,
+      "target": [
+        "dir"
+      ]
+    }
+  }
+}
