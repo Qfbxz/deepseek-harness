@@ -43,6 +43,27 @@ npm run package:mac
 Produces `dist/mac-arm64/DeepSeek Harness Shell.app`. Ad-hoc signed
 (`identity: null`), no notarization — local use only.
 
+### macOS Gatekeeper note (first launch)
+
+The app is ad-hoc signed and not notarized. On recent macOS, copying it to
+`/Applications` and launching it directly can trigger Gatekeeper's
+"malware removed" behavior — the bundle's contents get emptied while the
+outer `.app` shell remains. The build artifact under `dist/` is unaffected.
+
+Recover and unlock:
+
+```sh
+cp -R dist/mac-arm64/DeepSeek\ Harness\ Shell.app /Applications/
+```
+
+Then in Finder: **right-click (Control-click) the app → Open → confirm
+"Open"** in the dialog. This user-confirmed path registers the exception;
+subsequent launches open normally. Alternatively: System Settings → Privacy
+& Security → scroll to the bottom → "Open Anyway".
+
+A permanent fix requires an Apple Developer ID certificate and notarization
+(`afterSign` + `notarytool`); not configured here.
+
 ## Plugin compatibility
 
 - **`personal-plugins/dsh-desktop-chrome`** — uses
