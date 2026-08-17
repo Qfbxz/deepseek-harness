@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": false,
   "type": "module",
-  "description": "Bocha search usage in the web UI status bar: self-counted calls plus the official remaining balance, served host-side so the API key never reaches the browser.",
+  "description": "博查用量状态栏：状态栏实时显示「博查 已用 N/M 条」，官方余额+本机调用计数合一，API key 不出宿主进程。",
   "main": "index.mjs",
   "exports": {
     ".": "./index.mjs",

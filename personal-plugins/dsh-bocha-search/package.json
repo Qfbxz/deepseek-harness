@@ -1,7 +1,7 @@
 {
   "name": "dsh-bocha-search",
   "version": "1.0.0",
-  "description": "Bocha search usage: statusbar cell after TPS + settings panel (apiKey/baseURL/total/current)",
+  "description": "博查网页搜索 provider：接入 bochaai API 为 agent 提供中文优先的网络搜索，结果带摘要与来源，替代/补充内置 web_search。",
   "type": "module",
   "main": "index.mjs",
   "exports": {

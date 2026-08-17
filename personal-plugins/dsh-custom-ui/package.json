@@ -1,7 +1,7 @@
 {
   "name": "dsh-custom-ui",
   "version": "1.0.0",
-  "description": "Personal UI tweaks: move Session-log button to sidebar (renamed 导出会话), hide usage quota percentage",
+  "description": "界面精修合集：导出会话按钮移入侧边栏；隐藏配额百分比与计费周期余量；侧边栏底部按钮网格重排；空详情列自动折叠让会话区满宽；隐藏模型旁推理等级标签。",
   "type": "module",
   "main": "index.mjs",
   "exports": {

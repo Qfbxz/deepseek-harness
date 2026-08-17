@@ -1,3 +1,12 @@
+/* ⚠️ REWRITE RULE: this file MUST use the __ModuleLoader__ script contract:
+ * window.__ModuleLoader__.load({ id, factory }) with the factory returning
+ * { apply }. Plain ESM exports are IGNORED by the client loader and break
+ * the whole UI ("loaded without registering"). */
+window.__ModuleLoader__.load({
+  id: "dsh-context-ring",
+  factory: function () {
+    var module = { exports: {} };
+    var exports = module.exports;
 /**
  * context-ring client: sidebar entry「圆环」+ palette panel.
  * Swatch-grid color pickers (no hex typing) + threshold sliders; saves via
@@ -70,7 +79,7 @@ function ringSvg(p, color, pct) {
   return svg
 }
 
-export function apply(ctx) {
+function apply(ctx) {
   let open = false, cfg = { warnAt: 50, dangerAt: 80, warnColor: '#f59e0b', dangerColor: '#ef4444' }
   let style, entry, panel, liveStyle, observer
 
@@ -228,4 +237,9 @@ export function apply(ctx) {
   else if (typeof dispose === 'function') { /* keep */ }
 }
 
-export const inject = []
+const inject = []
+
+    exports.apply = apply;
+    return module.exports;
+  },
+});

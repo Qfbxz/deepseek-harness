@@ -1,3 +1,12 @@
+/* ⚠️ REWRITE RULE: this file MUST use the __ModuleLoader__ script contract:
+ * window.__ModuleLoader__.load({ id, factory }) with the factory returning
+ * { apply }. Plain ESM exports are IGNORED by the client loader and break
+ * the whole UI ("loaded without registering"). */
+window.__ModuleLoader__.load({
+  id: "dsh-crawler",
+  factory: function () {
+    var module = { exports: {} };
+    var exports = module.exports;
 /**
  * pawl browser half — full settings panel (vanilla DOM, no build chain).
  * Sections: 基础 · 人机验证 · 抓取内容(格式+提取开关组:文字/图片/表格/链接/meta/PDF)
@@ -317,7 +326,7 @@ function buildPanel() {
   return { card, loadStatus, loadBatch }
 }
 
-export function apply(ctx) {
+function apply(ctx) {
   let open = false, style, entry, panel, observer
   const ensureStyle = () => {
     if (style !== undefined && style.isConnected) return
@@ -376,4 +385,9 @@ export function apply(ctx) {
   if (ctx && typeof ctx.effect === 'function') ctx.effect(() => dispose, 'dsh-crawler: ui')
 }
 
-export const inject = []
+const inject = []
+
+    exports.apply = apply;
+    return module.exports;
+  },
+});

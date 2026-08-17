@@ -17,7 +17,8 @@ try {
 
 export const inject = ['webServer']
 export const name = 'dsh-context-ring'
-export const Config = Object
+// NOTE: no Config export — `Config = Object` is not a valid cordis schema and
+// crashes resolveConfig ("reading 'validate'"). Config passes through raw.
 
 export function apply(ctx, config = {}) {
   const disposeHost = hostApply(ctx, config) || (() => {})
@@ -25,4 +26,6 @@ export function apply(ctx, config = {}) {
 }
 
 // browser half: the web client loader imports "./client" of THIS entry file
-export { apply as client } from './context-ring-client.mjs'
+// client half loads via the dsh.client declaration (exports["./client"]),
+// NOT via a host re-export — the client file uses the __ModuleLoader__ script
+// contract and has no ESM exports to re-export.

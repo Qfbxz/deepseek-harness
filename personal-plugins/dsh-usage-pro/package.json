@@ -1,7 +1,7 @@
 {
   "name": "dsh-usage-pro",
   "version": "1.0.0",
-  "description": "cc-switch-style usage statistics: per-request capture from session events, SQLite rollups, dedup",
+  "description": "用量增强：今日/会话累计 token 统计行与 K/M/B 紧凑数字格式，配合 desktop-chrome 仪表盘展示。",
   "type": "module",
   "main": "index.mjs",
   "exports": {

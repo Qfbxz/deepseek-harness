@@ -1,7 +1,7 @@
 {
   "name": "dsh-crawler",
   "version": "0.5.0",
-  "description": "pawl \u2014 universal web crawler plugin: http/crawl4ai/patchright engines, per-call free-form extraction, resumable batch, BFS site crawl, storage-folder persistence, built-in Cloudflare auto-click responder. Agent tools: crawler_config/fetch/batch/site/unlock/status. GUI sidebar card (\u722c\u866b) with live enable switch.",
+  "description": "通用网页爬虫 pawl：http/crawl4ai/反检测浏览器三引擎；单页自由提取(文字/图片/表格/PDF/电子书)、批量断点续爬、整站BFS、CF自动过验证。侧边栏「爬虫」卡全量设置(网页列表/检索词模糊匹配/存放格式/存储路径)，6 个 agent 工具。",
   "type": "module",
   "main": "index.mjs",
   "exports": {
@@ -25,5 +25,8 @@
     "crawl4ai",
     "cloudflare"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6"
+  }
 }
