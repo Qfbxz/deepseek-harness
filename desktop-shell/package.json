@@ -7,11 +7,12 @@
   "scripts": {
     "start": "electron .",
     "dist:mac": "electron-builder --mac --arm64 --dir",
-    "package:mac": "electron-builder --mac --arm64"
+    "package:mac": "electron-builder --mac --arm64 && codesign --force --deep --sign - \"dist/mac-arm64/DeepSeek Harness Shell.app\"",
+    "sign:mac": "codesign --force --deep --sign - \"dist/mac-arm64/DeepSeek Harness Shell.app\""
   },
   "devDependencies": {
-    "electron": "^31.0.0",
-    "electron-builder": "^25.0.0"
+    "electron": "^43.4.0",
+    "electron-builder": "^26.0.0"
   },
   "build": {
     "appId": "ai.deepseek.harness.shell",
@@ -23,7 +24,7 @@
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "hardenedRuntime": true,
+      "hardenedRuntime": false,
       "identity": null,
       "target": [
         "dir"
