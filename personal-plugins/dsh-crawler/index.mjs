@@ -13,7 +13,7 @@
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
-import { mkdir, readFile, writeFile, readdir, stat } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, appendFile, readdir, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -24,7 +24,7 @@ const DSH_HOME = process.env.DSH_HOME || join(homedir(), '.dsh')
 const CONFIG_FILE = join(DSH_HOME, 'crawler-config.json')
 const VENV_PY = join(DSH_HOME, 'venvs/scrape/bin/python')
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
-const API = { config: '/api/dsh-crawler/config', status: '/api/dsh-crawler/status' }
+const API = { config: '/api/dsh-crawler/config', status: '/api/dsh-crawler/status', seeds: '/api/dsh-crawler/seeds', terms: '/api/dsh-crawler/terms', batch: '/api/dsh-crawler/batch', batchStop: '/api/dsh-crawler/batch/stop' }
 
 /** Execution tools removed by the enabled:false kill switch (config/status stay). */
 const WORKER_TOOLS = new Set(['crawler_fetch', 'crawler_batch', 'crawler_site', 'crawler_unlock'])
@@ -53,6 +53,10 @@ async function saveConfig(patch) {
   cache = next
   return next
 }
+
+const expandHome = (p) => (p ? p.replace(/^~(?=$|\/)/, homedir()) : p)
+const storeDirOf = (cfg) => expandHome(cfg.outdir) || join(DSH_HOME, 'crawler-out')
+const pidAlive = (pid) => { try { process.kill(pid, 0); return true } catch { return false } }
 
 // ---------------------------------------------------------------- python runner
 function pickPython() {
@@ -138,6 +142,7 @@ function makeTools(getCfg, onSync) {
         engine: { type: 'string', enum: ['auto', 'http', 'crawl4ai', 'browser'], description: 'default auto (browser for JS-heavy or when http gets challenged)' },
         mode: { type: 'string', enum: ['text', 'markdown', 'html', 'links'], description: 'main content shape (markdown via crawl4ai; text elsewhere)' },
         selectors: { type: 'object', additionalProperties: true, description: 'CSS selector map: fieldName -> selector; returns fields{} with innerText' },
+        extractOptions: { type: 'object', additionalProperties: true, description: 'structured extraction switches: {text, images, tables, links, meta, pdf} — images = img src/alt list, tables = row/cell matrices, pdf = .pdf URLs saved into outdir/assets' },
         extractJs: { type: 'string', description: 'browser engine only: arbitrary JS evaluated in page, result returned as extract' },
         meta: { type: 'boolean', description: 'include meta tags (title/description/og:*)' },
         screenshot: { type: 'string', description: 'browser engine only: save screenshot to this path' },
@@ -153,8 +158,9 @@ function makeTools(getCfg, onSync) {
       output: O(),
       async execute(args) {
         return guard(async (cfg) => {
-          const { mode: contentMode = (cfg.defaults ?? {}).mode, ...rest } = args
-          const cmd = { mode: 'fetch', ...rest, contentMode, config: { ...cfg, ...(cfg.defaults ?? {}) } }
+          const d = cfg.defaults ?? {}
+          const { mode: contentMode = d.mode, maxChars = d.maxChars, ...rest } = args
+          const cmd = { mode: 'fetch', ...rest, extractOptions: args.extractOptions ?? (cfg.defaults ?? {}).extractOptions, contentMode, maxChars, config: { ...cfg, ...(cfg.defaults ?? {}) } }
           const res = await runRunner(cmd, args.timeoutMs || cfg.timeoutMs || DEFAULT_TIMEOUT_MS)
           return res.ok === false ? res : { ok: true, result: res.result }
         })
@@ -175,6 +181,8 @@ function makeTools(getCfg, onSync) {
         extractJs: { type: 'string', description: 'browser engine only: JS applied to every page' },
         maxChars: { type: 'number', description: 'per-page truncation' },
         outFile: { type: 'string', description: 'JSONL output path (default <outdir>/batch.jsonl; relative resolves inside the storage folder)' },
+        saveMode: { type: 'string', enum: ['jsonl', 'files', 'both'], description: 'storage shape: jsonl (default) | files (one .md/.txt/.html per page under outdir/pages) | both' },
+        extractOptions: { type: 'object', additionalProperties: true, description: 'per-page extraction switches {text, images, tables, links, meta, pdf} (default from settings)' },
         resume: { type: 'boolean', description: 'skip URLs already in outFile (default true)' },
         limit: { type: 'number', description: 'max pages this run' },
         minDelayMs: { type: 'number', description: 'politeness delay between pages (default 1500)' },
@@ -183,8 +191,9 @@ function makeTools(getCfg, onSync) {
       output: O(),
       async execute(args) {
         return guard(async (cfg) => {
-          const { mode: contentMode = (cfg.defaults ?? {}).mode, ...rest } = args
-          return runRunner({ mode: 'batch', ...rest, contentMode, config: cfg }, args.timeoutMs || cfg.timeoutMs || DEFAULT_TIMEOUT_MS)
+          const d = cfg.defaults ?? {}
+          const { mode: contentMode = d.mode, saveMode = d.saveMode, resume = d.resume, maxChars = d.maxChars, ...rest } = args
+          return runRunner({ mode: 'batch', ...rest, extractOptions: args.extractOptions ?? d.extractOptions, contentMode, saveMode, resume, maxChars, config: cfg }, args.timeoutMs || cfg.timeoutMs || DEFAULT_TIMEOUT_MS)
         })
       },
     }),
@@ -214,8 +223,9 @@ function makeTools(getCfg, onSync) {
       output: O(),
       async execute(args) {
         return guard(async (cfg) => {
-          const { mode: contentMode = (cfg.defaults ?? {}).mode, ...rest } = args
-          return await runRunner({ mode: 'site', ...rest, contentMode, config: cfg }, args.timeoutMs || cfg.timeoutMs || DEFAULT_TIMEOUT_MS)
+          const d = cfg.defaults ?? {}
+          const { mode: contentMode = d.mode, saveMode = d.saveMode, resume = d.resume, maxChars = d.maxChars, ...rest } = args
+          return await runRunner({ mode: 'site', ...rest, contentMode, saveMode, resume, maxChars, config: cfg }, args.timeoutMs || cfg.timeoutMs || DEFAULT_TIMEOUT_MS)
         })
       },
     }),
@@ -284,6 +294,7 @@ async function readJsonBody(req, cap = 64 * 1024) {
 
 // ---------------------------------------------------------------- apply
 export function apply(ctx, config = {}) {
+  const batchState = { pid: undefined }
   let disposeTools
 
   const sync = () => {
@@ -320,11 +331,147 @@ export function apply(ctx, config = {}) {
             if (body === null || typeof body !== 'object') return writeJson(res, 400, { ok: false, error: 'invalid json' })
             const patch = {}
             for (const k of CONFIG_KEYS) if (body[k] !== undefined) patch[k] = body[k]
+            if (body.defaults && typeof body.defaults === 'object') {
+              const cur = (await loadConfig()).defaults ?? {}
+              patch.defaults = { ...cur, ...body.defaults }
+            }
             const next = await saveConfig(patch)
             sync()
             return writeJson(res, 200, { ok: true, config: next })
           }
           return writeJson(res, 405, { ok: false, error: 'method not allowed' })
+        },
+      },
+      {
+        kind: 'exact', path: API.seeds,
+        handler: async (req, res) => {
+          if (!isLoopbackRequest(req)) return writeJson(res, 403, { ok: false, error: 'loopback only' })
+          const cfg = await loadConfig()
+          const seedsPath = join(storeDirOf(cfg), 'seeds.txt')
+          if (req.method === 'GET') {
+            let text = '', count = 0
+            try {
+              text = await readFile(seedsPath, 'utf8')
+              count = text.split('\n').filter((l) => l.trim() && !l.startsWith('#')).length
+            } catch {}
+            return writeJson(res, 200, { ok: true, path: seedsPath, count, text })
+          }
+          if (req.method === 'POST') {
+            const body = await readJsonBody(req)
+            if (body === null || typeof body !== 'object' || typeof body.text !== 'string') return writeJson(res, 400, { ok: false, error: 'invalid json' })
+            const urls = [...body.text.matchAll(/https?:\/\/[^\s"'<>)]+/g)].map((m) => m[0])
+            const lines = body.text.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+            const final = urls.length ? [...new Set(urls)] : [...new Set(lines)]
+            await mkdir(dirname(seedsPath), { recursive: true })
+            await writeFile(seedsPath, final.join('\n') + '\n')
+            return writeJson(res, 200, { ok: true, path: seedsPath, count: final.length })
+          }
+          return writeJson(res, 405, { ok: false, error: 'method not allowed' })
+        },
+      },
+      {
+        kind: 'exact', path: API.terms,
+        handler: async (req, res) => {
+          if (!isLoopbackRequest(req)) return writeJson(res, 403, { ok: false, error: 'loopback only' })
+          const cfg = await loadConfig()
+          const dir = storeDirOf(cfg)
+          const termsPath = join(dir, 'terms.txt')
+          if (req.method === 'GET') {
+            let text = '', count = 0
+            try {
+              text = await readFile(termsPath, 'utf8')
+              count = text.split('\n').filter((l) => l.trim() && !l.startsWith('#')).length
+            } catch {}
+            return writeJson(res, 200, { ok: true, path: termsPath, count, text })
+          }
+          if (req.method === 'POST') {
+            const body = await readJsonBody(req)
+            if (body === null || typeof body !== 'object' || typeof body.text !== 'string') return writeJson(res, 400, { ok: false, error: 'invalid json' })
+            const engine = String(body.engine || 'bing')
+            const fuzzy = body.fuzzy !== false
+            const terms = [...new Set(body.text.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#')))]
+            await writeFile(termsPath, terms.join('\n') + '\n', 'utf8')
+            // build search-result URLs (fuzzy: per-term query variants) and merge into seeds
+            const engines = {
+              bing: (q) => 'https://www.bing.com/search?q=' + encodeURIComponent(q),
+              duckduckgo: (q) => 'https://duckduckgo.com/html/?q=' + encodeURIComponent(q),
+              baidu: (q) => 'https://www.baidu.com/s?wd=' + encodeURIComponent(q),
+            }
+            const pick = engines[engine] || engines.bing
+            const variantsOf = (q) => {
+              if (!fuzzy) return [q]
+              const vs = [q, '"' + q + '" filetype:pdf']
+              if (/[a-zA-Z]/.test(q)) vs.push(q + ' SPE')
+              else vs.push(q + ' 论文')
+              return vs
+            }
+            const searchUrls = []
+            const multiEngine = body.multiEngine === true
+            for (const q of terms) {
+              for (const v of variantsOf(q)) {
+                if (multiEngine) { for (const mk of Object.values(engines)) searchUrls.push(mk(v)) }
+                else searchUrls.push(pick(v))
+              }
+            }
+            const seedsPath = join(dir, 'seeds.txt')
+            let existing = []
+            try { existing = (await readFile(seedsPath, 'utf8')).split('\n').map((l) => l.trim()).filter(Boolean) } catch {}
+            const merged = [...existing]
+            for (const u of searchUrls) if (!merged.includes(u)) merged.push(u)
+            await writeFile(seedsPath, merged.join('\n') + '\n', 'utf8')
+            return writeJson(res, 200, { ok: true, path: termsPath, count: terms.length, engine, seedsNow: merged.length })
+          }
+          return writeJson(res, 405, { ok: false, error: 'method not allowed' })
+        },
+      },
+      {
+        kind: 'exact', path: API.batch,
+        handler: async (req, res) => {
+          if (!isLoopbackRequest(req)) return writeJson(res, 403, { ok: false, error: 'loopback only' })
+          const cfg = await loadConfig()
+          const dir = storeDirOf(cfg)
+          const logPath = join(dir, 'batch.log')
+          if (req.method === 'POST') {
+            if (batchState.pid && pidAlive(batchState.pid)) return writeJson(res, 409, { ok: false, error: 'batch already running', pid: batchState.pid })
+            const seedsPath = join(dir, 'seeds.txt')
+            let n = 0
+            try { n = (await readFile(seedsPath, 'utf8')).split('\n').filter((l) => l.trim() && !l.startsWith('#')).length } catch {}
+            if (!n) return writeJson(res, 400, { ok: false, error: 'no seeds: 网页列表先保存列表' })
+            const body = await readJsonBody(req).catch(() => ({}))
+            const cmd = { mode: 'batch', urlsFile: seedsPath, config: cfg, ...(body && body.limit ? { limit: Number(body.limit) } : {}) }
+            const child = spawn(pickPython(), [RUNNER], { stdio: ['pipe', 'pipe', 'pipe'] })
+            let out = ''
+            child.stdin.write(JSON.stringify(cmd)); child.stdin.end()
+            writeFile(logPath, '').catch(() => {})
+            child.stdout.on('data', (d) => { out += d })
+            child.stderr.on('data', (d) => { appendFile(logPath, d).catch(() => {}) })
+            const killer = setTimeout(() => { try { child.kill('SIGKILL') } catch {} }, (cfg.timeoutMs || DEFAULT_TIMEOUT_MS) + 30000)
+            child.on('close', () => { clearTimeout(killer); batchState.pid = undefined; writeFile(join(dir, 'batch-result.json'), out || '{"ok":false}').catch(() => {}) })
+            batchState.pid = child.pid
+            return writeJson(res, 200, { ok: true, pid: child.pid, seeds: n, log: logPath })
+          }
+          if (req.method === 'GET') {
+            const running = !!(batchState.pid && pidAlive(batchState.pid))
+            let logTail = []
+            try { logTail = (await readFile(logPath, 'utf8')).trim().split('\n').filter(Boolean).slice(-6) } catch {}
+            let lastResult = null
+            try { lastResult = JSON.parse(await readFile(join(dir, 'batch-result.json'), 'utf8')) } catch {}
+            let doneRecords = 0
+            try { doneRecords = (await readFile(join(dir, 'batch.jsonl'), 'utf8')).split('\n').filter(Boolean).length } catch {}
+            return writeJson(res, 200, { ok: true, running, pid: batchState.pid, logTail, doneRecords, lastResult })
+          }
+          return writeJson(res, 405, { ok: false, error: 'method not allowed' })
+        },
+      },
+      {
+        kind: 'exact', path: API.batchStop,
+        handler: async (req, res) => {
+          if (!isLoopbackRequest(req)) return writeJson(res, 403, { ok: false, error: 'loopback only' })
+          if (req.method !== 'POST') return writeJson(res, 405, { ok: false })
+          if (!batchState.pid || !pidAlive(batchState.pid)) return writeJson(res, 200, { ok: true, stopped: false, note: 'not running' })
+          try { process.kill(batchState.pid, 'SIGTERM') } catch {}
+          setTimeout(() => { try { process.kill(batchState.pid, 0) && process.kill(batchState.pid, 'SIGKILL') } catch {} }, 2000)
+          return writeJson(res, 200, { ok: true, stopped: true, pid: batchState.pid })
         },
       },
       {

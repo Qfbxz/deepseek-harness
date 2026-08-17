@@ -108,6 +108,15 @@ async def browser_pages(p, items, cfg):
             url = it["url"]
             rec = {"url": url}
             try:
+                if ((it.get("extract") or {}).get("docs") or (it.get("extract") or {}).get("pdf")) and DOC_RE.search(url):
+                    try:
+                        ar = await ctx.request.get(url, timeout=45000)
+                        body = await ar.body()
+                        saved = save_doc(cfg, url, body)
+                        if saved:
+                            results.append({"url": url, "title": Path(saved).name, "docSaved": saved}); continue
+                    except Exception:
+                        pass
                 resp = await page.goto(url, timeout=it.get("timeoutMs", cfg.get("timeoutMs", 30000)))
                 await wait_ready(page, it)
                 challenged = CHALLENGE.search(await page.title() or "")
@@ -147,6 +156,11 @@ async def page_extract(page, it):
         rec["links"] = await page.evaluate("Array.from(new Set(Array.from(document.links).map(a=>a.href).filter(h=>h.startsWith('http'))))")
     if it.get("meta"):
         rec["meta"] = await page.evaluate("Object.fromEntries(Array.from(document.querySelectorAll('meta[name],meta[property]')).map(m=>[m.name||m.getAttribute('property'),m.content]))")
+    want = it.get("extract") or {}
+    if want.get("images") or it.get("extractImages"):
+        rec["images"] = await page.evaluate("Array.from(document.images).slice(0,60).map(i=>({src:i.currentSrc||i.src, alt:i.alt||''}))")
+    if want.get("tables"):
+        rec["tables"] = await page.evaluate("Array.from(document.querySelectorAll('table')).slice(0,20).map(tb=>Array.from(tb.rows).slice(0,60).map(tr=>Array.from(tr.cells).map(c=>c.innerText.trim())))")
     sels = it.get("selectors") or {}
     if sels:
         rec["fields"] = await page.evaluate("(s)=>Object.fromEntries(Object.entries(s).map(([k,v])=>{const el=document.querySelector(v);return [k, el? el.innerText.trim() : null]}))", sels)
@@ -187,6 +201,28 @@ def slug(url):
     host = m.group(1).replace(".", "_") if m else "site"
     rest = re.sub(r"[^A-Za-z0-9._-]+", "_", (m.group(2) if m else (url or "")))[:80].strip("_")
     return (host + ("_" + rest if rest else "")).strip("_") or "page"
+
+def save_binary(cfg, data, name, sub="assets"):
+    d = os.path.join(store_dir(cfg), sub)
+    Path(d).mkdir(parents=True, exist_ok=True)
+    p = os.path.join(d, name)
+    Path(p).write_bytes(data)
+    return p
+
+DOC_RE = re.compile(r"\.(pdf|epub|mobi|azw3?|docx?|xlsx?|pptx?|csv|txt|rtf|md|markdown|json|yaml|yml|zip)(\?|$)", re.I)
+
+def save_doc(cfg, url, data):
+    if not data or len(data) > 120 * 1024 * 1024:
+        return None
+    m = DOC_RE.search(url)
+    ext = (m.group(1).lower() if m else "bin")
+    magic = {"pdf": b"%PDF", "zip": b"PK", "epub": b"PK", "docx": b"PK", "xlsx": b"PK", "pptx": b"PK", "mobi": b"BOOKMOBI", "azw": b"TPZ", "azw3": b"TPZ"}.get(ext)
+    if magic and not data[:len(magic)] == magic:
+        return None
+    base = slug(url)
+    if base.lower().endswith("." + ext):
+        base = base[: -(len(ext) + 1)]
+    return save_binary(cfg, data, base + "." + ext, sub="assets")
 
 def save_page_file(cfg, rec, sub="pages"):
     k, v = content_of(rec)
@@ -294,13 +330,41 @@ async def run_engine(cmd, cfg, items):
         res = []
         for it in items:
             try:
+                doc_flag = (it.get("extract") or {}).get("docs") or (it.get("extract") or {}).get("pdf")
+                if doc_flag and DOC_RE.search(it["url"]):
+                    try:
+                        rq = urllib.request.Request(it["url"], headers={"User-Agent": UA})
+                        with urllib.request.urlopen(rq, timeout=cfg.get("timeoutMs", 30000) / 1000) as pr:
+                            data = pr.read(120 * 1024 * 1024)
+                        saved = save_doc(cfg, it["url"], data)
+                        if saved:
+                            res.append({"url": it["url"], "title": Path(saved).name, "docSaved": saved}); continue
+                    except Exception:
+                        pass
                 f = http_fetch(it["url"], cfg)
                 r = {"url": f["url"], "status": f["status"], "title": meta_of(f["html"]).get("title")}
                 mode = it.get("mode") or "text"
                 if mode in ("text", "markdown"): r["text"] = strip_html(f["html"])[: int(it.get("maxChars") or 50000)]
                 elif mode == "html": r["html"] = f["html"][: int(it.get("maxChars") or 200000)]
                 if mode == "links" or it.get("_wantLinks"): r["links"] = links_of(f["html"], f["url"])
-                if it.get("meta"): r["meta"] = meta_of(f["html"])
+                if it.get("meta") or want.get("meta"): r["meta"] = meta_of(f["html"])
+                want = it.get("extract") or {}
+                if want.get("images") or it.get("extractImages"):
+                    imgs = []
+                    for m in re.finditer(r'<img[^>]+src=["\']([^"\']{8,300})["\']', f["html"]):
+                        s = m.group(1)
+                        if s.startswith("//"): s = "https:" + s
+                        elif s.startswith("/"): s = re.match(r"https?://[^/]+", f["url"]).group(0) + s
+                        if not s.startswith("data:"): imgs.append({"src": s[:300], "alt": ""})
+                    r["images"] = imgs[:60]
+                if want.get("tables"):
+                    r["tables"] = []
+                    for tm in list(re.finditer(r"<table[\s\S]{0,30000}?</table>", f["html"], re.I))[:20]:
+                        rows = []
+                        for rm in list(re.finditer(r"<tr[\s\S]*?</tr>", tm.group(0), re.I))[:60]:
+                            cells = [re.sub(r"<[^>]+>|\s+", " ", c).strip() for c in re.findall(r"<t[hd][\s\S]*?</t[hd]>", rm.group(0), re.I)]
+                            if cells: rows.append(cells)
+                        if rows: r["tables"].append(rows)
                 res.append(r)
             except Exception as e:
                 res.append({"url": it["url"], "error": str(e)[:300]})
@@ -349,7 +413,8 @@ async def main():
             body["pagesFull"] = items
         out(body)
     if mode == "fetch":
-        per = {"mode": cmd.get("contentMode"), **{k: cmd[k] for k in ("selectors", "extractJs", "meta", "waitMs", "waitForSelector", "scroll", "screenshot", "fullPage", "maxChars", "allowChallenge") if cmd.get(k) is not None}}
+        ex = cmd.get("extractOptions") or {}
+        per = {"mode": cmd.get("contentMode"), "extract": ex, **{k: cmd[k] for k in ("selectors", "extractJs", "meta", "waitMs", "waitForSelector", "scroll", "screenshot", "fullPage", "maxChars", "allowChallenge") if cmd.get(k) is not None}}
         items = [{"url": cmd["url"], **per}]
         res = (await run_engine(cmd, cfg, items))[0]
         if cmd.get("saveTo") and not res.get("error"):
@@ -380,10 +445,15 @@ async def main():
         conc = max(1, int(cmd.get("concurrency") or 1)); delay = int(cmd.get("minDelayMs") or cfg.get("minDelayMs", 1500))
         ok = fail = 0
         per = {"mode": cmd.get("contentMode"), **{k: cmd[k] for k in ("selectors", "extractJs", "meta", "maxChars") if cmd.get(k) is not None}}
+        save_mode = cmd.get("saveMode") or "jsonl"
         for i in range(0, len(todo), conc):
             chunk = [{"url": u, **per, "_delay": delay} for u in todo[i:i + conc]]
             for res in await run_engine(cmd, cfg, chunk):
-                with open(outf, "a") as f: f.write(json.dumps(res, ensure_ascii=False) + "\n")
+                if save_mode in ("files", "both") and not res.get("error"):
+                    fp = save_page_file(cfg, res)
+                    if fp: res["file"] = fp
+                if save_mode in ("jsonl", "both"):
+                    with open(outf, "a") as f: f.write(json.dumps(res, ensure_ascii=False) + "\n")
                 if res.get("error"): fail += 1
                 else: ok += 1
             print(f"[batch {min(i + conc, len(todo))}/{len(todo)}] ok={ok} fail={fail}", file=sys.stderr, flush=True)
