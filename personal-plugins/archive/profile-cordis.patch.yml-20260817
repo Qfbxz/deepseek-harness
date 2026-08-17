@@ -1,0 +1,46 @@
+# Your patch layer for this dsh profile, applied after every bundle layer:
+# a top-level YAML array of loader patch entries (id-targeted config
+# overrides, disables, and insert lists; `!!js` expressions allowed).
+#
+# mcp-argo: id 定向覆盖 argo 插件注入的条目，追加博查 API key
+# （注意：覆盖不能用 insert —— 会与插件层同 id 条目冲突导致启动失败）
+- id: mcp-argo
+  config:
+    serverName: argo
+    transport: stdio
+    command: npx
+    args: ['-y', 'github:taxueseek/argo']
+    env:
+      BOCHA_API_KEY: 'sk-12b2764a16404920b2872b7778d7c405'
+# --- dsh-local (bocha search provider; temperature moved to ~/.dsh/cordis.patch.yml for all profiles) ---
+- insert:
+    - id: web-search-bocha
+      name: ./plugins/dsh-local/bocha.mjs
+- id: web
+  config:
+    searchProvider: bocha
+- insert:
+    - id: bocha-status
+      name: dsh-bocha-status
+      config:
+        totalCalls: 2000
+# --- 2026-08-16 右栏替换：aionui-panel 是 web-ui-all 的传递依赖会自动组合，
+# 按 id 禁用，右栏交给 dsh-better-sidebar（文件/git/终端/浏览器工作台）。
+- id: ui-dsh-aionui-panel
+  disabled: true
+# --- 2026-08-16 桌面窗口 chrome：qq98 复古标题栏可拖动 + 右上角三键接真
+# （壳 preload bridge window.dshDesktop；纯浏览器里按钮保持装饰不报错）。
+- insert:
+    - id: desktop-chrome
+      name: dsh-desktop-chrome
+# --- 2026-08-16 删除梁神模式：web-ui-all 插入的 liangshen 行禁用（停同步）。
+- id: liangshen
+  disabled: true
+# --- 2026-08-16 核心卫生哨兵：启动时扫描全部 dsh-tools 物理副本并把裸 Symbol
+# 调度器键就地统一为 Symbol.for（根治：插件更新→根部影子副本→身份分裂→
+# 工具调用全崩）。与 package.json postinstall（安装时）、LaunchAgent
+# io.dsh.scheduler-symbol-watch（App 重建时）构成三层防线。
+# 详见 ~/.dsh/INCIDENT-2026-08-16-prepare-error.md。
+- insert:
+    - id: core-hygiene
+      name: ./plugins/dsh-local/core-hygiene.mjs

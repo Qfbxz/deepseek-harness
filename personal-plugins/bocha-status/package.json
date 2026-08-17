@@ -1,0 +1,22 @@
+{
+  "name": "dsh-bocha-status",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Bocha search usage in the web UI status bar: self-counted calls plus the official remaining balance, served host-side so the API key never reaches the browser.",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  },
+  "dependencies": {
+    "@linxin666/dsh-client-ui-skin-qq98": "^0.1.16"
+  }
+}

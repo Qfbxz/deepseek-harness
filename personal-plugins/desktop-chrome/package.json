@@ -1,0 +1,23 @@
+{
+  "name": "dsh-desktop-chrome",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Desktop window chrome for skinned UIs: makes the QQ98 retro titlebar draggable and wires its decorative min/max/close buttons to the shell's preload bridge (window.dshDesktop).",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  },
+  "dependencies": {
+    "@linxin666/dsh-client-ui-skin-qq98": "^0.1.16",
+    "dsh-usage-stats": "github:Ychris12138/dsh-usage-stats#v0.1.2"
+  }
+}
