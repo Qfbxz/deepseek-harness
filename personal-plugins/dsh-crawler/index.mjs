@@ -34,7 +34,7 @@ const WORKER_TOOLS = new Set(['crawler_fetch', 'crawler_batch', 'crawler_site', 
 /** Allowed top-level config keys (everything else is dropped on write). */
 const CONFIG_KEYS = ['enabled', 'engine', 'headless', 'profileDir', 'outdir', 'minDelayMs', 'timeoutMs', 'headers', 'defaults', 'autoClick', 'autoClickBudgetMs', 'autoClickMaxTries']
 
-export const inject = ['tools', 'webServer']
+export const inject = ['tools']
 export const name = 'dsh-crawler'
 
 /** Settings namespace surfaced in the GUI 设置 page (schema-driven form). */
@@ -338,7 +338,9 @@ export function apply(ctx, config = {}) {
     sync()
   }).catch(() => { cache = { ...config }; sync() })
 
-  const disposeRoutes = ctx.effect(() => {
+  // late-mount: the webServer service may not exist at apply time — a static
+  // inject left this fiber waiting forever (routes silently never registered).
+  const disposeRoutes = ctx.inject(['webServer'], (host) => host.effect(() => {
     const routes = [
       {
         kind: 'exact', path: API.config,
@@ -502,9 +504,9 @@ export function apply(ctx, config = {}) {
         },
       },
     ]
-    const disposers = routes.map((r) => ctx.webServer.register(r))
+    const disposers = routes.map((r) => host.webServer.register(r))
     return () => { for (const d of disposers) d() }
-  }, 'dsh-crawler: routes')
+  }, 'dsh-crawler: routes'), 'dsh-crawler: webServer')
 
   return () => {
     if (disposeTools !== undefined) disposeTools()

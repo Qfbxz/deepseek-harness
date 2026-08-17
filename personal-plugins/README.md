@@ -37,3 +37,11 @@ dsh plugin --profile web add <本仓库路径>/personal-plugins/dsh-desktop-chro
 - `core-hygiene.mjs` — 调度器 Symbol.for 卫生哨兵（配合 ~/.dsh/check-scheduler-symbol.py）
 - `profile-cordis.patch.yml-20260817` — web profile 补丁层快照（argo MCP、bocha provider、
   aionui-panel 禁用等），重建 profile 时可参考
+
+## 依赖说明（market 遮蔽告警辨析）
+
+dsh-crawler / dsh-context-ring 的 node_modules/@deepseek-ai/* 是指向
+~/.dsh/profiles/node_modules（宿主共享层）的 symlink，版本与宿主恒等
+（同源同版本），运行时不存在重复加载；package.json 已将全部宿主包声明为
+peerDependencies（use-host 语义）。市场清单扫描若按 node_modules 存在即
+告警的规则判定，对本目录为误报。
