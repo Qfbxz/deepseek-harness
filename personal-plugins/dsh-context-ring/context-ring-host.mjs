@@ -9,8 +9,18 @@ import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
 
+import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import z from '@deepseek-ai/schemastery'
+
 export const inject = ['webServer']
 export const name = 'dsh-context-ring'
+export const RING_SETTINGS = settingsNamespace('context-ring')
+const SettingsSchema = z.object({
+  warnAt: z.number().step(5).min(0).max(100).default(50),
+  dangerAt: z.number().step(5).min(0).max(100).default(80),
+  warnColor: z.string().default('#f59e0b'),
+  dangerColor: z.string().default('#ef4444'),
+})
 
 const PATCH = join(dirname(fileURLToPath(import.meta.url)), 'cordis.patch.yml')
 const DEFAULTS = { warnAt: 50, dangerAt: 80, warnColor: '#f59e0b', dangerColor: '#ef4444' }
@@ -63,6 +73,11 @@ function loopback(req) {
 }
 
 export function apply(ctx) {
+  // GUI 设置页表单：官方 settings seam（live-stats 范式）
+  installSettingsSection(ctx, RING_SETTINGS, SettingsSchema, DEFAULTS, {
+    setSource: () => {},
+    onChange: () => { readCfg().then((c) => { current = c }).catch(() => {}) },
+  })
   let current = { ...DEFAULTS }
   readCfg().then((c) => { current = c }).catch(() => {})
 

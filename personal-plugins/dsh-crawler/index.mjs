@@ -11,6 +11,8 @@
  * removes every crawler_* tool from the session without a restart.
  */
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import z from '@deepseek-ai/schemastery'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { mkdir, readFile, writeFile, appendFile, readdir, stat } from 'node:fs/promises'
@@ -34,6 +36,18 @@ const CONFIG_KEYS = ['enabled', 'engine', 'headless', 'profileDir', 'outdir', 'm
 
 export const inject = ['tools', 'webServer']
 export const name = 'dsh-crawler'
+
+/** Settings namespace surfaced in the GUI 设置 page (schema-driven form). */
+export const PAWL_SETTINGS = settingsNamespace('pawl')
+const SettingsSchema = z.object({
+  enabled: z.boolean().default(true),
+  engine: z.string().default('auto'),
+  headless: z.boolean().default(true),
+  autoClick: z.boolean().default(true),
+  minDelayMs: z.number().step(500).min(0).default(1500),
+  outdir: z.string().default(''),
+  profileDir: z.string().default(''),
+})
 
 // ---------------------------------------------------------------- config store
 let cache = undefined
@@ -296,6 +310,11 @@ async function readJsonBody(req, cap = 64 * 1024) {
 export function apply(ctx, config = {}) {
   const batchState = { pid: undefined }
   let disposeTools
+  // GUI 设置页表单 -> merge into the config store live (live-stats pattern)
+  installSettingsSection(ctx, PAWL_SETTINGS, SettingsSchema, config, {
+    setSource: () => {},
+    onChange: () => { loadConfig().then((c) => { cache = c; sync() }).catch(() => {}) },
+  })
 
   const sync = () => {
     if (disposeTools !== undefined) { disposeTools(); disposeTools = undefined }
