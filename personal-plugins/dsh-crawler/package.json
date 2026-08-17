@@ -1,0 +1,18 @@
+{
+  "name": "dsh-crawler",
+  "version": "0.4.0",
+  "description": "pawl — universal web crawler plugin: http/crawl4ai/patchright engines, per-call free-form extraction, resumable batch, BFS site crawl, storage-folder persistence, built-in Cloudflare auto-click responder. Agent tools: crawler_config/fetch/batch/site/unlock/status. GUI sidebar card (爬虫) with live enable switch.",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web" }
+  },
+  "keywords": ["dsh-plugin", "crawler", "scraper", "patchright", "crawl4ai", "cloudflare"],
+  "license": "MIT"
+}

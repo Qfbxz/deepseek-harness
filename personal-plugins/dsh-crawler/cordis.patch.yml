@@ -1,0 +1,8 @@
+# dsh-crawler (pawl) bundle patch: registers the dual-face plugin row.
+# Host half (exports ".") runs agent tools + loopback config API; the dsh.client
+# declaration loads the browser half (exports "./client") — sidebar 爬虫 card.
+- insert:
+    - id: dsh-crawler
+      name: dsh-crawler
+      config:
+        enabled: true

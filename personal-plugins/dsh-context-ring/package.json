@@ -1,0 +1,18 @@
+{
+  "name": "dsh-context-ring",
+  "version": "1.0.0",
+  "description": "Context ring color bands by usage percent: <T1 theme color, >=T1 warn, >=T2 danger. Dual-half: host loopback config API (validated, persisted), client sidebar palette card — 18-swatch picker + threshold sliders + live 3-stage preview, no hex typing.",
+  "type": "module",
+  "main": "context-ring.mjs",
+  "exports": {
+    ".": "./context-ring.mjs",
+    "./client": "./context-ring-client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": { "platform": "web" }
+  },
+  "keywords": ["dsh-plugin", "context-meter", "ring", "palette"],
+  "license": "MIT"
+}
