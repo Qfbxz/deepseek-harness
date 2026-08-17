@@ -1,0 +1,21 @@
+{
+  "name": "dsh-bocha-search",
+  "version": "1.0.0",
+  "description": "Bocha search usage: statusbar cell after TPS + settings panel (apiKey/baseURL/total/current)",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  }
+}

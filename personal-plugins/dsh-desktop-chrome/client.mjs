@@ -23,13 +23,19 @@ window.__ModuleLoader__.load({
 .EGn-AW_retroTitlebar { -webkit-app-region: drag; }
 .EGn-AW_retroTitlebarBtn { -webkit-app-region: no-drag; cursor: pointer; }
 [class*="_previewBadge"] { color: var(--dsw-alias-label-primary) !important; }
-.usg_layer:not(.usg_rail) { height: 36px; flex: 1; min-width: 0; margin: 2px 0 0 6px; }
+/* footer row: let entries wrap so the usage badge always gets a full row
+ * instead of being squeezed to 0px by full-width footer slot entries */
+.hHd-Xa_footerActions { flex-wrap: wrap; row-gap: 4px; }
+.usg_layer:not(.usg_rail) { height: 36px; flex: 1 1 100%; min-width: 0; margin: 2px 0 0 6px; }
+/* dsh-chat-import's sidebar trigger ships width:100% inline — shrink it to
+ * its content so it stops evicting every other footer entry */
+button[aria-label="导入会话"] { width: auto !important; flex: 0 0 auto !important; }
 .usg_layer:not(.usg_rail) .usg_badge { height: 36px; width: 100%; gap: 6px; }
 .usg_layer:not(.usg_rail) .usg_badgeLabel,
 .usg_layer:not(.usg_rail) .usg_badgeCount { display: none; }
 .hHd-Xa_collapsed .hHd-Xa_footerActions { flex-direction: column; align-items: center; }
 html { font-size: 93.75%; }
-.usg_panel { width: 280px !important; max-height: 62vh !important; font-size: 12px !important; }
+.usg_panel { width: var(--dshc-sidebar-w, 280px) !important; max-height: 62vh !important; font-size: 12px !important; }
 .usg_statsRow { flex-wrap: wrap !important; }
 .usg_statsRow .usg_stat { flex: 1 1 40% !important; min-width: 0; }
 .usg_statsRow .usg_stat:last-child { flex-basis: 100% !important; }
@@ -49,7 +55,8 @@ html { font-size: 93.75%; }
 #dshc-model-rings:hover { filter:brightness(1.25); }
 /* frame the official context trigger so it reads as a zone; the injected
  * percentage sits right of the ring */
-button[aria-label^="上下文已用"] { display:inline-flex !important; align-items:center; gap:3px; box-sizing:border-box; min-height:28px; width:auto !important; padding:2px 6px; border:1px solid var(--dsw-alias-border-l1); border-radius:4px; }
+/* PATCH: user asked the native context-usage ring hidden */
+button[aria-label^="上下文已用"] { display:inline-flex !important; align-items:center; gap:3px; box-sizing:border-box; min-height:28px; width:auto !important; padding:2px 6px; border:none; border-radius:4px; background:transparent; }
 button[aria-label^="上下文已用"] svg { flex:none !important; }
 #dshc-health-dot { animation: dshc-breathe 2.6s ease-in-out infinite; }
 #dshc-health-dot[data-state="orange"] { animation-duration: 1.4s; }
@@ -59,10 +66,13 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 .usg_layer.usg_rail #dshc-usage { display: none; }
 [data-dshc-stats="1"], [data-dshc-stats="1"] * { white-space: normal !important; text-overflow: clip !important; overflow: visible !important; }
 [data-dshc-stats="1"] { max-width: none !important; font-size: 11px !important; line-height: 15px !important; }
+
+/* user prefs: bigger health dot, tightened composer spacing */
+#dshc-health-dot { width: 10px !important; height: 10px !important; }
 `;
 
 		const WIDGET_ID = "dshc-usage";
-		const REFRESH_MS = 5 * 60 * 1000;
+		const REFRESH_MS = 30 * 1000;
 
 		function fmtCompact(n) {
 			if (!Number.isFinite(n)) return "—";
@@ -107,14 +117,27 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			return res.json();
 		}
 
-		async function buildRows() {
+
+// PATCH: today tokens from usage-pro (event-captured, accurate); legacy fallback.
+async function fetchProTodayTokens() {
+  try {
+    const pro = await fetchJson("/dsh-local/usage-pro/summary");
+    if (pro && pro.ok && pro.today) {
+      const t = pro.today;
+      return (Number(t.i)||0) + (Number(t.o)||0) + (Number(t.cr)||0) + (Number(t.cw)||0);
+    }
+  } catch {}
+  return null;
+}
+
+async function buildRows() {
 			const modelName = currentModelName();
 			const [usageRes, providersRes] = await Promise.all([
 				fetchJson("/api/usage-stats/usage"),
 				fetchJson("/api/usage-stats/providers"),
 			]);
 			if (usageRes.ok !== true) throw new Error("usage route");
-			const todayKey = new Date().toISOString().slice(0, 10);
+			const now = new Date(); const todayKey = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0"); // PATCH: local-day key (UTC key showed YESTERDAY 00:00-08:00 CST)
 			const days = usageRes.days ?? [];
 			const day = days.find((d) => d.date === todayKey) ?? null;
 			// Days arrive oldest-first; the most recent day resolves the current
@@ -164,7 +187,7 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			if (account !== null) {
 				const sessionWindow = (account.windows ?? []).find((w) => w.kind === "session") ?? null;
 				if (sessionWindow !== null) {
-					row1.push('<span class="dshc-cell" title="窗口用量 ' + sessionWindow.usedPercent + '%">' + ringSvg(sessionWindow.usedPercent, ringColor(sessionWindow.usedPercent)) + Math.round(sessionWindow.usedPercent) + "%</span>");
+					// PATCH: 5h session-window usage ring removed per user request
 					row1.push('<span class="dshc-cell dshc-dim" title="窗口重置">' + fmtReset(sessionWindow.resetsAt) + "</span>");
 				}
 				if (account.mode === "balance") {
@@ -179,11 +202,11 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			}
 			const todayEntry = findEntry(day, false);
 			const hitRate = (todayEntry ?? entry) !== null && Number.isFinite((todayEntry ?? entry).cacheHitRate) ? (todayEntry ?? entry).cacheHitRate : null;
-			if (hitRate !== null) {
-				row1.push('<span class="dshc-cell" title="缓存命中率">' + ringSvg(hitRate, "#7fb2e5") + Math.round(hitRate) + "%</span>");
-			}
-			const todayTokens = todayEntry !== null ? todayEntry.tokens : null;
-			const row2 = "今日 " + (todayTokens !== null ? fmtCompact(todayTokens) : "—") + (modelName !== null ? " · " + modelName : "");
+   if (hitRate !== null) {
+    row1.push('<span class="dshc-cell" title="缓存命中率">' + ringSvg(hitRate, "#7fb2e5") + Math.round(hitRate) + "%</span>");
+   }
+			const todayTokens = await fetchProTodayTokens() ?? (todayEntry !== null ? todayEntry.tokens : null);
+			const row2 = "今日 " + (todayTokens !== null ? fmtCompact(todayTokens) : "—"); // PATCH: model name removed
 			return { row1: row1.join(""), row2 };
 		}
 
@@ -217,7 +240,7 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			try {
 				const res = await fetchJson("/api/usage-stats/usage");
 				if (res.ok !== true) return;
-				const todayKey = new Date().toISOString().slice(0, 10);
+				const now = new Date(); const todayKey = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0"); // PATCH: local-day key (UTC key showed YESTERDAY 00:00-08:00 CST)
 				const monthPrefix = todayKey.slice(0, 7);
 				let today = 0, month = 0, total = 0;
 				for (const d of res.days ?? []) {
@@ -234,7 +257,7 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 					if (nums[index] !== undefined && el.textContent !== nums[index]) el.textContent = nums[index];
 				});
 				const firstLabel = panel.querySelector(".usg_stat .usg_statLabel");
-				if (firstLabel !== null && firstLabel.textContent === "今日") firstLabel.textContent = "今日·当前模型";
+				if (firstLabel !== null && firstLabel.textContent === "今日") firstLabel.textContent = "今日·全部";
 			} catch { /* plugin's own totals stay */ }
 		}
 
@@ -255,10 +278,12 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 
 		/** Full-width conversation: the official flow caps its column (and the
 		 * composer/stats strip) at ~748px via hashed classes — match structurally
-		 * (a `_column` whose computed max-width sits in the capped range) and
-		 * uncap. Runs on every mutation, so sidebar toggles re-apply it. */
+		 * (a `_column`/`_card`/`_stack` whose computed max-width sits in the
+		 * capped range) and uncap. Runs on every mutation, so sidebar toggles
+		 * re-apply it. (`_stack` covers the new-session welcome column, which
+		 * newer builds render with a different hashed suffix.) */
 		function widenConversation() {
-			for (const el of document.querySelectorAll('[class*="_column"], [class*="_card"]')) {
+			for (const el of document.querySelectorAll('[class*="_column"], [class*="_card"], [class*="_stack"]')) {
 				if (el.dataset.dshcWide === "1") continue;
 				const maxWidth = parseFloat(getComputedStyle(el).maxWidth);
 				if (Number.isFinite(maxWidth) && maxWidth >= 600 && maxWidth <= 900) {
@@ -297,6 +322,9 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			const line = document.querySelector('[class*="composerStack"] [data-dshc-stats="1"]');
 			if (line === null) return;
 			if (statsSegEl !== null && statsSegEl.isConnected && statsSegEl.parentElement === line) return;
+   // PATCH: React rebuilds the line on composer switches; stale segments
+   // from previous lines survive and ACCUMULATE — sweep orphans first.
+   for (const stale of line.querySelectorAll('[data-dshc-stats-totals="1"]')) stale.remove();
 			statsSegEl = document.createElement("span");
 			statsSegEl.dataset.dshcStatsTotals = "1";
 			line.appendChild(statsSegEl);
@@ -320,7 +348,7 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			try {
 				const res = await fetchJson("/api/usage-stats/usage");
 				if (res.ok !== true) return;
-				const todayKey = new Date().toISOString().slice(0, 10);
+				const now = new Date(); const todayKey = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0"); // PATCH: local-day key (UTC key showed YESTERDAY 00:00-08:00 CST)
 				const day = (res.days ?? []).find((d) => d.date === todayKey) ?? null;
 				const modelName = currentModelName();
 				const entry = day !== null && modelName !== null
@@ -522,6 +550,11 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			// own zone: a sibling BEFORE the model button, side by side — the
 			// trigger root is block layout, so flex it when it only holds these two
 			if (modelRingsEl !== null && modelRingsEl.isConnected && modelRingsEl.parentElement === host && modelRingsEl.nextElementSibling === button) return;
+   // PATCH: React rebuilds the host on switches; stale rings/dots ACCUMULATE.
+   const keepDot = document.getElementById("dshc-health-dot");
+   for (const stale of host.querySelectorAll("#dshc-model-rings, #dshc-health-dot")) {
+     if (stale !== modelRingsEl && stale !== keepDot) stale.remove();
+   }
 			// health dot as a sibling BEFORE the rings — never inside the React-
 			// managed trigger: a foreign FIRST child shifts React's child indices
 			// and breaks model switching / the picker menu
@@ -614,7 +647,7 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			if (modelRingsEl === null || !modelRingsEl.isConnected) return;
 			renderHealthDot();
 			const hitRing = modelRingHit !== null
-				? '<span title="今日缓存命中率 ' + Math.round(modelRingHit) + '%">' + ringSvg(modelRingHit, "#46a06e") + Math.round(modelRingHit) + "%</span>"
+				? '<span title="今日缓存命中率 ' + modelRingHit.toFixed(1) + '%">' + ringSvg(modelRingHit, "#46a06e") + modelRingHit.toFixed(1) + "%</span>"
 				: "";
 			if (modelRingMode === "balance") {
 				modelRingsEl.innerHTML = (modelRingBalance !== null
@@ -636,10 +669,10 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			// one button zone, three rings in distinct hues; mid-saturation
 			// colors stay legible on both light and dark themes
 			const usageColor = modelRingUsed >= 95 ? "#e85443" : "#4a90d9";
-			let html = '<span title="5 小时窗口用量 ' + Math.round(modelRingUsed) + '%'
+			let html = '<span title="5 小时窗口用量 ' + modelRingUsed.toFixed(1) + '%'
 				+ (resetAt !== "" ? "，重置于 " + resetAt : "") + '">'
-				+ ringSvg(modelRingUsed, usageColor) + Math.round(modelRingUsed) + "%</span>";
-			if (remainLabel !== "") {
+				+ ringSvg(modelRingUsed, usageColor) + modelRingUsed.toFixed(1) + "%</span>";
+   if (remainLabel !== "") {
 				// countdown ring: the remaining fraction depletes toward reset
 				const remainingPct = Math.min(100, Math.max(0, (remainMs / MODEL_WINDOW_MS) * 100));
 				html += '<span title="距重置还有 ' + remainLabel + "（5 小时窗口"
@@ -676,64 +709,12 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			}
 			const text = match[1] + "%";
 			if (label.textContent !== text) label.textContent = text;
-		}
-
-		/** "导入会话" button beside the Session log header action: pick a
-		 * claude/codex/dsh log, POST it to the host route, reload into the
-		 * imported session. */
-		function mountImportButton() {
-			const sessionLog = [...document.querySelectorAll("button")].find((b) => (b.textContent ?? "").trim() === "Session log");
-			if (sessionLog === undefined) return;
-			if (document.getElementById("dshc-import-session") !== null) return;
-			const button = document.createElement("button");
-			button.id = "dshc-import-session";
-			button.textContent = "导入会话";
-			button.title = "导入 Claude / Codex / dsh 会话（.jsonl / .zip），转换后继续干活";
-			// identical chrome to the export (Session log) button: adopt its class
-			button.className = sessionLog.className;
-			const input = document.createElement("input");
-			input.type = "file";
-			input.accept = ".jsonl,.zip";
-			input.style.display = "none";
-			button.addEventListener("click", () => input.click());
-			input.addEventListener("change", async () => {
-				const file = input.files?.[0];
-				input.value = "";
-				if (file === undefined) return;
-				button.textContent = "导入中…";
-				button.disabled = true;
-				// import into the workspace the composer pill currently shows
-				const wsPill = document.querySelector('button[aria-label="选择工作区"], button[aria-label*="工作区"]');
-				const wsName = wsPill !== null ? (wsPill.textContent ?? "").trim().replace(/\s*▾?$/u, "") : "";
-				try {
-					let body = await file.arrayBuffer();
-					// the host caps request bodies around 10 MB — gzip large logs
-					if (body.byteLength > 8 * 1024 * 1024 && typeof CompressionStream === "function") {
-						const stream = new Blob([body]).stream().pipeThrough(new CompressionStream("gzip"));
-						body = await new Response(stream).arrayBuffer();
-					}
-					const res = await fetch("/dsh-local/import-session?filename=" + encodeURIComponent(file.name) + (wsName !== "" ? "&ws=" + encodeURIComponent(wsName) : "&cwd=auto"), {
-						method: "POST",
-						body,
-					});
-					const data = await res.json();
-					if (data.ok === true) {
-						// no auto-reload: the host must restart to index the new
-						// session anyway, and reloading spawned empty shells
-						button.textContent = "已导入 ✓ 重启 App 后可见";
-						button.disabled = false;
-						setTimeout(() => { button.textContent = "导入会话"; }, 6000);
-						return;
-					}
-					button.textContent = "失败：" + String(data.error ?? "").slice(0, 24);
-				} catch (error) {
-					button.textContent = "失败：网络错误";
-				}
-				button.disabled = false;
-				setTimeout(() => { button.textContent = "导入会话"; }, 3500);
-			});
-			sessionLog.parentElement.insertBefore(button, sessionLog);
-			document.body.appendChild(input);
+  // PATCH: threshold colors — >80% red, >=50% orange, else green
+  const pct = Number(match[1]);
+  const ctxColor = pct > 80 ? "#e85443" : pct >= 50 ? "#e0a03c" : "#46a06e";
+  const ctxSvg = trigger.querySelector("svg circle") ;
+  if (ctxSvg !== null && ctxSvg.getAttribute("stroke") !== ctxColor) ctxSvg.setAttribute("stroke", ctxColor);
+  if (label.style.color !== ctxColor) label.style.color = ctxColor;
 		}
 
 		function mountWidget() {
@@ -815,9 +796,21 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			// own fetches — a per-mutation walk starved them into "Failed to
 			// fetch" timeouts.
 			let observerTimer = 0;
+			/** Keep --dshc-sidebar-w in sync with the live sidebar width so the
+			 * usage panel (.usg_panel) can match it. Writes only on change; the
+			 * var lives on <html> (outside the body observer's subtree). */
+			const syncSidebarWidthVar = () => {
+				const col = document.querySelector('[class*="_sidebarCol"]');
+				let w = col !== null ? col.getBoundingClientRect().width : 0;
+				if (!(w >= 200)) w = 280; // collapsed rail / missing → sane default
+				const val = Math.round(w) + "px";
+				if (document.documentElement.style.getPropertyValue("--dshc-sidebar-w") !== val) {
+					document.documentElement.style.setProperty("--dshc-sidebar-w", val);
+				}
+			};
 			const runHeavyPatches = () => {
 				observerTimer = 0;
-				for (const patch of [wrapDayBars, placeGoalGitRow, widenConversation, patchStatsLine, ensureStatsSegment, patchCompactNumbers, mountModelRings, syncRingTexture, patchContextPercent, mountImportButton]) {
+				for (const patch of [wrapDayBars, placeGoalGitRow, widenConversation, patchStatsLine, ensureStatsSegment, patchCompactNumbers, mountModelRings, syncRingTexture, patchContextPercent, syncSidebarWidthVar]) {
 					try { patch(); } catch (error) { console.warn("dshc:", patch.name, error?.message ?? error); }
 				}
 				if (document.querySelector(".usg_panel") !== null) void patchPanelStats();

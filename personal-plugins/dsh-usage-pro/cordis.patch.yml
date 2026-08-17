@@ -1,0 +1,4 @@
+# dsh-usage-pro bundle layer: cc-switch-style request-level usage stats.
+- insert:
+    - id: usage-pro
+      name: dsh-usage-pro

@@ -1,0 +1,23 @@
+{
+  "name": "dsh-desktop-chrome",
+  "version": "1.1.0",
+  "private": false,
+  "type": "module",
+  "description": "DSH desktop chrome: Electron window controls, usage widget (5h/hit rings), model rings, layout fixes (macOS-tuned)",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  },
+  "dependencies": {
+    "@linxin666/dsh-client-ui-skin-qq98": "^0.1.16",
+    "dsh-usage-stats": "github:Ychris12138/dsh-usage-stats#v0.1.2"
+  }
+}

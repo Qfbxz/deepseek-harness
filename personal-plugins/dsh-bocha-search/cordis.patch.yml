@@ -1,0 +1,5 @@
+# dsh-bocha-search bundle layer: mounted automatically on dsh plugin add
+# (package.json declares dsh.bundle.patch), activating the host half.
+- insert:
+    - id: bocha-search
+      name: dsh-bocha-search

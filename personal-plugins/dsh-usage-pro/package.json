@@ -1,0 +1,21 @@
+{
+  "name": "dsh-usage-pro",
+  "version": "1.0.0",
+  "description": "cc-switch-style usage statistics: per-request capture from session events, SQLite rollups, dedup",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  }
+}
