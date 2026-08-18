@@ -97,4 +97,39 @@ export function apply(ctx: ClientContext): void {
       },
     }),
   }, GoalDock))
+
+  // Priority-winner slot for the trailing tool row (immediately after the
+  // primary Send button). The same GoalDock occupies the cell shared with the
+  // queue and todo panels; ascending priority keeps the goalbar above the
+  // queue (10) and the queue above the todo (15) — the renderer shows only
+  // the priority winner, so the trailing row sees at most one panel.
+  ctx.slots.inject('conversation.input.send-after', () => ctx.slots.register({
+    name: 'conversation.input.send-after',
+    id: 'occupant',
+    priority: 5,
+    order: 0,
+    locale: NS,
+    inject: (sessionId): GoalBarActions => ({
+      onEdit: async (objective) => {
+        const ref = refOf(sessionId)
+        if (ref === undefined) return noCurrentGoal
+        return await ctx.remote.goals.edit(sessionId, ref, { objective })
+      },
+      onPause: async () => {
+        const ref = refOf(sessionId)
+        if (ref === undefined) return noCurrentGoal
+        return await ctx.remote.goals.pause(sessionId, ref)
+      },
+      onResume: async () => {
+        const ref = refOf(sessionId)
+        if (ref === undefined) return noCurrentGoal
+        return await ctx.remote.goals.resume(sessionId, ref)
+      },
+      onClear: async () => {
+        const ref = refOf(sessionId)
+        if (ref === undefined) return noCurrentGoal
+        return await ctx.remote.goals.clear(sessionId, ref)
+      },
+    }),
+  }, GoalDock))
 }

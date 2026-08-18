@@ -151,6 +151,10 @@ export function ConversationRoot({
     overlay: renderSlot('conversation.input.overlay', {}),
     leftItems: zone === undefined ? null : renderSlot('conversation.input.left', zone),
     rightItems: zone === undefined ? null : renderSlot('conversation.input.right', zone),
+    // send-after slot: trailing seat after the primary button. The slot is a
+    // priority-winner list (goalbar > queue > todo): only the priority winner
+    // renders, so the trailing row sees at most one panel.
+    sendAfter: zone === undefined ? null : renderSlot('conversation.input.send-after', zone),
     // Stats band under the card, inside the bar's width column so both
     // share one constraint (composer.dock = stats-line family).
     footer: !hero && zone !== undefined ? renderSlot('conversation.composer.dock', zone) : null,

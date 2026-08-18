@@ -1,6 +1,18 @@
 /* GoalBar: the second standalone card in the composer context stack (Figma
    1236:32276). Its dock column (card cap minus four insets) matches Todo and
-   the Queue panel. */
+   the Queue panel.
+
+   Two display modes share the same DOM:
+   - Standalone card (mounted in `conversation.input.dock`, parent
+     `.composerStack`): block-level, full-width, capped by the dock inset
+     column, margin 0 auto centers the cap.
+   - Trailing-row occupant (mounted in `conversation.input.send-after`,
+     parent `[data-send-after]`): the priority-winner of the cell — the
+     composer row's `.sendAfter` wrapper supplies `flex: 1 1 0`, so the bar
+     grows to fill the slack between the primary button and the card's
+     right edge. The attribute selector bridge is necessary because CSS
+     modules scope `.dock` to this file — the parent attr is the only
+     cross-module hook. */
 
 .dock {
   box-sizing: border-box;
@@ -14,6 +26,18 @@
     var(--dsh-composer-dock-inset)
   );
   margin: 0 auto;
+}
+
+/* Trailing-row mode: the composer row's `.sendAfter` wrapper (hashed in
+   its own module) provides the flex item sizing through `flex: 1 1 0`; here
+   we drop the standalone-card width calc so the bar fits the row's slack
+   instead of overrunning the card. Same DOM, same `.dock` class — the
+   attribute bridge is the only cross-module hook. */
+:global([data-send-after]) .dock {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  min-width: 0;
 }
 
 .bar {

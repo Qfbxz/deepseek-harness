@@ -150,5 +150,18 @@ export const todoDockEntry = {
   apply(ctx: Context): void {
     ctx.slots.inject('conversation.input.dock', () =>
       ctx.slots.register({ name: 'conversation.input.dock', id: 'todo', order: 0, locale: NS }, TodoDock))
+
+    // Priority-winner slot for the trailing tool row (immediately after the
+    // primary Send button). The same TodoDock occupies the cell shared with
+    // the goalbar and queue; ascending priority keeps the todo below both
+    // (5 and 10), so absent a goal and a queue the todo rides the trailing row.
+    ctx.slots.inject('conversation.input.send-after', () =>
+      ctx.slots.register({
+        name: 'conversation.input.send-after',
+        id: 'occupant',
+        priority: 15,
+        order: 0,
+        locale: NS,
+      }, TodoDock))
   },
 }

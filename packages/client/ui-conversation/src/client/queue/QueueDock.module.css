@@ -1,5 +1,8 @@
 /* Figma .FileContainerText 1:791: the wrapper uses the shared dock inset
-   inside the composer card around the inset panel. */
+   inside the composer card around the inset panel. The same DOM also mounts
+   as the trailing-row occupant (mounted in `conversation.input.send-after`,
+   parent `[data-send-after]`); the parent attr is the only cross-module
+   hook so the local-hashed `.dock` rule can target the trailing mode. */
 
 .dock {
   box-sizing: border-box;
@@ -23,6 +26,16 @@
      subtracts two insets from its width); no vertical padding, so the visual
      gap above the panel stays the uniform stack gap. */
   padding: 0 var(--dsh-composer-dock-inset);
+}
+
+/* Trailing-row mode: drop the standalone-card width and the stack-gap-absorbing
+   margin so the queue fits the row's slack instead of overrunning the card. */
+:global([data-send-after]) .dock {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
 }
 
 .panel {

@@ -240,5 +240,28 @@ export const queueDockEntry = {
         }
       },
     }, QueueDock))
+
+    // Priority-winner slot for the trailing tool row (immediately after the
+    // primary Send button). The same QueueDock occupies the cell shared with
+    // the goalbar and todo panel; ascending priority puts the queue below the
+    // goal (5) and above the todo (15) — the renderer shows only the priority
+    // winner, so absent a goal the queue rides the trailing row.
+    ctx.slots.inject('conversation.input.send-after', () => ctx.slots.register({
+      name: 'conversation.input.send-after',
+      id: 'occupant',
+      priority: 10,
+      order: 0,
+      locale: NS,
+      inject: (sessionId: SessionId): QueueDockInjected => {
+        const actx = ctx.sessions.scope(sessionId)
+        if (actx === undefined) throw new Error(`queue dock: session "${sessionId}" resolved no scope`)
+        const conversation = actx.get('conversation')
+        if (conversation === undefined) throw new Error('queue dock: conversation service unavailable')
+        return {
+          updateQueue: (itemId, action) => conversation.updateQueue(itemId, action),
+          notify: (level, text) => { conversation.input.for(actx).notify(level, text) },
+        }
+      },
+    }, QueueDock))
   },
 }

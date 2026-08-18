@@ -323,6 +323,17 @@
   gap: 12px;
 }
 
+/* Trailing seat of the tool row (immediately after the primary Send button).
+   The GoalBar/QueueDock/TodoPanel panel mounts its child inside this wrapper;
+   the wrapper grows into the slack between the primary button and the row's
+   right edge so the priority-winner panel takes the row's remaining width. */
+.sendAfter {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  min-width: 0;
+}
+
 /* Attach circle (figma + control): 28px, selector fill, primary glyph. */
 .add {
   display: grid;

@@ -186,6 +186,18 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'conversation.input.right': { kind: 'list'; scope: 'session'; owner: InputZone }
     /**
+     * The trailing seat of the composer tool row, immediately after the
+     * primary send button — the seat for a single full-row context panel
+     * (goal strip, queue panel, todo panel). Entries share one cell
+     * (`id: 'occupant'`) at distinct ascending priority and the renderer
+     * shows only the priority-winner, so the same three panels that live as
+     * stacked cards in `conversation.input.dock` collapse into the row's
+     * remaining width when they fit. Priority order: goalbar (5) > queue
+     * (10) > todo (15); absent all three, the seat renders nothing. Same
+     * {@link InputZone} owner share as the tool row.
+     */
+    'conversation.input.send-after': { kind: 'list'; scope: 'session'; owner: InputZone }
+    /**
      * The default composer body: a single slot rendered as the composer
      * chain's fallback (a real entry, not a chain rider, so a
      * takeover election hides rather than unmounts it and the textarea DOM
@@ -485,6 +497,8 @@ export interface ComposerBarOwnerProps {
   leftItems?: ReactNode
   /** input.right slot entries (tool row, before the primary button). */
   rightItems?: ReactNode
+  /** input.send-after slot entries (trailing tool row, after the primary button; the priority-winner takes the row's remaining width). */
+  sendAfter?: ReactNode
   /** composer.dock entries (stats line), rendered under the card inside the bar's width column. */
   footer?: ReactNode
 }
@@ -573,6 +587,7 @@ export type ConversationSlotProps =
     | 'conversation.input.overlay'
     | 'conversation.input.dock' | 'conversation.composer.dock'
     | 'conversation.input.left' | 'conversation.input.right'
+    | 'conversation.input.send-after'
     | 'conversation.hero.workspace'
     | 'conversation.hero.agentPreset'
   >

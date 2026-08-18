@@ -1,7 +1,12 @@
 /* Todo strip in the composer context stack (Figma 1236:32276): tip surface,
    status icons + secondary item labels. Its visible card aligns with the
    GoalBar and the Queue panel inside their shared dock column: 12px radius,
-   36px collapsed row, 12px side padding, 14px tertiary leading glyph. */
+   36px collapsed row, 12px side padding, 14px tertiary leading glyph.
+
+   The same DOM also mounts as the trailing-row occupant (mounted in
+   `conversation.input.send-after`, parent `[data-send-after]`); the parent
+   attr is the only cross-module hook so the local-hashed `.root` rule can
+   target the trailing mode. */
 
 .root {
   box-sizing: border-box;
@@ -34,6 +39,15 @@
      styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+/* Trailing-row mode: drop the standalone-card width so the todo fits the
+   row's slack instead of overrunning the card. */
+:global([data-send-after]) .root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  min-width: 0;
 }
 
 .body {

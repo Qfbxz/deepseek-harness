@@ -49,7 +49,7 @@ export function InputBar({
   renderSlot, useNotices, useLexicon, useMenuLauncher,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
-  placeholder, accessory, overlay, leftItems, rightItems, footer,
+  placeholder, accessory, overlay, leftItems, rightItems, sendAfter, footer,
 }: InputBarProps) {
   const input = useInput(s => s)
   const notice = useNotices(s => s)
@@ -791,6 +791,21 @@ export function InputBar({
                 )}
               </button>
             </Tooltip>
+            {/* send-after slot: the one priority-winner panel (goalbar > queue > todo)
+                takes the row's remaining width. The wrapping div grows into
+                the slack between the primary button and the card's right
+                edge; the GoalBar/QueueDock/TodoPanel inside it drops its
+                standalone-card width because the parent attribute in each
+                stylesheet (`[data-send-after] .dock`) sets flex: 1 1 0. The
+                data attribute is the cross-module bridge: each dock's CSS
+                module scopes its own `.dock` and reaches the parent by the
+                stable attribute selector (`sendAfter` is a generic tag, not
+                a class hash from another module). */}
+            {sendAfter !== null && (
+              <div className={css.sendAfter} data-send-after="" role="presentation">
+                {sendAfter}
+              </div>
+            )}
           </div>
         </div>
       </div>
