@@ -11,12 +11,12 @@
  * removes every crawler_* tool from the session without a restart.
  */
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { mkdir, readFile, writeFile, appendFile, readdir, stat } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -48,6 +48,9 @@ const SettingsSchema = z.object({
   outdir: z.string().default(''),
   profileDir: z.string().default(''),
 })
+// 2026-08-18: export as cordis Config so the GUI settings page renders the
+// pawl card (schema existed but was never exported — no settings page appeared).
+export const Config = SettingsSchema
 
 // ---------------------------------------------------------------- config store
 let cache = undefined
@@ -137,6 +140,7 @@ function makeTools(getCfg, onSync) {
             patch.defaults = { ...cur, ...args.values.defaults }
           }
           const next = await saveConfig(patch)
+          pushToSettings(patch)
           if (onSync) onSync()
           return { ok: true, config: next }
         }
@@ -310,11 +314,29 @@ async function readJsonBody(req, cap = 64 * 1024) {
 export function apply(ctx, config = {}) {
   const batchState = { pid: undefined }
   let disposeTools
-  // GUI 设置页表单 -> merge into the config store live (live-stats pattern)
-  installSettingsSection(ctx, PAWL_SETTINGS, SettingsSchema, config, {
-    setSource: () => {},
-    onChange: () => { loadConfig().then((c) => { cache = c; sync() }).catch(() => {}) },
-  })
+  // GUI 设置卡（pawl 命名空间）与 crawler-config.json 双向同步：
+  // 卡保存 -> scope.watch -> 写文件并即时生效；工具/接口改文件 -> 回推 scope（卡片不显示旧值）。
+  let settingsScope = null
+  ctx.inject(['settings'], (sctx) => {
+    let fileBase = {}
+    try { fileBase = JSON.parse(readFileSync(CONFIG_FILE, 'utf8')) } catch {}
+    const base = {}
+    for (const k of CONFIG_KEYS) if (fileBase[k] !== undefined) base[k] = fileBase[k]
+    settingsScope = sctx.settings.register(PAWL_SETTINGS, SettingsSchema, { base })
+    ctx.effect(() => settingsScope.watch(() => {
+      const value = settingsScope.get()
+      const patch = {}
+      for (const k of CONFIG_KEYS) if (value[k] !== undefined) patch[k] = value[k]
+      saveConfig(patch).then(() => sync()).catch(() => {})
+    }), 'pawl: settings sync')
+  }, 'pawl: settings')
+  const pushToSettings = (patch) => {
+    if (settingsScope === null || patch === undefined) return
+    const clean = {}
+    for (const k of ['enabled', 'engine', 'headless', 'autoClick', 'minDelayMs', 'outdir', 'profileDir']) if (patch[k] !== undefined) clean[k] = patch[k]
+    if (Object.keys(clean).length === 0) return
+    Promise.resolve(settingsScope.update(clean)).catch(() => {})
+  }
 
   const sync = () => {
     if (disposeTools !== undefined) { disposeTools(); disposeTools = undefined }
@@ -357,6 +379,7 @@ export function apply(ctx, config = {}) {
               patch.defaults = { ...cur, ...body.defaults }
             }
             const next = await saveConfig(patch)
+            pushToSettings(patch)
             sync()
             return writeJson(res, 200, { ok: true, config: next })
           }

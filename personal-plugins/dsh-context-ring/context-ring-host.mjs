@@ -1,15 +1,13 @@
 /**
  * dsh-local/context-ring — ContextMeter ring color by usage percent.
- * Dual-half: host serves /api/context-ring/config (loopback-fenced, persists
- * into ~/.dsh/cordis.patch.yml and hot-applies); client shows a palette panel
- * (swatch pickers + threshold sliders) in the sidebar.
+ * Dual-half: host serves /api/context-ring/config (loopback-fenced); client
+ * shows a palette panel (swatch pickers + threshold sliders) in the sidebar.
+ * Config authority: the host settings service (namespace `context-ring`) —
+ * the GUI settings card, the sidebar palette, and ring behavior all read and
+ * write the same scope; nothing is persisted in this plugin any more.
  * @module dsh-local/context-ring
  */
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
-import { readFile, writeFile } from 'node:fs/promises'
-
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 
 export const inject = ['webServer']
@@ -21,50 +19,10 @@ const SettingsSchema = z.object({
   warnColor: z.string().default('#f59e0b'),
   dangerColor: z.string().default('#ef4444'),
 })
+export const Config = SettingsSchema
 
-const PATCH = join(dirname(fileURLToPath(import.meta.url)), 'cordis.patch.yml')
 const DEFAULTS = { warnAt: 50, dangerAt: 80, warnColor: '#f59e0b', dangerColor: '#ef4444' }
 const KEYS = Object.keys(DEFAULTS)
-const CONFIG_LINE = /^\s+(warnAt|dangerAt|warnColor|dangerColor):/
-
-function parseConfig(text) {
-  const out = {}
-  const lines = text.split('\n')
-  let inBlock = false
-  for (const line of lines) {
-    if (line.includes('id: dsh-context-ring')) { inBlock = true; continue }
-    if (inBlock && line.startsWith('- ')) break
-    if (inBlock) {
-      const m = line.match(/^\s+(warnAt|dangerAt|warnColor|dangerColor):\s*'?"?([^'"\s]+)'?"?\s*$/)
-      if (m) out[m[1]] = m[2]
-    }
-  }
-  return out
-}
-
-async function readCfg() {
-  try { return { ...DEFAULTS, ...parseConfig(await readFile(PATCH, 'utf8')) } } catch { return { ...DEFAULTS } }
-}
-
-async function writeCfg(patch) {
-  const text = await readFile(PATCH, 'utf8')
-  const lines = text.split('\n')
-  let inBlock = false, edited = false
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].includes('id: dsh-context-ring')) { inBlock = true; continue }
-    if (inBlock && lines[i].startsWith('- ')) break
-    if (inBlock) {
-      const m = lines[i].match(CONFIG_LINE)
-      if (m && patch[m[1]] !== undefined) {
-        const v = patch[m[1]]
-        lines[i] = lines[i].replace(/:\s*.*/, typeof v === 'string' ? ": '" + v + "'" : ': ' + v)
-        edited = true
-      }
-    }
-  }
-  if (edited) await writeFile(PATCH, lines.join('\n'))
-  return edited
-}
 
 function loopback(req) {
   const a = req.socket.remoteAddress
@@ -73,13 +31,16 @@ function loopback(req) {
 }
 
 export function apply(ctx) {
-  // GUI 设置页表单：官方 settings seam（live-stats 范式）
-  installSettingsSection(ctx, RING_SETTINGS, SettingsSchema, DEFAULTS, {
-    setSource: () => {},
-    onChange: () => { readCfg().then((c) => { current = c }).catch(() => {}) },
-  })
   let current = { ...DEFAULTS }
-  readCfg().then((c) => { current = c }).catch(() => {})
+  let scope = null
+
+  // 设置服务 = 唯一数据源：GUI 设置卡与调色板 POST 都写 scope，行为读 scope
+  ctx.inject(['settings'], (sctx) => {
+    scope = sctx.settings.register(RING_SETTINGS, SettingsSchema, { base: DEFAULTS })
+    const sync = () => { current = { ...DEFAULTS, ...scope.get() } }
+    sync()
+    ctx.effect(() => scope.watch(sync), 'context-ring: settings sync')
+  }, 'context-ring: settings')
 
   ctx.effect(() => {
     const route = {
@@ -98,8 +59,9 @@ export function apply(ctx) {
             const next = { ...current, ...patch }
             if (!(Number(next.warnAt) >= 0 && Number(next.warnAt) <= 100) || !(Number(next.dangerAt) >= 0 && Number(next.dangerAt) <= 100)) return send(400, { ok: false, error: 'thresholds must be 0-100' })
             if (!/^#[0-9a-fA-F]{6}$/.test(String(next.warnColor)) || !/^#[0-9a-fA-F]{6}$/.test(String(next.dangerColor))) return send(400, { ok: false, error: 'colors must be #rrggbb' })
-            current = next
-            writeCfg(patch).catch(() => {})
+            if (scope === null) return send(503, { ok: false, error: 'settings not ready' })
+            await scope.update(patch)
+            current = { ...current, ...patch }
             return send(200, { ok: true, config: current })
           } catch { return send(400, { ok: false, error: 'invalid json' }) }
         }

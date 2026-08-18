@@ -1,0 +1,4 @@
+# Bundle patch: 把 dsh-ring-settings 插入 web profile 插件名册。
+- insert:
+    - id: ring-settings
+      name: 'dsh-ring-settings'

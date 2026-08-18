@@ -1,0 +1,26 @@
+{
+  "name": "dsh-crawler-settings",
+  "version": "1.0.0",
+  "description": "爬虫设置卡。作用对象：设置页「插件配置」标签 + dsh-crawler（pawl）插件的 pawl 设置命名空间（网页抓取引擎与行为）。功能：以官方插槽（settings.plugin.item）注册一张「爬虫」卡，编辑启用开关、抓取引擎（auto/http/crawl4ai/browser）、无头模式、自动点击、最小间隔（毫秒）、输出目录、浏览器配置目录；保存写入 ~/.dsh/crawler-config.json 并即时生效（工具/接口改配置也会回推到卡片，双向同步）；保存成功绿色「已保存」提示；卡片显示配置文件真实值。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    }
+  }
+}

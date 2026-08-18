@@ -1,0 +1,96 @@
+// dsh-queue-dock — 会话排队（排队消息 dock）双模式布局。
+// 有 goal：独立行停在 goal 行上方，居中、宽度对齐输入卡；
+// 无 goal：进 goal 行，git 分支/提交 chip 之后占右边余宽。
+// 编辑排队消息时按正常文档流向上展开（不遮挡）。
+//
+// ⚠️ REWRITE RULE: 本文件是 ModuleLoader 脚本契约，不是裸 ESM。
+// factory 必须 `return module.exports`，且 module.exports 必须带 .apply。
+window.__ModuleLoader__.load({
+  id: "dsh-queue-dock",
+  factory: function () {
+    var module = { exports: {} };
+
+    // 只认宿主的直接子元素——querySelectors 全子树会误抓 goal bar 自己的
+    // dock 容器（class 含 _dock），把它拽出 React 容器引发 removeChild 崩溃
+    function findQueueDock(host, row) {
+      if (host === null) return null;
+      for (var i = 0; i < host.children.length; i++) {
+        var c = host.children[i];
+        if (c === row || (row !== null && row.contains(c))) continue;
+        // 真实排队 dock 渲染在插槽容器里：类名含 _dock，或容器内含 _dock 元素
+        if (/_dock/.test(String(c.className))) return c;
+        if (c.querySelector('[class*="_dock"]') !== null) return c;
+      }
+      return null;
+    }
+
+    function findCard() {
+      var ta = document.querySelector("textarea");
+      return ta !== null ? ta.closest('[class*="_card"]') : null;
+    }
+
+    function place() {
+      var row = document.getElementById("dshc-goal-git-row");
+      var card = findCard();
+      if (row === null || card === null) return;
+      var host = card.parentElement;
+      if (host === null) return;
+      var qdock = findQueueDock(host, row);
+      if (qdock === null) return;
+      var goalBar = document.querySelector("[data-goal-bar]");
+      if (goalBar === null) {
+        // 无 goal：进 goal 行，chip 之后占余宽
+        if (qdock.parentElement !== row) row.appendChild(qdock);
+        if (qdock.style.flex !== "1 1 auto") qdock.style.flex = "1 1 auto";
+        if (qdock.style.minWidth !== "0") qdock.style.minWidth = "0";
+        if (qdock.style.width !== "") qdock.style.width = "";
+        if (qdock.style.maxWidth !== "") qdock.style.maxWidth = "";
+        if (qdock.style.margin !== "") qdock.style.margin = "";
+      } else {
+        // 有 goal：独立行在 goal 行上方，居中、宽度对齐输入卡
+        if (qdock.parentElement !== host || qdock.nextElementSibling !== row) host.insertBefore(qdock, row);
+        var w = Math.round(card.getBoundingClientRect().width) + "px";
+        if (qdock.style.width !== w) qdock.style.width = w;
+        if (qdock.style.maxWidth !== "none") qdock.style.maxWidth = "none";
+        if (qdock.style.margin !== "0 auto 8px") qdock.style.margin = "0 auto 8px";
+        if (qdock.style.flex !== "0 0 auto") qdock.style.flex = "0 0 auto";
+      }
+    }
+
+    var timer = null;
+    var pendingSince = 0;
+    function apply() {
+      var obs = new MutationObserver(function () {
+        var now = Date.now();
+        if (pendingSince === 0) pendingSince = now;
+        if (timer !== null) clearTimeout(timer);
+        // 铁律 2b：300ms 防抖；但高频 mutation 页面（agent-teams 轮询等）会
+        // 让防抖永远重置（饥饿）——超过 800ms 强制执行
+        var wait = now - pendingSince >= 800 ? 0 : 300;
+        timer = setTimeout(function () { pendingSince = 0; place(); }, wait);
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+      place();
+    }
+
+    // 幂等闸：运行时应用或脚本体兜底，先到先得
+    var applied = false;
+    module.exports.apply = function () {
+      if (applied) return;
+      applied = true;
+      apply();
+    };
+    return module.exports;
+  }
+});
+// 兜底：装载器注册≠应用（运行时可能永不物化本模块）——3s 后自行 import 并应用。
+// module.exports.apply 带幂等闸，运行时之后调用也不会双重应用。
+setTimeout(function () {
+  var m = window.__DSH_MODULES__;
+  if (!m) return;
+  try {
+    m.import("dsh-queue-dock").then(function (exp) {
+      if (exp && typeof exp.apply === "function") exp.apply();
+    }).catch(function () {});
+  } catch (e) {}
+}, 3000);

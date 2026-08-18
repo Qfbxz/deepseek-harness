@@ -1,0 +1,26 @@
+{
+  "name": "dsh-ring-settings",
+  "version": "1.0.0",
+  "description": "圆环设置卡。作用对象：设置页「插件配置」标签 + dsh-context-ring 插件的 context-ring 设置命名空间（底部上下文圆环的配色行为）。功能：以官方插槽（settings.plugin.item）注册一张「圆环配色」卡，编辑预警/危险阈值（0–100%）与警告/危险颜色（#rrggbb），读写走官方 settings API、与侧边栏圆环调色板数据同源、保存即生效并持久化；保存成功显示绿色「已保存」提示、失败红色提示；覆盖官方四张内置卡之外的空白。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "dsh-goal-expand",
+  "version": "1.0.0",
+  "description": "goal 目标编辑多行展开。作用对象：会话输入框上方的「进行中的目标」条（官方 GoalBar）。功能：显示态保持官方单行样式不动；点击编辑时自动换成多行文本框（自动增高、可拖拽调高），编辑期间 goal 条整体拉长显示、不被输入框遮挡；支持换行书写长目标，Cmd/Ctrl+Enter 保存、Esc 取消，与官方保存/取消按钮完全兼容；保存后换行内容完整保留。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  }
+}

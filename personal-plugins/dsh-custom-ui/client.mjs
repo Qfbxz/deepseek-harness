@@ -9,7 +9,8 @@
  */
 /* global window, document, MutationObserver */
 /* ⚠️ REWRITE RULE: the factory below MUST end with
- *   var module = { exports: {} };
+ *   var module = {
+      try { registerSshCard(ctx); } catch (e) {} exports: {} };
  *   module.exports.apply = function apply() {};
  *   return module.exports;
  * — see the comment at the bottom of the factory. Dropping it kills the UI. */
@@ -62,11 +63,15 @@ window.__ModuleLoader__.load({
       ".hHd-Xa_collapsed .dsh-custom-export > span{display:none !important;}",
       // F3 (grid): expanded — row1 import+export half/half, row2 others x3;
       // collapsed rail — everything stacks in ONE column.
-      ".hHd-Xa_footerActions{display:grid !important;grid-template-columns:repeat(6,1fr) !important;gap:4px !important;row-gap:4px !important;}",
+      ".hHd-Xa_footerActions{display:grid !important;grid-template-columns:repeat(6,1fr) !important;gap:2px !important;row-gap:2px !important;}",
+
+
+      'button[aria-label="移动端远程控制"]{grid-column:3/5 !important;grid-row:2 !important;justify-self:center !important;min-width:44px !important;}',
       '.hHd-Xa_footerActions > button[aria-label="导入会话"],.hHd-Xa_footerActions > button[aria-label="Import Sessions"]{grid-row:1 !important;grid-column:span 3 !important;width:auto !important;min-width:0 !important;margin:0 !important;flex:none !important;align-self:stretch;}',
       ".dsh-custom-export{grid-row:1 !important;grid-column:span 3 !important;align-self:stretch;}",
-      '.hHd-Xa_footerActions > *:not(.dsh-custom-export):not(button[aria-label="导入会话"]):not(button[aria-label="Import Sessions"]):not(.usg_layer){grid-row:2 !important;grid-column:span 2 !important;margin:0 !important;min-width:0 !important;align-self:stretch;}',
-      '.usg_layer:not(.usg_rail){grid-row:2 !important;grid-column:2/7 !important;}',
+      '.hHd-Xa_footerActions > *:not(.dsh-custom-export):not(button[aria-label="导入会话"]):not(button[aria-label="Import Sessions"]):not(.usg_layer){grid-row:2 !important;grid-column:2 !important;justify-self:end !important;margin:0 !important;min-width:0 !important;align-self:stretch;}',
+      '.hHd-Xa_footerActions > *:not(.dsh-custom-export):not(button[aria-label="导入会话"]):not(button[aria-label="Import Sessions"]):not(.usg_layer) > *{justify-content:center !important;padding:4px !important;min-width:28px !important;box-sizing:border-box;}',
+      '.usg_layer:not(.usg_rail){grid-row:2 !important;grid-column:4/7 !important;}',
       ".usg_layer:not(.usg_rail){height:auto !important;min-height:36px;}",
       // collapsed rail: single column stack for ALL six buttons
       ".hHd-Xa_collapsed .hHd-Xa_footerActions{display:flex !important;flex-direction:column !important;align-items:center !important;gap:6px !important;grid-template-columns:none !important;}",
@@ -87,6 +92,23 @@ window.__ModuleLoader__.load({
       ".dsh-custom-titlebar .dsh-custom-tb-btn{-webkit-app-region:no-drag;cursor:pointer;width:28px;height:22px;border:none;border-radius:6px;background:transparent;color:inherit;font-size:12px;line-height:22px;text-align:center;padding:0;}",
       ".dsh-custom-titlebar .dsh-custom-tb-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.08));}",
       "body.dsh-custom-tb{padding-top:32px;}",
+      // --- 底部行终版：[检查更新|移动端] 自然宽 + 用量条填满右侧（1px 间隙，两缘对齐设置按钮）---
+      '.hHd-Xa_footerActions [class*="entryRow"]{grid-row:2 !important;grid-column:1 / span 2 !important;margin:0 0 0 4px !important;justify-self:start !important;}',
+      '.hHd-Xa_footerActions .usg_layer{grid-row:2 !important;grid-column:3 / -1 !important;margin:0 -4px 0 10px !important;justify-self:stretch !important;width:auto !important;}',
+      '.usg_layer .usg_footerButtons, .usg_layer .usg_badge{flex:1 1 auto !important;width:auto !important;min-width:0 !important;}',
+      '.usg_layer button{width:100% !important;box-sizing:border-box !important;}',
+      // --- 折叠态（窄栏）：底部按钮单列垂直居中对齐 ---
+      '.hHd-Xa_settingsArea, .hHd-Xa_settingsArea button{margin-left:4px !important;}',
+      '.hHd-Xa_footerActions{container-type:inline-size;}',
+      '@container (max-width: 120px){',
+      '  .hHd-Xa_footerActions{width:100% !important;margin:0 !important;justify-items:center !important;}',
+      '  .hHd-Xa_footerActions [class*="entryRow"]{margin:0 0 0 -26px !important;}',
+      '  .hHd-Xa_footerActions .usg_layer{margin:0 0 0 -26px !important;width:auto !important;}',
+      '  .hHd-Xa_footerActions button[aria-label="导入会话"], .hHd-Xa_footerActions button[aria-label="Import Sessions"]{margin-left:-21px !important;}',
+      '  .hHd-Xa_footerActions .dsh-custom-export, .hHd-Xa_footArea .dsh-custom-export{margin-left:-24px !important;}',
+      '  .usg_layer .usg_footerButtons, .usg_layer .usg_badge{flex:0 1 auto !important;width:auto !important;}',
+      '  .usg_layer button{width:auto !important;}',
+      '}',
     ].join("");
     function injectCss() {
       if (document.querySelector("style[data-dsh-custom-ui]")) return;
@@ -285,8 +307,18 @@ window.__ModuleLoader__.load({
         //#endregion
 
     //#region boot + observer (P3)
+    // 折叠态设置按钮对齐：settingsArea 不在 footerActions 容器查询作用域内，用 JS 切换
+    function settingsCollapsedAlign() {
+      var fa = document.querySelector('[class*="footerActions"]');
+      var sa = document.querySelector('[class*="settingsArea"]');
+      if (fa === null || sa === null) return;
+      var collapsed = fa.getBoundingClientRect().width <= 120;
+      var want = collapsed ? "-5px" : "4px";
+      sa.style.setProperty('margin-left', want, 'important');
+    }
+
     function tick() {
-      var fns = [syncSidebarWidthVar, injectCss, ensureExportClone, ensureTitlebar, watchDetailsFrame, collapseDetailsTrack, scrubEffortText];
+      var fns = [syncSidebarWidthVar, injectCss, ensureExportClone, ensureTitlebar, watchDetailsFrame, collapseDetailsTrack, scrubEffortText, settingsCollapsedAlign];
       for (var i = 0; i < fns.length; i++) {
         try { fns[i](); } catch (e) { /* per-feature isolation: one failure never kills the rest */ }
       }

@@ -1,11 +1,6 @@
-# dsh-context-ring bundle patch. Host half serves /api/context-ring/config
-# (loopback, validated, persisted back into this patch file); client half is
-# the sidebar 圆环 palette card.
+# dsh-context-ring bundle patch. Config authority is the host settings
+# service (namespace `context-ring`); no config block lives here any more —
+# a YAML-typed config block once crashed boot when values were quoted.
 - insert:
     - id: dsh-context-ring
       name: dsh-context-ring
-      config:
-        warnAt: '50'
-        dangerAt: '80'
-        warnColor: '#f59e0b'
-        dangerColor: '#ef4444'

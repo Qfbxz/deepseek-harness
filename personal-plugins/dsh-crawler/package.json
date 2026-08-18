@@ -14,6 +14,11 @@
       "patch": "./cordis.patch.yml"
     },
     "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
       "platform": "web"
     }
   },
@@ -26,12 +31,5 @@
     "cloudflare"
   ],
   "license": "MIT",
-  "peerDependencies": {
-    "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-settings": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-invariants": "0.1.0-rc.6",
-    "@deepseek-ai/dsh-brand": "0.1.0-rc.6",
-    "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/schemastery": "^3.18.1"
-  }
+  "dshHostDeps": "bridged: node_modules/@deepseek-ai/* are symlinks to the dsh CLI copies (single instance, no shadowing). Do NOT run pnpm install here — it would vendor real copies and break the bridges."
 }

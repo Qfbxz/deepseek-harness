@@ -1,0 +1,4 @@
+# Bundle patch: 把 dsh-git-commit 插入 web profile 插件名册（host 半边提供回环 git API）。
+- insert:
+    - id: git-commit
+      name: 'dsh-git-commit'

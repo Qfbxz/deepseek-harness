@@ -1,0 +1,18 @@
+{
+  "name": "dsh-task-checklist",
+  "version": "1.0.0",
+  "description": "任务清单停靠条（全局勾选式待办）。作用对象：会话输入框上方区域 + 浏览器 localStorage（键 dsh.taskChecklist.v1，跨会话共享）。功能：单行摘要常驻（完成数/下一步预览）；点开显示清单，条目可勾选完成、添加、删除、⠿ 拖拽排序；条目点击进入多行编辑（自动增高、Cmd/Ctrl+Enter 保存、Esc 取消）；点击清单外部自动收缩（编辑中不收防丢草稿）；位置自适应——有 goal 时独立整行停在 goal 行上方（间距与 goal↔输入框一致），无 goal 时收窄挪进 goal 行与 git 分支按钮同行；长清单限高 40vh 内部滚动不被会话区遮挡；展开/收起宽度不跳变、不闪烁。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  }
+}

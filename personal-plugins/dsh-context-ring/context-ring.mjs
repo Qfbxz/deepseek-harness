@@ -10,15 +10,20 @@ import { dirname, join } from 'node:path'
 const here = dirname(fileURLToPath(import.meta.url))
 
 let hostApply
+let hostConfig = undefined
 try {
   const host = await import('./context-ring-host.mjs')
   hostApply = host.apply
+  hostConfig = host.Config
 } catch { hostApply = () => {} }
 
 export const inject = ['webServer']
 export const name = 'dsh-context-ring'
-// NOTE: no Config export — `Config = Object` is not a valid cordis schema and
-// crashes resolveConfig ("reading 'validate'"). Config passes through raw.
+// 2026-08-18: re-export the host's valid schemastery Config so the settings
+// page renders a card for this plugin (host file owns RING_SETTINGS + schema;
+// previously only `apply` was re-exported, so no settings card appeared).
+
+export const Config = hostConfig
 
 export function apply(ctx, config = {}) {
   const disposeHost = hostApply(ctx, config) || (() => {})

@@ -1,0 +1,18 @@
+{
+  "name": "dsh-queue-dock",
+  "version": "1.0.0",
+  "description": "会话排队停靠布局。作用对象：输入框上方的排队消息 dock（官方排队 UI）+ goal 行（dshc-goal-git-row）。功能：有进行中的目标时，排队消息独立成行停在 goal 行上方，居中显示、宽度对齐输入框；没有 goal 时，排队消息挪进 goal 行，排在 git 分支与提交按钮之后、占据右侧余宽；编辑排队消息时按正常文档流向上展开，不遮挡下方内容；位置变化时才移动节点（不偷焦点、不闪烁）。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  }
+}

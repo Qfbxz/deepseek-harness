@@ -1,0 +1,21 @@
+{
+  "name": "dsh-git-commit",
+  "version": "1.0.0",
+  "description": "git 提交/推送停靠按钮（Codex 风格）。作用对象：goal 行（git 分支按钮旁）+ 当前会话 cwd 对应的 git 仓库。功能：常驻「⎇ 提交 ±N」chip 显示未提交文件数（有改动或待推送时高亮，每 12 秒自动刷新）；点击弹出提交面板——提交信息输入（留空自动生成「auto: +N/-M · X 个文件 · 时间」）、「包含未暂存的更改」勾选项（附 +N -M 增删行数徽章）、提交 / 提交并推送 / 推送 三个按钮，显示分支名与领先/落后状态，操作结果即时反馈；host 侧回环 API 仅限本机访问，cwd 必须是 git 仓库。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  }
+}
