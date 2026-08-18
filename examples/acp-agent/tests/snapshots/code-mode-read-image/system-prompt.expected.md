@@ -44,8 +44,8 @@ interface ToolArgsMap {
   bash: {
     /** The bash command to execute. */
     command: string;
-    /** Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples: "ls" → "List files in current directory"; "git status" → "Show working tree status"; "npm install" → "Install package dependencies". */
-    description: string;
+    /** Clear, concise description of what this command does in active voice, 5-10 words (shown in the UI). Examples: "ls" → "List files in current directory"; "git status" → "Show working tree status"; "npm install" → "Install package dependencies". Optional; omitted or blank, the first command line labels the call. */
+    description?: string;
     /** Timeout in milliseconds. The executor applies its configured default and cap, and kills the command on expiry. */
     timeoutMs?: number;
     /** Working directory for this command. Defaults to the session workspace; a relative path is resolved against it. */

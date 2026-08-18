@@ -1307,11 +1307,31 @@ describe('the run_code dispatch bridge', () => {
     })
   })
 
-  it('rejects a whitespace-only description with a structured isError', async () => {
+  it('derives the card title from the first meaningful program line when the description is omitted', async () => {
     const { ctx } = await setup({ mode: 'code' })
-    const result = await runCode(ctx, 'return 1', { description: '   ' })
-    expect(result.isError).toBe(true)
-    expect((result.content[0] as { text: string }).text).toContain('invalid description')
+    const tool = ctx.tools.get(RUN_CODE_NAME)!
+    expect(tool.presentCall?.({ code: '// Count TODO markers across packages\nconst r = await tools.grep({})' })).toEqual({
+      card: 'generic',
+      title: 'Count TODO markers across packages',
+      kind: 'execute',
+      rawInput: '// Count TODO markers across packages\nconst r = await tools.grep({})',
+    })
+    // A whitespace-only description is absent, not an error: the run proceeds
+    // under the derived label (a hard requirement here wasted a whole round).
+    expect(tool.presentCall?.({ code: 'return 1', description: '   ' })?.title).toBe('return 1')
+  })
+
+  it('runs a call with no description instead of failing on the missing property', async () => {
+    const { ctx, runtime } = await setup({ mode: 'code' })
+    runtime.behavior = () => Promise.resolve({ logs: [], value: 'ok' })
+    const result = await ctx.tools.execute({
+      signal: testToolSignal,
+      callId: CallId('call-no-desc'),
+      name: RUN_CODE_NAME,
+      arguments: { code: 'return 1' },
+    })
+    expect(result.isError).toBe(false)
+    expect((result.content[0] as { text: string }).text).toContain('ok')
   })
 
   it.each([
