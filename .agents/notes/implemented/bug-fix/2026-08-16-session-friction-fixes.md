@@ -28,15 +28,10 @@ pattern, a user-space convention, not harness code).
    `meta.description` stays required: it is the workflow's identity record,
    not a UI label.
 
-2. **Locale-tiered token formatting** (ui-conversation). `formatTokens`
-   takes the active locale: zh renders the wan/yi scale (5,600 / 8.6 万 /
-   321 万 / 3.11 亿 — the units the surrounding copy already uses), en keeps
-   K/M/B and now rolls to B at a billion instead of padding M (the
-   session's 310.95M-class totals). The language flows from the
-   registrations' `ctx.locale` closures through `activeLocale` inject
-   callbacks (composer bar + stats dock), matching the slots rule that
-   inject returns plain callbacks. ContextMeter threads the same seat for
-   its occupancy figures.
+2. **Locale-tiered token formatting** stays unshipped on this branch: the
+   two-row dock route it rode on was replaced by the single-row
+   ellipsis-plus-tooltip StatsLine, and the HEAD-shaped components do not
+   take the `activeLocale` seat. It returns with the next dock-band change.
 
 3. **Actionable grep failures** (tool-fs-search). A missing search target
    keeps the rg stderr excerpt but appends what to do (check the path
@@ -53,18 +48,21 @@ pattern, a user-space convention, not harness code).
    (code-runtime-worker-thread). A program-body SyntaxError now reports its
    message plus a remediation hint (fix the syntax, or move complex logic
    into a file written first); the stack of a synthetic function body is
-   dropped since its frames carry no location. Previously
-   `Expected ',', got '<eof>'` arrived with zero context.
+   dropped since its frames carry no location. The type-strip entry point
+   (`stripTypeScriptTypes`, whose amaro SyntaxError likewise carries no line
+   or column) appends the same hint plus a best-effort location: a scan names
+   the opening line of an unterminated string or template literal, the
+   dominant shape of these failures. Previously `Expected ',', got '<eof>'`
+   arrived with zero context.
 
-Also: the composer dock footer wraps dock entries in a `statsBand` column
-with a 2px gap, so stacked plugin strips (shipped stats rows + market
-plugins like dsh-usage-stats) stay visibly separate instead of reading as
-one wall of figures — the session's jammed stats text.
+The composer-dock stats strip splits in two rows on the branch this note
+originated from; this branch ships the single-row ellipsis-plus-tooltip
+StatsLine instead, so the dock band layout is not part of what shipped here.
 
 ## Verification
 
 - pnpm vitest run: code-mode/ts-types/py-types (152), tool-fs-search (146), tool-fs (321),
-  code-runtime suites (114), chat-stats + context-meter (29).
+  code-runtime suites (116, including the unterminated-literal location pair), chat-stats + context-meter (29).
 - pnpm run typecheck clean.
 - pnpm run test:gui: 3789 passed; 2 pre-existing failures on HEAD
   (chat-branch-tails cache-hit string, ui-theme scrollbar rebind in

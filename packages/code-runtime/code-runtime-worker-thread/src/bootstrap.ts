@@ -211,7 +211,7 @@ function prepareFailure(
  * is a synthetic function body), so without this the model cannot tell a
  * broken tool call from broken program text.
  */
-const SYNTAX_HINT = ' — the program body failed to parse before any code ran; fix the syntax, or move complex logic into a file written first and keep this body minimal'
+export const SYNTAX_HINT = ' — the program body failed to parse before any code ran; fix the syntax, or move complex logic into a file written first and keep this body minimal'
 
 /**
  * Prepare a thrown program value without sending an unbounded stack or
