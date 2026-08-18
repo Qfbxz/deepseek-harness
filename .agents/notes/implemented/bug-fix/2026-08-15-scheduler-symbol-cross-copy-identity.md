@@ -14,6 +14,15 @@ Profile-installed plugins declare `@deepseek-ai/dsh-*` packages as npm dependenc
 
 Register the scheduler through the global symbol registry: `Symbol.for('@deepseek-ai/dsh-tools.scheduler')`. The registry key is the package-documented name, so any copy of any version that applies the same registration interoperates, independent of how many copies pnpm materializes or which one a given composition resolves. Deduplicating the copies themselves (workspace aliasing, host-only resolution) is a packaging-policy change with its own failure modes; identity-level registration fixes the cross-copy contract without touching dependency layout.
 
+## Alternatives considered
+
+- **Deduplicate the physical copies** (workspace aliasing, host-only resolution). A packaging-policy change with its own failure modes; identity-level registration fixes the cross-copy contract without touching dependency layout.
+- **A string key on the service object.** String keys collide with public method names and lose the symbol's non-enumerable, non-string safety; a registry symbol keeps both while still being copy-independent.
+
+## Consequences
+
+Any copy of any version that applies the same registration interoperates, independent of how many copies pnpm materializes or which one a given composition resolves. The registry key `@deepseek-ai/dsh-tools.scheduler` is now a published contract: renaming it later breaks cross-version interop between mixed copies, so it is package-documented and stable.
+
 ## Verification
 
 `tests/scheduler-symbol.spec.ts` pins the contract: the exported symbol equals `Symbol.for` under the documented key, which is the registry's guarantee that every copy applying the same registration shares one identity. The incident reproduction — a profile closure with its own `dsh-tools` copy driving subagent tool calls — went from universal `reading 'prepare'` failures to clean execution after the host copy registered through the global registry.
