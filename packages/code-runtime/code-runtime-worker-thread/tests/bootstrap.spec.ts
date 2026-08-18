@@ -201,6 +201,20 @@ describe('prepareException', () => {
       error: { kind: 'exception', message: '42' },
     })
   })
+
+  it('appends the parse-failure remediation hint to a SyntaxError', () => {
+    const syntax = new SyntaxError("Expected ',', got '<eof>'")
+    expect(prepareException(syntax, 4_000)).toEqual({
+      error: {
+        kind: 'exception',
+        message: "Expected ',', got '<eof>' — the program body failed to parse before any code ran; fix the syntax, or move complex logic into a file written first and keep this body minimal",
+      },
+    })
+    // Non-syntax errors keep their stack form with no hint appended.
+    const plain = prepareException(new TypeError('x is not a function'), 4_000).error?.message ?? ''
+    expect(plain).toContain('x is not a function')
+    expect(plain).not.toContain('failed to parse')
+  })
 })
 
 describe('makeNamespaces', () => {

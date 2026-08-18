@@ -132,6 +132,29 @@ describe('WorkerThreadCodeRuntime — programs and bindings (real workers)', () 
     expect(result.error?.message).toMatch(/enum|strip/i)
   })
 
+  it('locates an unterminated string for a strip-phase parse failure', async () => {
+    const { runtime } = await setup()
+    const result = await runtime.run({
+      program: 'const rows = [\n  grep(env, "pattern-with-tail\n];\nreturn rows',
+      bindings: [],
+    })
+    expect(result.error?.kind).toBe('exception')
+    expect(result.error?.message).toContain('unterminated string starting at line 2')
+    expect(result.error?.message).toContain('grep(env,')
+    expect(result.error?.message).toContain('failed to parse before any code ran')
+  })
+
+  it('locates an unterminated template literal for a strip-phase parse failure', async () => {
+    const { runtime } = await setup()
+    const result = await runtime.run({
+      program: "const label = `multi-line\nconst done = true\nreturn done ? label : ''",
+      bindings: [],
+    })
+    expect(result.error?.kind).toBe('exception')
+    expect(result.error?.message).toContain('unterminated template literal starting at line 1')
+    expect(result.error?.message).toContain('failed to parse before any code ran')
+  })
+
   it('reports a runtime throw as an exception with the message', async () => {
     const { runtime } = await setup()
     const result = await runtime.run({ program: 'throw new Error("kaboom")', bindings: [] })

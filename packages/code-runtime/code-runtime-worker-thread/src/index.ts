@@ -18,6 +18,7 @@ import type { CodeBindingNamespace, CodeJsonValue, CodeRunFailure, CodeRunReques
 import { snapshotJsonValue } from '@deepseek-ai/dsh-session'
 import type { ReplyMessage, WorkerBootData, WorkerToHost } from './protocol.ts'
 import { jsonStringBytesUpTo, jsonValueBytesUpTo, truncateJsonStringBytes } from './output-json.ts'
+import { SYNTAX_HINT } from './bootstrap.ts'
 import { decodeWorkerJson, encodeWorkerJson } from './worker-json.ts'
 import type { WorkerJsonWire } from './worker-json.ts'
 
@@ -105,6 +106,50 @@ interface LiveRun {
 /* v8 ignore next -- the './worker.cjs' arm is the built-lib world, unreachable unbuilt by construction; the built-lib e2e pins it. */
 const WORKER_PATH = fileURLToPath(new URL(new URL(import.meta.url).pathname.endsWith('.ts') ? './worker.ts' : './worker.cjs', import.meta.url))
 
+/**
+ * Best-effort location for the dominant strip-phase syntax failure: a string or
+ * template literal left unclosed (its opening quote then swallows the rest of the
+ * program). `stripTypeScriptTypes` reports a bare `SyntaxError` with no line or
+ * column, so this scan names the opening line when it can pin one.
+ * @param program - the program body as received, before type-stripping.
+ * @returns a suffix naming the unclosed literal's opening line, or '' when the
+ * breakage is not an unclosed literal this scan can see.
+ */
+function unclosedLiteralHint(program: string): string {
+  let state: 'code' | 'sq' | 'dq' | 'tpl' | 'line-comment' | 'block-comment' = 'code'
+  let line = 1
+  let openLine = 0
+  for (let i = 0; i < program.length; i += 1) {
+    const c = program[i]
+    const next = program[i + 1]
+    if (c === '\n') {
+      line += 1
+      if (state === 'line-comment') state = 'code'
+      continue
+    }
+    if (state === 'line-comment') continue
+    if (state === 'block-comment') {
+      if (c === '*' && next === '/') { state = 'code'; i += 1 }
+      continue
+    }
+    if (state === 'sq' || state === 'dq' || state === 'tpl') {
+      const quote = state === 'sq' ? "'" : state === 'dq' ? '"' : '`'
+      if (c === '\\') { i += 1; continue }
+      if (c === quote) state = 'code'
+      continue
+    }
+    if (c === '/' && next === '/') { state = 'line-comment'; i += 1; continue }
+    if (c === '/' && next === '*') { state = 'block-comment'; i += 1; continue }
+    if (c === "'" || c === '"' || c === '`') {
+      state = c === "'" ? 'sq' : c === '"' ? 'dq' : 'tpl'
+      openLine = line
+    }
+  }
+  if (state === 'code' || state === 'line-comment' || state === 'block-comment') return ''
+  const kind = state === 'tpl' ? 'template literal' : 'string'
+  const opening = (program.split('\n')[openLine - 1] ?? '').trim().slice(0, 60)
+  return ` (unterminated ${kind} starting at line ${openLine}: ${opening})`
+}
 /** Render an unknown thrown value as a message, `Error` or not. */
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -305,7 +350,12 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
       // A program that does not survive the type-strip (syntax error,
       // non-erasable syntax like `enum`) is a program failure, reported the
       // same way a thrown exception would be — and no worker ever spawns.
-      return this.failureBeforeWorker({ kind: 'exception', message: messageOf(error) })
+      // amaro's SyntaxError carries no line or column, so a parse failure
+      // gains the unclosed-literal location and the shared remediation hint.
+      const message = error instanceof SyntaxError
+        ? `${messageOf(error)}${unclosedLiteralHint(request.program)}${SYNTAX_HINT}`
+        : messageOf(error)
+      return this.failureBeforeWorker({ kind: 'exception', message })
     }
 
     return await this.execute(request, code, bindings)
