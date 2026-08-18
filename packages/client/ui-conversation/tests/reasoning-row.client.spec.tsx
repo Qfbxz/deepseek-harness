@@ -39,7 +39,7 @@ afterEach(() => {
 const t = makeTranslate(zh, commonZh)
 
 describe('ReasoningRow', () => {
-  it('follows the latest streaming line, scrolls to its end, then restores the settled first line', () => {
+  it('streams expanded, follows the latest line after a manual fold, then settles folded to the first line', () => {
     const view = render(
       <AssistantMarkdown
         t={t}
@@ -47,7 +47,15 @@ describe('ReasoningRow', () => {
         streaming
       />,
     )
+    const row = view.getByRole('button')
     expect(view.getByText('运行中')).toBeTruthy()
+    // Auto disclosure: the row expands while its reasoning streams.
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+    expect(view.getByText(/Newest reasoning tokens/)).toBeTruthy()
+
+    // A manual fold pins collapsed for the rest of the streaming phase.
+    fireEvent.click(view.getByText('Think'))
+    expect(row.getAttribute('aria-expanded')).toBe('false')
     const summary = view.getByText('Newest reasoning tokens')
     Object.defineProperties(summary, {
       scrollWidth: { configurable: true, value: 300 },
@@ -76,6 +84,8 @@ describe('ReasoningRow', () => {
       />,
     )
     flushAnimationFrames(3)
+    // The phase flip clears the manual override; the settled row stays folded.
+    expect(row.getAttribute('aria-expanded')).toBe('false')
     expect(view.getByText('Inspect the session')).toBeTruthy()
     expect(view.queryByText('运行中')).toBeNull()
     expect(summary.scrollLeft).toBe(0)
