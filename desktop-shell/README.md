@@ -8,13 +8,14 @@ Minimal Electron shell for the official DeepSeek Harness Web Host — built as t
 
 - Spawns `dsh --profile web` (PATH lookup) and parses the canonical readiness
   line `dsh web: http://127.0.0.1:<port>` to learn the loopback URL.
-- Attaches to an already-running dsh web on 3080/3000/4096/5173 instead of
-  double-spawning when one exists.
+- Attaches to an already-running dsh web on 3080 (the dsh default) instead
+  of double-spawning when one exists.
 - Loads the URL into a sandboxed BrowserWindow with a single validated IPC
   channel backing `window.dshDesktop.windowCommand("minimize"|"maximize"|"close")`
   — the same bridge shape that `desktop-chrome` (in `../personal-plugins/`)
   consumes for the QQ98 retro titlebar.
-- Kills the spawned host on quit.
+- Kills the spawned host on quit (non-macOS). On macOS closing the window
+  keeps the app and host resident; the Dock icon reopens the window.
 
 Total: ~150 lines of JavaScript. No vendored runtime. No bundled community
 plugins — the official profile manages them via `dshmarket`.
@@ -32,7 +33,10 @@ npm start
 ```
 
 `ELECTRON_MIRROR` avoids the GitHub-binary hang on this network. The first
-install downloads Electron (~150 MB) via the mirror.
+install downloads Electron (~150 MB) via the mirror. For packaging, the
+downloaded Electron zip already ships via `build.electronDownload` in
+package.json; `npm run dist:mac:cn` additionally mirrors the electron-builder
+helper binaries (the `got` request that times out against GitHub).
 
 ## Package (mac-arm64, ad-hoc)
 
@@ -45,10 +49,16 @@ Produces `dist/mac-arm64/DeepSeek Harness Shell.app`. Ad-hoc signed
 
 ### macOS Gatekeeper note (first launch)
 
-The app is ad-hoc signed and not notarized. On recent macOS, copying it to
-`/Applications` and launching it directly can trigger Gatekeeper's
-"malware removed" behavior — the bundle's contents get emptied while the
-outer `.app` shell remains. The build artifact under `dist/` is unaffected.
+The app is ad-hoc signed (no Developer ID, no notarization). On recent
+macOS, an Electron 31.x or older framework whose original GitHub
+notarization ticket was revoked by Apple will be flagged as "malware"
+by XProtect and auto-deleted from `/Applications` — `spctl` reports
+"notarization indicates this code has been revoked". This build pins
+**Electron 43.4.0** whose GitHub-signed framework still has a fresh
+stamp, so `spctl` reports only the normal "rejected" verdict (Gatekeeper
+ad-hoc unsigned-by-known-developer). After `npm run package:mac`
+auto-runs the post-build `codesign --force --deep --sign -`, the bundle
+is ready for the standard first-launch workaround.
 
 Recover and unlock:
 
@@ -58,11 +68,16 @@ cp -R dist/mac-arm64/DeepSeek\ Harness\ Shell.app /Applications/
 
 Then in Finder: **right-click (Control-click) the app → Open → confirm
 "Open"** in the dialog. This user-confirmed path registers the exception;
-subsequent launches open normally. Alternatively: System Settings → Privacy
-& Security → scroll to the bottom → "Open Anyway".
+subsequent launches open normally. Alternatively: System Settings →
+Privacy & Security → scroll to the bottom → "Open Anyway".
 
 A permanent fix requires an Apple Developer ID certificate and notarization
 (`afterSign` + `notarytool`); not configured here.
+
+If you ever pin Electron to an older line and XProtect starts flagging
+the build again, fall back to running from source — `npm start` launches
+the Electron binary in `node_modules/electron/dist/` directly, bypassing
+the `/Applications` Gatekeeper/XProtect scan.
 
 ## Plugin compatibility
 

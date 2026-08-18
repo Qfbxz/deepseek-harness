@@ -7,6 +7,7 @@
   "scripts": {
     "start": "electron .",
     "dist:mac": "electron-builder --mac --arm64 --dir",
+    "dist:mac:cn": "ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ ELECTRON_BUILDER_BINARIES_MIRROR=https://npmmirror.com/mirrors/electron-builder-binaries/ electron-builder --mac --arm64 --dir",
     "package:mac": "electron-builder --mac --arm64 && codesign --force --deep --sign - \"dist/mac-arm64/DeepSeek Harness Shell.app\"",
     "sign:mac": "codesign --force --deep --sign - \"dist/mac-arm64/DeepSeek Harness Shell.app\""
   },
@@ -16,6 +17,9 @@
   },
   "build": {
     "appId": "ai.deepseek.harness.shell",
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
     "productName": "DeepSeek Harness Shell",
     "files": [
       "main.js",
