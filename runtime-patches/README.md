@@ -18,7 +18,16 @@ node runtime-patches/replay-tool-bash-optional-description.mjs \
   ~/.dsh/profiles/node_modules/@deepseek-ai/dsh-tool-bash/lib/index.js
 `
 
-## 补丁 2：run_code 解析失败提示与未闭合字面量定位（dsh-code-runtime-worker-thread）
+## 补丁 2：run_code description 可选（dsh-tools 编译层）
+
+源码修复已提交（见 PR-A 2026-08-18-optional-tool-descriptions）。编译层在 dsh-tools 的 code-mode，不在 dsh-tool-bash。把同样的修复带进运行时：移除 description 参数的 required: true、移除执行期空串拒绝 throw、注入 deriveRunCodeTitle 从首行派生标签（PR-A 等价语义）：
+
+`sh`
+node runtime-patches/replay-run-code-optional-description.mjs \
+  "$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tools/lib/index.js"
+`
+
+## 补丁 3：run_code 解析失败提示与未闭合字面量定位（dsh-code-runtime-worker-thread）
 
 源码修复已提交（见 Agent Note 2026-08-16-session-friction-fixes 第 5 条 + 3f95abbcf0 补强）。补丁让 `stripTypeScriptTypes` 阶段的 SyntaxError 携带补救提示与未闭合字符串/模板的起始行 —— 此前 `Expected ',', got '<eof>'` 毫无位置信息。注意 `~/.dsh/profiles` 下该包软链到全局，只需打全局一份：
 
