@@ -123,7 +123,23 @@ function stderrExcerpt(stderrText: string, truncated: boolean): string {
 function classifyRunFailure(toolName: string, exitCode: number, stderrText: string, stderrTruncated: boolean): SearchError {
   const stderr = stderrExcerpt(stderrText, stderrTruncated)
   if (/regex parse error|error parsing glob/i.test(stderr)) {
-    return new SearchError(`${toolName} pattern rejected by ripgrep: ${stderr}`, 'SEARCH_INVALID_PATTERN')
+    // The common cause is an unescaped metacharacter (`+`, `*`, `(`) intended
+    // literally, or alternation containing raw arithmetic like `x + 1e6`. Say
+    // the remedy so the next call escapes or simplifies instead of resending.
+    return new SearchError(
+      `${toolName} pattern rejected by ripgrep: ${stderr} — the pattern is a regex; escape metacharacters intended literally (\\+, \\*, \\(), or split the search into simpler alternations and retry`,
+      'SEARCH_INVALID_PATTERN',
+    )
+  }
+  // An IO error names its target in rg's stderr ("<path>: IO error for operation
+  // on <path>: No such file or directory"). Keep the excerpt — the path is the
+  // actionable part — but say what to DO about it, since a raw rg line reads
+  // like an internal fault rather than "check the path you passed".
+  if (/IO error for operation on/i.test(stderr)) {
+    return new SearchError(
+      `${toolName} search failed (exit ${exitCode}): ${stderr} — the search target does not exist or is inaccessible; check the path (it resolves against the session workspace), then retry`,
+      'SEARCH_FAILED',
+    )
   }
   return new SearchError(`${toolName} search failed (exit ${exitCode})${stderr.length > 0 ? `: ${stderr}` : ''}`, 'SEARCH_FAILED')
 }
@@ -208,6 +224,16 @@ export function resolveRgPath(): Promise<string> {
  * @param stderrMaxBytes - cap on the retained stderr diagnostic tail.
  * @returns the complete stdout, the zero-result flag, and the resolved workdir.
  */
+/**
+ * The uniform abort message: names the cause and the remedy in one line, so a
+ * timeout on a broad search tells the model to narrow instead of retrying blind.
+ */
+function abortError(toolName: string): SearchError {
+  return new SearchError(
+    `${toolName} was aborted before completion (tool timeout or caller cancellation); narrow the pattern, add an include glob, or scope the path and retry`,
+    'SEARCH_ABORTED',
+  )
+}
 export async function runRipgrep(
   ctx: Context,
   exec: ToolExecution,
@@ -218,7 +244,7 @@ export async function runRipgrep(
   stderrMaxBytes: number,
 ): Promise<RipgrepRun> {
   if (exec.signal.aborted) {
-    throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED')
+    throw abortError(toolName)
   }
   const cwd = exec.agent?.session.header.cwd
   const workdir = cwd ?? process.cwd()
@@ -243,7 +269,7 @@ export async function runRipgrep(
     // see AbortSignal state changes.
     // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (exec.signal.aborted) {
-      throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED')
+      throw abortError(toolName)
     }
     throw new SearchError(`${toolName} could not start its search command (ripgrep launch failed)`, 'SEARCH_FAILED', { cause: error })
   }
@@ -262,7 +288,7 @@ export async function runRipgrep(
   // proves this re-check "always false" cannot see AbortSignal state changes.
   // oxlint-disable-next-line typescript/no-unnecessary-condition
   if (exec.signal.aborted) {
-    throw new SearchError(`${toolName} was aborted before completion (tool timeout or caller cancellation)`, 'SEARCH_ABORTED')
+    throw abortError(toolName)
   }
   if (outcome.signal !== null || outcome.exitCode === null) {
     throw new SearchError(`${toolName} search command was killed by signal ${outcome.signal ?? '(unknown)'}`, 'SEARCH_FAILED')

@@ -554,12 +554,13 @@ describe('exit semantics and failure classification', () => {
     expect(text(grep)).toBe('No matches found')
   })
 
-  it('a regex parse error classifies as SEARCH_INVALID_PATTERN', async () => {
+  it('a regex parse error classifies as SEARCH_INVALID_PATTERN with the escape remedy', async () => {
     const { ctx, subprocess } = await setup()
     subprocess.handler = () => runResult('', { exitCode: 2, stderr: { text: 'rg: regex parse error:\n    (\nerror: unclosed group' } })
     const result = await call(ctx, 'grep', { pattern: '(' })
     expect(result.error).toMatchObject({ info: { code: 'SEARCH_INVALID_PATTERN' } })
     expect(text(result)).toContain('regex parse error')
+    expect(text(result)).toContain('escape metacharacters')
   })
 
   it('a glob parse error classifies as SEARCH_INVALID_PATTERN', async () => {
@@ -577,6 +578,29 @@ describe('exit semantics and failure classification', () => {
     expect(text(result)).toContain('IO error')
   })
 
+  it('a missing search target names the actionable remedy beside the rg excerpt', async () => {
+    const { ctx, subprocess } = await setup()
+    subprocess.handler = () => runResult('', {
+      exitCode: 2,
+      stderr: { text: 'rg: /gone/path/file.cs: IO error for operation on /gone/path/file.cs: No such file or directory (os error 2)' },
+    })
+    const result = await call(ctx, 'grep', { pattern: 'x', path: '/gone/path/file.cs' })
+    expect(result.error).toMatchObject({ info: { code: 'SEARCH_FAILED' } })
+    expect(text(result)).toContain('IO error')
+    expect(text(result)).toContain('check the path')
+  })
+
+  it('an abort message carries the narrowing hint', async () => {
+    const { ctx, subprocess } = await setup()
+    const controller = new AbortController()
+    subprocess.handler = () => {
+      controller.abort('timeout')
+      return runResult('', { exitCode: null, signal: 'SIGTERM' })
+    }
+    const result = await call(ctx, 'grep', { pattern: 'x' }, { signal: controller.signal })
+    expect(result.error).toMatchObject({ info: { code: 'SEARCH_ABORTED' } })
+    expect(text(result)).toContain('narrow the pattern')
+  })
   it('a nonzero exit with EMPTY stderr still reports the exit code', async () => {
     const { ctx, subprocess } = await setup()
     subprocess.handler = () => runResult('', { exitCode: 3 })

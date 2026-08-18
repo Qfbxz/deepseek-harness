@@ -44,7 +44,7 @@ export const Config: z<Config> = z.object({
 /** Parsed tool args; execute validates value constraints absent from ParameterSchemaSpec. */
 interface BashToolArgs {
   command: string
-  description: string
+  description?: string
   timeoutMs?: number
   workdir?: string
   run_in_background?: boolean
@@ -56,9 +56,6 @@ function validateBashArgs(args: BashToolArgs): void {
   if (args.command.trim().length === 0) {
     throw new Error('invalid command: expected a non-empty string')
   }
-  if (args.description.trim().length === 0) {
-    throw new Error('invalid description: expected a non-empty string')
-  }
   if (args.timeoutMs !== undefined && (!Number.isFinite(args.timeoutMs) || args.timeoutMs <= 0)) {
     throw new Error(`invalid timeoutMs: expected a positive number, got ${JSON.stringify(args.timeoutMs)}`)
   }
@@ -67,6 +64,29 @@ function validateBashArgs(args: BashToolArgs): void {
   validateEscalationArgs(args.sandbox_permissions, args.justification)
 }
 
+/** Cap for the derived call label; long enough to identify, short enough for a card. */
+const DERIVED_DESCRIPTION_MAX_CHARS = 60
+
+/**
+ * Label for a call whose model omitted `description`: the first meaningful
+ * command line (comment stripped, trimmed, capped). Pure — replay of logged
+ * args reproduces it exactly. The command is itself a strong label (the
+ * terminal card titles by it), so a derived description only needs to carry
+ * the intent-bearing head.
+ * @param command - the bash command.
+ * @returns a non-empty description.
+ */
+export function deriveBashDescription(command: string): string {
+  for (const rawLine of command.split('\n')) {
+    const line = rawLine.trim()
+    if (line.length === 0) continue
+    const stripped = line.startsWith('#') ? line.replace(/^#+\s*/, '') : line
+    return stripped.length > DERIVED_DESCRIPTION_MAX_CHARS
+      ? stripped.slice(0, DERIVED_DESCRIPTION_MAX_CHARS - 1) + '…'
+      : stripped
+  }
+  return '(empty command)'
+}
 function bashDescription(backgroundEnabled: boolean, escalationModes: readonly SandboxMode[]): string {
   const background = backgroundEnabled
     ? 'Set `run_in_background: true` for long-running commands: the call returns a job id immediately; read its output with `job_output` and stop it with `job_kill`.'
@@ -97,22 +117,24 @@ function bashDescription(backgroundEnabled: boolean, escalationModes: readonly S
  * The command remains the title on both paths; foreground cwd is passed through
  * for the bridge to resolve, while background descriptions remain card content.
  */
-type BashCallArgs = { command: string; description: string; workdir?: string; run_in_background?: boolean }
+type BashCallArgs = { command: string; description?: string; workdir?: string; run_in_background?: boolean }
 
 function presentBashCall(args: BashCallArgs): GenericCallView | TerminalCallView {
+  const given = args.description?.trim()
+  const description = given !== undefined && given.length > 0 ? given : deriveBashDescription(args.command)
   if (args.run_in_background === true) {
     return {
       card: 'generic',
       title: args.command,
       kind: 'execute',
       rawInput: args.command,
-      content: [{ type: 'text', text: args.description }],
+      content: [{ type: 'text', text: description }],
     }
   }
   return {
     card: 'terminal',
     title: args.command,
-    description: args.description,
+    description,
     ...args.workdir !== undefined ? { cwd: args.workdir } : {},
   }
 }
@@ -246,10 +268,10 @@ export function apply(ctx: Context, config: Config = {}): void {
       command: { type: 'string', required: true, description: 'The bash command to execute.' },
       description: {
         type: 'string',
-        required: true,
         description: 'Clear, concise description of what this command does in active voice, '
           + '5-10 words (shown in the UI). Examples: "ls" → "List files in current directory"; '
-          + '"git status" → "Show working tree status"; "npm install" → "Install package dependencies".',
+          + '"git status" → "Show working tree status"; "npm install" → "Install package dependencies". '
+          + 'Optional; omitted or blank, the first command line labels the call.',
       },
       timeoutMs: { type: 'number', description: 'Timeout in milliseconds. The executor applies its configured default and cap, and kills the command on expiry.' },
       workdir: { type: 'string', description: 'Working directory for this command. Defaults to the session workspace; a relative path is resolved against it.' },
