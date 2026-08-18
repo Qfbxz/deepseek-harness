@@ -18,7 +18,16 @@ node runtime-patches/replay-tool-bash-optional-description.mjs \
   ~/.dsh/profiles/node_modules/@deepseek-ai/dsh-tool-bash/lib/index.js
 `
 
-## 补丁 2：Think 行流式自动展开/折叠（dsh-client-ui-conversation）
+## 补丁 2：run_code 解析失败提示与未闭合字面量定位（dsh-code-runtime-worker-thread）
+
+源码修复已提交（见 Agent Note 2026-08-16-session-friction-fixes 第 5 条 + 3f95abbcf0 补强）。补丁让 `stripTypeScriptTypes` 阶段的 SyntaxError 携带补救提示与未闭合字符串/模板的起始行 —— 此前 `Expected ',', got '<eof>'` 毫无位置信息。注意 `~/.dsh/profiles` 下该包软链到全局，只需打全局一份：
+
+```sh
+node runtime-patches/replay-code-runtime-parse-hint.mjs \
+  "$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-code-runtime-worker-thread/lib/index.js"
+```
+
+## 补丁 3：Think 行流式自动展开/折叠（dsh-client-ui-conversation）
 
 源码已提交（`packages/client/ui-conversation/src/client/chat/ReasoningRow.tsx`，fc78ffeb9f）。GUI 加载的是 `~/.dsh/profiles/.../dsh-client-ui-conversation/lib/client.js`，若被官方更新覆盖：优先从本仓库源码重建 bundle（`pnpm run build:lib:client` 后同步到 profiles），或临时用快照恢复：
 
@@ -36,5 +45,6 @@ cp runtime-patches/backups/dsh-client-ui-conversation.lib.client.repo-built.js \
 | dsh-tool-bash.lib.index.global-rc6.patched.js | 全局安装副本（rc.6 + 补丁） | 2026-08-18 |
 | dsh-tool-bash.lib.index.profiles.patched.js | ~/.dsh/profiles 副本（rc.6 + 补丁） | 2026-08-18 |
 | dsh-client-ui-conversation.lib.client.repo-built.js | repo 源码构建的 GUI bundle | 2026-08-18 |
+| dsh-code-runtime-worker-thread.lib.index.patched.js | 全局安装副本（rc.6 + 补丁 2） | 2026-08-18 |
 
 注意：快照是对应版本时刻的产物；跨版本恢复优先用重放脚本（补丁 1）或源码重建（补丁 2），快照仅作兜底。
