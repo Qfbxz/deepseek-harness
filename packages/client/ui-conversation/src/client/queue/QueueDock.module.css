@@ -140,6 +140,9 @@
 
 .editor {
   box-sizing: border-box;
+  /* 2026-08-18 修复「编辑拉长显示」: input 默认 size≈154px 且 flex-basis:auto
+     不会拉满; width:100% 配合父行 flex 让编辑框占满整行(532/532)。 */
+  width: 100%;
   height: 28px;
   padding: 0 8px;
   border: 1px solid var(--dsw-alias-border-l2);

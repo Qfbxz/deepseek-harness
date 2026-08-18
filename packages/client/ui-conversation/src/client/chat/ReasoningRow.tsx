@@ -25,7 +25,11 @@ function latestLine(text: string): string {
  * @returns the reasoning disclosure.
  */
 export function ReasoningRow({ text, running, t }: { text: string; running: boolean; t: ChatViewSlotProps['t'] }) {
-  const [expanded, setExpanded] = useState(false)
+  // Auto think disclosure: expand while streaming (watch live), collapse when done.
+  // `override` keeps a manual toggle only until the running phase flips, then auto resumes.
+  const [override, setOverride] = useState<boolean | null>(null)
+  const expanded = override ?? running
+  useEffect(() => { setOverride(null) }, [running])
   const summaryRef = useRef<HTMLSpanElement>(null)
   const summary = running ? latestLine(text) : firstLine(text)
   const scheduleSummaryScroll = useThrottledVisualUpdate(() => {
@@ -50,7 +54,7 @@ export function ReasoningRow({ text, running, t }: { text: string; running: bool
         open={expanded}
         expandable
         expandOnRowClick
-        onToggle={() => { setExpanded(value => !value) }}
+        onToggle={() => { setOverride(value => (value === null ? !running : !value)) }}
         collapsedContent={(
           <>
             <span className={css.separator} aria-hidden />
