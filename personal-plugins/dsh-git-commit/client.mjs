@@ -1,6 +1,8 @@
 // dsh-git-commit — client 半边：goal 行的提交 chip（±N 未提交数）+ Codex 风格提交弹窗。
 // 弹窗：提交信息（留空自动生成）、包含未暂存的更改（+N -M 徽章）、提交/提交并推送/推送。
-// 仓库定位：当前选中会话的 cwd（session.list 匹配侧边栏选中项，兜底最近会话）。
+// 仓库定位：当前选中会话的 cwd（fiber 取 sessionId 精确解析，与 git-graph 的
+// byId[sessionId].cwd 同源语义；标题前缀匹配与最近会话仅作兜底——跨工作区
+// 同前缀标题会错配）。
 //
 // ⚠️ REWRITE RULE: 本文件是 ModuleLoader 脚本契约，不是裸 ESM。
 // factory 必须 `return module.exports`，且 module.exports 必须带 .apply。
@@ -82,6 +84,24 @@ window.__ModuleLoader__.load({
       return best || null;
     }
 
+    // 选中会话行的 React fiber 携带视图模型 { id, title, ... }——id 即 sessionId。
+    // 按它精确解析 cwd；标题前缀匹配只作兜底（跨工作区同前缀标题会张冠李戴，
+    // 见 git-graph 的 byId[sessionId].cwd 同源语义）。
+    function selectedSessionId() {
+      var sel = document.querySelector('[role="treeitem"][aria-selected="true"], [role="treeitem"][data-selected]');
+      if (sel === null) return null;
+      var fk = null;
+      for (var k in sel) if (k.indexOf("__reactFiber") === 0) { fk = k; break; }
+      if (fk === null) return null;
+      var f = sel[fk];
+      for (var i = 0; i < 6 && f; i++) {
+        var p = f.memoizedProps;
+        if (p && typeof p === "object" && p.node && p.node.id && p.currentId !== undefined) return String(p.node.id);
+        f = f.return;
+      }
+      return null;
+    }
+
     function resolveCwd(force) {
       var title = selectedTitle();
       // 选中会话变了就必须重解析——否则切会话后提交面板还挂着上一个仓库的
@@ -94,9 +114,13 @@ window.__ModuleLoader__.load({
       }).then(function (r) { return r.json(); }).then(function (msg) {
         var items = (msg.result && msg.result.value && msg.result.value.items) || [];
         if (items.length === 0) return null;
-        var title = selectedTitle();
+        var sid = selectedSessionId();
         var pick = null;
-        if (title !== null) {
+        if (sid !== null) {
+          for (var i = 0; i < items.length; i++) if (String(items[i].sessionId || "") === sid) { pick = items[i]; break; }
+        }
+        var title = selectedTitle();
+        if (pick === null && title !== null) {
           for (var i = 0; i < items.length; i++) {
             var t = String(((items[i].projections || {}).values || {}).title || "");
             if (t && title.indexOf(t.slice(0, 12)) >= 0) { pick = items[i]; break; }
