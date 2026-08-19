@@ -340,9 +340,14 @@ export function makeNamespaces(
       Object.defineProperty(namespace, name, {
         enumerable: true,
         value: (args: unknown): Promise<unknown> => {
+          // A call that omits every optional parameter passes `undefined` as
+          // the argument record; the empty object is its lossless-JSON form.
+          // Normalizing here keeps `undefined` meaning "not representable"
+          // (functions, cycles, symbols) instead of also meaning "no args".
+          const callArgs = args === undefined ? {} : args
           let detached: ReturnType<typeof snapshotCodeJsonValue>
           try {
-            detached = snapshotCodeJsonValue(args)
+            detached = snapshotCodeJsonValue(callArgs)
           } catch {
             detached = undefined
           }

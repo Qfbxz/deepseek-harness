@@ -218,6 +218,24 @@ describe('prepareException', () => {
 })
 
 describe('makeNamespaces', () => {
+  it('treats an omitted argument record as the empty object, not a lossy value', async () => {
+    const port = new FakePort()
+    const posted: Array<Record<string, unknown>> = []
+    port.respond = (message) => {
+      if (message.type === 'call') {
+        posted.push(message)
+        return { type: 'reply', id: message.id, ok: true, value: encodeWorkerJson('ok') }
+      }
+      return undefined
+    }
+    const pending = new Map<number, PendingCall>()
+    wireReplies(port, pending)
+    const [tools] = makeNamespaces({ namespaces: [{ global: 'tools', names: ['list'] }] }, port, pending, { value: 1 })
+    // A zero-argument call (every parameter optional) arrives as `undefined`.
+    await expect((tools.list as (args?: unknown) => Promise<unknown>)()).resolves.toBe('ok')
+    expect(decodeWorkerJson(posted[0]?.args as never)).toEqual({})
+  })
+
   it('rejects a malformed success reply instead of resolving a lossy binding value', async () => {
     const port = new FakePort()
     const pending = new Map<number, PendingCall>()
