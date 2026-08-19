@@ -187,6 +187,17 @@ node runtime-patches/replay-git-graph-popover-below.mjs \
 
 watchdog 条目 `p13-popover-below`（marker=`patch(popover-below)`，bad=旧 `bottom:calc(100% + 4px);left:0` 定位；插件作者修复后自动退役）。生效需重启 dsh web 并刷新浏览器（client 插件按 rev 拉取）。
 
+## 补丁 14：auto-continue 设置卡注册缺 key（dsh-client-auto-continue）
+
+第三方包（HsiangNianian/dsh-auto-continue）：注册 `settings.plugin.item` 时只传 `id` 未传 `key`，keyed slot 校验拒绝 → 插件整体加载失败（"Failed to load plugins: dsh-client-auto-continue"）。补丁对齐 dshmarket/vision-router 的传法，在 register options 补 `key: SETTINGS_NS`。升级重装该包后需重放：
+
+```sh
+node runtime-patches/replay-auto-continue-slot-key.mjs \
+  ~/.dsh/profiles/web/node_modules/dsh-client-auto-continue/lib/client.js
+```
+
+watchdog 条目 `p14-auto-continue-slot-key`（marker=`patch(slot-key)`，bad=无 key 的相邻行对；上游补 key 后自动退役）。
+
 ## 快照清单（backups/）
 
 | 文件 | 来源 | 时间 |
