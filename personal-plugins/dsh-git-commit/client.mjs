@@ -16,7 +16,7 @@ window.__ModuleLoader__.load({
     var PANEL_ID = "dsh-git-commit-panel";
 
     var CSS = [
-      "#" + CHIP_ID + "{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;line-height:1;border:1px solid var(--dsw-alias-border-l2, rgba(168,200,232,0.18));border-radius:999px;background:var(--dsw-alias-button-tool-bar-fill, transparent);cursor:pointer;font-size:12px;color:var(--dsw-alias-label-secondary, #a5b3da);flex:0 0 auto;transition:background-color .12s,border-color .12s,color .12s}",
+      "#" + CHIP_ID + "{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;line-height:1;border:1px solid var(--dsw-alias-border-l2, rgba(168,200,232,0.18));border-radius:999px;background:transparent;cursor:pointer;font-size:12px;color:var(--dsw-alias-label-secondary, #a5b3da);flex:0 0 auto;transition:background-color .12s,border-color .12s,color .12s}",
       "#" + CHIP_ID + ":hover{background:var(--dsw-alias-interactive-bg-hover, transparent)}",
       "#" + CHIP_ID + ":active{background:var(--dsw-alias-interactive-bg-active, transparent)}",
       "#" + CHIP_ID + ".dirty{color:var(--dsw-alias-label-primary, inherit);border-color:var(--dsw-alias-brand-primary, #4c8dff)}",
