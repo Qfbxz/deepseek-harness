@@ -259,13 +259,14 @@
 
 .footerActions {
   /* A footer occupant inline-styles this container to column, stacking every
-     action full-width; the shell's row policy wins with !important. */
+     action full-width; the shell's row policy wins with !important. Row
+     density (padding, font, gap) is compressed so four entries fit one line. */
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: wrap !important;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
+  gap: 1px;
 }
 
 /* Occupants ship their own geometry — inline width:100% and flex:1 sheet
@@ -279,6 +280,9 @@
 .footerActions button {
   width: auto !important;
   flex: none !important;
+  padding-inline: 2px !important;
+  font-size: 12px !important;
+  white-space: nowrap;
 }
 
 .settingsArea {
@@ -294,9 +298,10 @@
 
 /* Occupants own their geometry, but the settings trigger's full-width rule
    would push row-mates off-screen: on this row it sizes to content like its
-   neighbours. */
+   neighbours. Row labels never wrap to two lines. */
 .settingsArea button {
   width: auto;
+  white-space: nowrap;
 }
 
 .collapsed .footArea {
