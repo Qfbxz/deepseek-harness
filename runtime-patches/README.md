@@ -10,6 +10,14 @@
 - 缺省时从命令首行派生标签（`deriveBashDescription`，60 字符封顶）
 - schema 去掉 `required: true`，参数说明标注可选与回退行为
 
+补丁 2 的 scanner 升级：源码 scanner 扩展（相邻字面量检测）后，用 `upgrade-scanner-from-source.mjs` 从源码 ts 提取最新版替换编译产物中的同名函数：
+
+```sh
+node runtime-patches/upgrade-scanner-from-source.mjs \
+  packages/code-runtime/code-runtime-worker-thread/src/index.ts \
+  "$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-code-runtime-worker-thread/lib/index.js"
+```
+
 重放（幂等，可重复执行；升级 dsh 后跑一次）：
 
 `sh`

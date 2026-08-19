@@ -1,25 +1,51 @@
 import { stripTypeScriptTypes } from "node:module";
 var SYNTAX_HINT = " — the program body failed to parse before any code ran; fix the syntax, or move complex logic into a file written first and keep this body minimal";
 function unclosedLiteralHint(program) {
-	var state = 'code'; var line = 1; var openLine = 0;
-	for (var i = 0; i < program.length; i += 1) {
-		var c = program[i]; var next = program[i + 1];
-		if (c === '\n') { line += 1; if (state === 'line-comment') state = 'code'; continue; }
-		if (state === 'line-comment') continue;
-		if (state === 'block-comment') { if (c === '*' && next === '/') { state = 'code'; i += 1; } continue; }
-		if (state === 'sq' || state === 'dq' || state === 'tpl') {
-			if (c === '\\') { i += 1; continue; }
-			if ((state === 'sq' && c === '\'') || (state === 'dq' && c === '"') || (state === 'tpl' && c === '\`')) state = 'code';
-			continue;
-		}
-		if (c === '/' && next === '/') { state = 'line-comment'; i += 1; continue; }
-		if (c === '/' && next === '*') { state = 'block-comment'; i += 1; continue; }
-		if (c === '\'' || c === '"' || c === '\`') { state = c === '\'' ? 'sq' : c === '"' ? 'dq' : 'tpl'; openLine = line; }
-	}
-	if (state === 'code' || state === 'line-comment' || state === 'block-comment') return '';
-	var kind = state === 'tpl' ? 'template literal' : 'string';
-	var opening = (program.split('\n')[openLine - 1] || '').trim().slice(0, 60);
-	return ' (unterminated ' + kind + ' starting at line ' + openLine + ': ' + opening + ')';
+  let state = 'code'
+  let line = 1
+  let openLine = 0
+  let lastClosedAt = -1
+  for (let i = 0; i < program.length; i += 1) {
+    var c = program[i]
+    var next = program[i + 1]
+    if (c === '\n') {
+      line += 1
+      if (state === 'line-comment') state = 'code'
+      continue
+    }
+    if (state === 'line-comment') continue
+    if (state === 'block-comment') {
+      if (c === '*' && next === '/') { state = 'code'; i += 1 }
+      continue
+    }
+    if (state === 'sq' || state === 'dq' || state === 'tpl') {
+      var quote = state === 'sq' ? "'" : state === 'dq' ? '"' : '`'
+      if (c === '\\') { i += 1; continue }
+      if (c === quote) { state = 'code'; lastClosedAt = i }
+      continue
+    }
+    if (c === '/' && next === '/') { state = 'line-comment'; i += 1; continue }
+    if (c === '/' && next === '*') { state = 'block-comment'; i += 1; continue }
+    if (c === "'" || c === '"' || c === '`') {
+      // Adjacent-literal check: a quote opening directly after a closed literal
+      // with only whitespace between them is a dropped separator (concat needs
+      // `+`, sequence needs `,`). Template expressions and tagged templates carry
+      // non-whitespace in that gap and stay silent.
+      if (lastClosedAt >= 0) {
+        var gap = program.slice(lastClosedAt + 1, i)
+        if (gap.trim().length === 0) {
+          var opening = (program.split('\n')[line - 1] ?? '').trim().slice(0, 60)
+          return ` (adjacent literals at line ${line} — a comma or operator between them is missing: ${opening})`
+        }
+      }
+      state = c === "'" ? 'sq' : c === '"' ? 'dq' : 'tpl'
+      openLine = line
+    }
+  }
+  if (state === 'code' || state === 'line-comment' || state === 'block-comment') return ''
+  var kind = state === 'tpl' ? 'template literal' : 'string'
+  var opening = (program.split('\n')[openLine - 1] ?? '').trim().slice(0, 60)
+  return ` (unterminated ${kind} starting at line ${openLine}: ${opening})`
 }
 
 import { Worker } from "node:worker_threads";
