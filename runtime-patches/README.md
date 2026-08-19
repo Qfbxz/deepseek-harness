@@ -198,6 +198,28 @@ node runtime-patches/replay-auto-continue-slot-key.mjs \
 
 watchdog 条目 `p14-auto-continue-slot-key`（marker=`patch(slot-key)`，bad=无 key 的相邻行对；上游补 key 后自动退役）。
 
+## 补丁 15：auto-memory「记忆」按钮迁设置行 + 大脑图标（@a9i5k4/dsh-auto-memory）
+
+第三方包：按钮原注册在 `sidebar.footer.action`（堆在设置上方）。补丁两步（各自幂等）：a. 迁到 `sidebar.settings.action`（ui-sidebar 源码新增的设置行孔，见补丁 16）——与孔的恢复顺序无关，slot inject 会等声明出现；b. 按钮注入 lucide brain 轮廓图标（14px 描边、currentColor）。上游原生改挂设置行则步骤 a 自动跳过。
+
+```sh
+node runtime-patches/replay-auto-memory-settings-row.mjs \
+  ~/.dsh/profiles/web/node_modules/@a9i5k4/dsh-auto-memory/lib/client.js
+```
+
+watchdog 条目 `p15-auto-memory-settings-row`（marker=`patch(settings-row)`，bad=旧 footer.action 注入）。
+
+## 补丁 16：ui-sidebar 设置行孔位同步（@deepseek-ai/dsh-client-ui-sidebar）
+
+源码修复在本仓库（`packages/client/ui-sidebar`：新增 `sidebar.settings.action` 孔 + footer 单行换行布局策略）。官方升级会覆盖回无孔版本——本补丁把 backups/ 里的仓库构建产物幂等重同步到全局。**改了 ui-sidebar 源码后需 `pnpm --filter @deepseek-ai/dsh-client-ui-sidebar bundle` 并刷新 backups/ 快照**。注意：官方发版但未带孔时，重同步会盖掉官方新产物（个人取舍，接受降级换孔位）。
+
+```sh
+node runtime-patches/replay-ui-sidebar-settings-action.mjs \
+  "$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-ui-sidebar/lib/client.js"
+```
+
+watchdog 条目 `p16-ui-sidebar-settings-action`（marker=`sidebar.settings.action`，bad=恒在的 `sidebar.footer.action` 声明 → 官方带孔后自动停用）。
+
 ## 快照清单（backups/）
 
 | 文件 | 来源 | 时间 |
