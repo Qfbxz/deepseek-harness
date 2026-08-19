@@ -119,6 +119,17 @@ node runtime-patches/replay-abort-reason-and-parse-locator.mjs \
 
 watchdog 条目 `p7-abort`（marker=`renderAbortReason`，bad=`String(request.signal?.reason)`，官方修复后自动退役）。
 
+## 补丁 8：skill-explorer 认软链（dsh-client-ui-skill-explorer/lib/index.js）
+
+根因：`readdir(withFileTypes)` 的 Dirent 对符号链接描述**链接自身**——软链 skill 目录 `isDirectory()/isFile()` 双 false，落入 else-continue 被**静默跳过**（文件系统 60 个、explorer API 只吐 59）。补丁在扫描循环加 `isSymbolicLink()` 分支：stat 跟链取目标真实类型（断链 continue）。同时 `~/.dsh/skills/spe-lit-search` 已放实体目录双保险（cc-switch 中央库仍为单源，`~/.agents` 等软链在 explorer 重启后经此补丁可见）。
+
+```sh
+node runtime-patches/replay-skill-explorer-symlinks.mjs \
+  ~/.dsh/profiles/web/node_modules/@linxin666/dsh-client-ui-skill-explorer/lib/index.js
+```
+
+watchdog 条目 `p8-explorer-symlink`（marker=`patch(symlink-support)`，bad=原始 isFile 判定行）+ autorun 启动重放；插件作者修复（或改用其他扫描实现）后自动退役。
+
 ## 快照清单（backups/）
 
 | 文件 | 来源 | 时间 |
