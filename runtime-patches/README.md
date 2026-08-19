@@ -253,6 +253,16 @@ node runtime-patches/replay-usage-stats-settings-row.mjs \
 
 watchdog 条目 `p18-usage-settings-row`（marker=`patch(settings-seat)`，bad=旧 footer.action 注入）。绿色余量百分比的固定定位在 `personal-plugins/dsh-desktop-chrome/client.mjs`（源码，非补丁）。
 
+## 补丁 20：agency-agents 客户端注入自有专家（@michengai/dsh-agency-agents）
+
+第三方包：客户端把 271 内置专家硬编码在 `ROSTER` 常量，输入框 picker 只认这份静态清单（设置页才是动态读宿主目录的）——外部目录的专家在 picker 里永远"暂无可召唤"。补丁从 `~/.dsh/experts/0-masters/` 读 persona，注入 ROSTER / DIVISION_ORDER / ZH_NAME / ZH_DIVISION 四处（标记块可重跑刷新），picker 与设置页一致置顶显示。
+
+```sh
+node runtime-patches/replay-agency-own-roster.mjs
+```
+
+watchdog 条目 `p20-agency-own-roster`（marker=`/*patch(own-roster)*/`，bad=原版 ROSTER 首条目；上游改为动态名册后自动退役）。启用状态在 `~/.dsh/settings.yaml` 的 `agency-agents.enabled`（插件默认全部停用）。
+
 ## 快照清单（backups/）
 
 | 文件 | 来源 | 时间 |
