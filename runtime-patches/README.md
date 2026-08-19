@@ -132,6 +132,39 @@ node runtime-patches/replay-skill-explorer-symlinks.mjs \
 
 watchdog 条目 `p8-explorer-symlink`（marker=`patch(symlink-support)`，bad=原始 isFile 判定行）+ autorun 启动重放；插件作者修复（或改用其他扫描实现）后自动退役。
 
+## 补丁 9：dsh-git-commit 提交面板向下展开（personal-plugins/dsh-git-commit/client.mjs）
+
+源码修复已提交（`a53bd06fec`）。面板原默认向上展开（`top - height - 8`），被上方 tab 栏裁切；补丁改为默认从 chip 向下（`r.bottom + 8`），仅越过视口底部时回退向上，最终钳制 `top ≥ 8`。源即运行时（profile link 到 personal-plugins 源），replay 供任何副本回滚后重放：
+
+```sh
+node runtime-patches/replay-git-commit-panel-below.mjs \
+  /Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-git-commit/client.mjs
+```
+
+watchdog 条目 `p9-git-panel-below`（marker=`patch(panel-below)`，bad=旧向上定位行）。
+
+## 补丁 10：desktop-chrome git chip 锚行兜底（personal-plugins/dsh-desktop-chrome/client.mjs）
+
+源码修复已提交（`816f3e1f72`）。panelHeader 折叠为 0 高时锚行算出 `top = -12`，git chip 被钉出屏；补丁在锚行高度 < 14 时依次回退 tabs 行、cluster rect，并把结果钳制到视口顶部（`top ≥ 2`）。源即运行时，replay 供回滚后重放：
+
+```sh
+node runtime-patches/replay-desktop-chrome-anchor-fallback.mjs \
+  /Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-desktop-chrome/client.mjs
+```
+
+watchdog 条目 `p10-chip-anchor`（marker=`patch(anchor-fallback)`，bad=旧锚行取 top 行）。
+
+## 补丁 11：git-graph 分支 chip 恒渲染（@linxin666/dsh-client-ui-git-graph）
+
+第三方包（不在本仓库）：非 git 会话原直接 `return null`，chip 整个消失；补丁改为渲染禁用占位（label "—"、onClick 禁用），仅 `showBranchSelector` 关闭或 repo 未就绪时才隐藏。升级重装该包后需重放：
+
+```sh
+node runtime-patches/replay-git-graph-chip-always.mjs \
+  ~/.dsh/profiles/web/node_modules/@linxin666/dsh-client-ui-git-graph/lib/client.js
+```
+
+watchdog 条目 `p11-chip-always`（marker=`patch(chip-always)`，bad=旧 guard 行；插件作者修复后自动退役）。
+
 ## 补丁 12：run_code discard 诊断 + 绑定结果 24k 钳制（dsh-tools/lib/types/code-mode.js）
 
 源码修复：discard 诊断部分已提交（`de98efaac`，`packages/core/tools/src/code-mode.ts`）；`clampBindingValue` 增量在源码中、待提交。旧形态 `run is over ... result discarded` 不区分工具成败，模型只能盲重试；超大绑定返回值（如 50 KB bash stdout）会撑爆输出账本并以不透明 abort 收场。replay 从本仓库构建产物 `packages/core/tools/lib/types/code-mode.js` 原样提取注入（新 discard 诊断：errored/succeeded + JSON 尺寸签名 + side-effects 提示；`clampBindingValue`：字符串 24k 截断、数组/对象递归逐元素钳制）。**换机先 `npx tsc -b packages/core/tools --force` 重建产物再重放**。
