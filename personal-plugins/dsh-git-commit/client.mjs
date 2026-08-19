@@ -271,8 +271,12 @@ window.__ModuleLoader__.load({
       var r = chip.getBoundingClientRect();
       var w = 380;
       var left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
-      var top = r.top - p.offsetHeight - 8;
-      if (top < 8) top = r.bottom + 8;
+      // patch(panel-below): the commit panel MUST open downward from the chip.
+      // The old default opened upward (top - height - 8), which clipped against
+      // the tab bar above; only an overflow past the viewport bottom falls back up.
+      var top = r.bottom + 8;
+      if (top + p.offsetHeight > window.innerHeight - 8) top = r.top - p.offsetHeight - 8;
+      if (top < 8) top = 8;
       p.style.left = left + "px";
       p.style.top = top + "px";
     }
