@@ -220,9 +220,9 @@ node runtime-patches/replay-ui-sidebar-settings-action.mjs \
 
 watchdog 条目 `p16-ui-sidebar-settings-action`（marker=`sidebar.settings.action`，bad=恒在的 `sidebar.footer.action` 声明 → 官方带孔后自动停用）。
 
-## 补丁 17：导出会话桌面化（@dsh-external/dsh-mobile-nav）
+## 补丁 17：导出按钮桌面化（@dsh-external/dsh-mobile-nav）
 
-第三方包：`导出会话日志`按钮默认仅移动端显示（≥1024px 媒体查询隐藏）。补丁三步（各自幂等）：a. 把 session-log 与容器 drawer-actions 从桌面隐藏列表摘出（文件浏览 explorer 保持仅移动端）；c. 改名 `导出会话`（en: Export session）；d. 图标改为外向箭头（原下载箭头子路径垂直镜像，无托盘外框，与导入同风格）。
+第三方包：`导出会话日志`按钮默认仅移动端显示（≥1024px 媒体查询隐藏）。补丁四步（各自幂等）：a. 把 session-log 与容器 drawer-actions 从桌面隐藏列表摘出（文件浏览 explorer 保持仅移动端）；c. 改名 `导出`（en: Export）；d. 图标 = 导入图标的框 + 垂直箭头从框内刺出框外（从里面指向外）；e. 按钮去边框。
 
 ```sh
 node runtime-patches/replay-mobile-nav-desktop-session-log.mjs \
@@ -230,6 +230,17 @@ node runtime-patches/replay-mobile-nav-desktop-session-log.mjs \
 ```
 
 watchdog 条目 `p17-desktop-session-log`（marker=`patch(desktop-session-log)`，bad=隐藏列表中的 session-log 行）。
+
+## 补丁 19：导入按钮精简文案（dsh-chat-import）
+
+第三方包：`导入会话`→`导入`（tooltip 保留完整说明"从其他工具导入会话…"）。
+
+```sh
+node runtime-patches/replay-chat-import-short-label.mjs \
+  ~/.dsh/profiles/web/node_modules/dsh-chat-import/lib/client.js
+```
+
+watchdog 条目 `p19-chat-import-short-label`（marker=新文案，bad=旧文案）。行内四键的顺序与间距（图标对间距拉大、space-evenly）在 ui-sidebar 源码 CSS（补丁 16 同步）。
 
 ## 补丁 18：用量徽章迁设置行（dsh-usage-stats）
 
