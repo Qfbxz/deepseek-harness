@@ -533,9 +533,20 @@ async function buildRows() {
 			// toggles re-align. Margin auto beats pixel math when the card
 			// overflows the host's content box.
 			if (card !== null) {
-				const w = Math.round(card.getBoundingClientRect().width) + "px";
+				// patch(pixel-align): margin auto centers inside the host's CONTENT box,
+				// ignoring host padding — measured +16px inset on both sides vs the card.
+				// Pin left edge and width to the card's viewport rect instead.
+				const cr = card.getBoundingClientRect();
+				const w = Math.round(cr.width) + "px";
 				if (row.style.width !== w) row.style.width = w;
-				if (row.style.margin !== "0 auto 8px") row.style.margin = "0 auto 8px";
+				// measured: card.left - host.contentLeft = 12 (host pad 8 + card negative
+				// margin 4). Goal row + queue dock share this rule and the side gap is
+				// tightened to 4px (match: pixel-align-tight).
+				const hostR = row.parentElement.getBoundingClientRect();
+				// -15 final: 14 measured + 1 (card border-box vs borderless row)
+				const ml = Math.round(cr.left - hostR.left - 15) + "px";
+				if (row.style.margin !== "0 0 4px") row.style.margin = "0 0 4px";
+				if (row.style.marginLeft !== ml) row.style.marginLeft = ml;
 				// breathing room under the queue dock when one is open above
 				// (no gap when the row is the composer's first element)
 				const prev = row.previousElementSibling;
