@@ -220,6 +220,28 @@ node runtime-patches/replay-ui-sidebar-settings-action.mjs \
 
 watchdog 条目 `p16-ui-sidebar-settings-action`（marker=`sidebar.settings.action`，bad=恒在的 `sidebar.footer.action` 声明 → 官方带孔后自动停用）。
 
+## 补丁 17：导出会话桌面化（@dsh-external/dsh-mobile-nav）
+
+第三方包：`导出会话日志`按钮默认仅移动端显示（≥1024px 媒体查询隐藏）。补丁三步（各自幂等）：a. 把 session-log 与容器 drawer-actions 从桌面隐藏列表摘出（文件浏览 explorer 保持仅移动端）；c. 改名 `导出会话`（en: Export session）；d. 图标改为外向箭头（原下载箭头子路径垂直镜像，无托盘外框，与导入同风格）。
+
+```sh
+node runtime-patches/replay-mobile-nav-desktop-session-log.mjs \
+  ~/.dsh/profiles/web/node_modules/@dsh-external/dsh-mobile-nav/lib/client.js
+```
+
+watchdog 条目 `p17-desktop-session-log`（marker=`patch(desktop-session-log)`，bad=隐藏列表中的 session-log 行）。
+
+## 补丁 18：用量徽章迁设置行（dsh-usage-stats）
+
+第三方包：用量徽章原注册在 `sidebar.footer.action`。补丁两步（各自幂等）：a. 迁到 `sidebar.settings.action`（order 提到 1，排在记忆左侧，用量占行内剩余宽度）；b. 废除其"把宿主容器内联改成 column"的兼容副作用（设置行必须保持 row）。
+
+```sh
+node runtime-patches/replay-usage-stats-settings-row.mjs \
+  ~/.dsh/profiles/web/node_modules/dsh-usage-stats/lib/client.js
+```
+
+watchdog 条目 `p18-usage-settings-row`（marker=`patch(settings-seat)`，bad=旧 footer.action 注入）。绿色余量百分比的固定定位在 `personal-plugins/dsh-desktop-chrome/client.mjs`（源码，非补丁）。
+
 ## 快照清单（backups/）
 
 | 文件 | 来源 | 时间 |
