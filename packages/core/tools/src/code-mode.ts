@@ -295,6 +295,18 @@ function renderValue(value: JsonValue): string {
   return typeof value === 'string' ? value : renderJsonValue(value)
 }
 
+/**
+ * Compact outcome signature for a discard diagnostic: names the JSON kind and
+ * a size measure (string length, array length, or object key count) so the
+ * model can gauge what the discarded tool produced without dumping it.
+ */
+function summarizeJsonValue(value: JsonValue): string {
+  if (typeof value === 'string') return `string ${value.length} chars`
+  if (Array.isArray(value)) return `array ${value.length} items`
+  if (typeof value === 'object' && value !== null) return `object ${Object.keys(value).length} keys`
+  return `${typeof value} ${JSON.stringify(value)}`
+}
+
 /** Canonical value returned by the outer Code Mode transport. */
 type RunCodeOutput = { logs: string[]; result?: JsonValue }
 
@@ -650,9 +662,15 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         })
         // A budget expiry or outer cancel that occurs while this call was in
         // flight already aborted the dispatch; stop the program now rather
-        // than hand it a result from a run that is over.
+        // than hand it a result from a run that is over. The tool itself may
+        // have SUCCEEDED — surface its name, outcome kind, and (for object
+        // values) a size signature in the discard diagnostic, so the model
+        // can tell "the write actually landed" from "the tool failed".
         if (runOver()) {
-          throw new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} result discarded`)
+          const done = outcome.isError
+            ? `errored: ${outcome.message.slice(0, 120)}`
+            : `succeeded (value ${summarizeJsonValue(outcome.value)})`
+          throw new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} already ${done} — its side effects stand; do NOT retry blindly, verify state first`)
         }
         // The worker turns a binding rejection into ToolCallError and adds
         // only the binding name. Native content and internal error metadata
