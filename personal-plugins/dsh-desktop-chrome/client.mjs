@@ -108,7 +108,10 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			const btn = document.querySelector('button[aria-haspopup="menu"][aria-label^="选择模型，当前"]');
 			if (btn === null) return null;
 			const label = btn.getAttribute("aria-label") ?? "";
-			const name = label.replace(/^选择模型，当前\s*/, "").split(" (")[0].trim().toLowerCase();
+			// 官方 label 曾是 "MODEL (推理等级 X)"，现在是 "MODEL，推理等级 X"——
+			// 只按 " (" 分割会让模型名带上"推理等级"尾巴，用量匹配永远失败
+			// （2026-08-19 三环消失根因）。半角/全角括号、中文逗号都切。
+			const name = label.replace(/^选择模型，当前\s*/, "").split(/[（(，]/)[0].trim().toLowerCase();
 			return name.length > 0 ? name : null;
 		}
 
@@ -362,47 +365,84 @@ async function buildRows() {
 			} catch { /* keep the previous text */ }
 		}
 
-		/** One row at the composer top: the goal dock keeps its original
-		 * elements and pill styling; the git branch chip sits beside it as a
-		 * sibling (not inside the bar), raised to the goal bar's height. */
+		/** Sidebar-top chip row: the git branch dropdown (git-graph's chipWrap)
+		 * lives in the sidebar header's logoRow, left of the collapse toggle —
+		 * 2026-08-19 user instruction. The composer row below only carries the
+		 * checklist dock; the goal bar stays in its official composer-stack dock. */
 		function placeGoalGitRow() {
-			// Hero (blank-session) phase: the git-graph plugin's hero lift already
-			// raises the branch chip into the official hero chip row (right of the
-			// agent-preset seat). Do NOT hijack it here — undo any earlier move
-			// (return chipWrap to its anchor, restore display, drop our row) so the
-			// chip renders on the same row as the workspace/preset chips.
+			// Hero (blank-session) phase: no composer row needed; the branch chip
+			// still rides the sidebar top. Just drop any stale composer row.
 			const heroStack = document.querySelector('[class*="composerStack"]');
 			if (heroStack !== null && heroStack.className.includes("composerHero")) {
 				const heroRow = document.getElementById("dshc-goal-git-row");
-				if (heroRow !== null) {
-					const movedChip = heroRow.querySelector('[class*="chipWrap"]');
-					const anchor = document.querySelector('[data-gitgraph-chip-anchor]');
-					if (movedChip !== null && anchor !== null && movedChip.parentElement !== anchor) {
-						movedChip.style.flex = "";
-						movedChip.style.height = "";
-						const movedBtn = movedChip.querySelector("button");
-						if (movedBtn !== null) movedBtn.style.height = "";
-						anchor.appendChild(movedChip);
-					}
-					if (anchor !== null) anchor.style.display = "";
-					heroRow.remove();
-				}
-				return;
+				if (heroRow !== null) heroRow.remove();
 			}
-			const existingRow = document.getElementById("dshc-goal-git-row");
-			const isDockCandidate = (el) => {
-				if (el.childElementCount !== 1) return false;
-				const bar = el.firstElementChild;
-				if (bar === null || !bar.textContent.includes("进行中的目标")) return false;
-				const rect = el.getBoundingClientRect();
-				return rect.height > 0 && rect.height < 60;
-			};
-			// React re-parenting can leave a match that CONTAINS our row —
-			// appending it into itself throws; pick a candidate outside the row.
-			const dock = [...document.querySelectorAll("div")].find((el) => isDockCandidate(el) && (existingRow === null || (!existingRow.contains(el) && !el.contains(existingRow))));
 			// the git plugin's own chip wrapper (hashed prefix, stable suffix)
-			const chip = document.querySelector('[class*="chipWrap"]') ?? undefined;
-			if (dock === undefined && chip === undefined) return;
+			const chipAll = Array.from(document.querySelectorAll('[class*="chipWrap"]'));
+			// 只认当前自然位置上可见的那个实例（插件在多个槽位挂载多个 chipWrap，
+			// 搬错实例=搬走死节点，点击永远无反应）
+			const chip = chipAll.find(c => c.getBoundingClientRect().width > 0 && getComputedStyle(c).display !== "none") ?? undefined;
+			if (chip !== undefined) {
+				const cluster = document.querySelector('[class*="toggleCluster"]');
+				// 2026-08-19 终版方案：不搬节点（搬离 React 容器=事件委托断裂），
+				// 直接 position:fixed 原地钉到右上角、与 tab 栏（对话/轨迹、
+				// 石油项目智能体行）水平对齐；文件区展开时随会话区左移。
+				const conv = document.querySelector('[class*="scrollBody"]');
+				const tabs = document.querySelector('[role="tablist"]');
+				if (cluster !== null) {
+					const clusterRect = cluster.getBoundingClientRect();
+					const convRight = conv !== null ? conv.getBoundingClientRect().right : Infinity;
+					const rightEdge = Math.min(clusterRect.left - 8, convRight - 10);
+					// 垂直对齐会话标题行（"PTC 模式" chip 所在行 = tablist 的上一个
+					// 兄弟）；行不在时退回 tab 栏/收缩按钮行
+					const titleRow = tabs !== null ? tabs.previousElementSibling : null;
+					const anchorRow = titleRow !== null ? titleRow.getBoundingClientRect() : (tabs !== null ? tabs.getBoundingClientRect() : clusterRect);
+					const top = Math.round(anchorRow.top + (anchorRow.height - 24) / 2);
+					// 水平：钉在标题行最右侧可见元素（"PTC 模式"或其他模式 chip）后面，
+					// 按实测右缘排布，任何模式下都不与已有 chip 重叠。顺序 [分支][提交]。
+					const commitChip = document.getElementById("dsh-git-commit-chip");
+					let rowRight = 0;
+					if (titleRow !== null) {
+						// 上限取行宽 85%：子智能体下拉展开时其容器可能长到 600px+，
+						// 60% 会漏掉导致按钮压住展开的列表；85% 仍排除整行容器
+						const widthCap = anchorRow.width * 0.85;
+						for (const c of titleRow.querySelectorAll('*')) {
+							if (chip.contains(c) || (commitChip !== null && commitChip.contains(c))) continue;
+							const cr = c.getBoundingClientRect();
+							// 几何过滤：只认底边仍在标题行带内的元素——子代理下拉展开的
+							// 面板垂到行下方（无论 absolute 还是流式），天然被排除，
+							// 点开下拉不会推走按钮
+							if (cr.bottom > anchorRow.bottom + 4) continue;
+							// 只认 chip 尺寸的元素（宽<85% 行宽排除整行容器/长标题块，
+							// 高≥14 排除装饰层）——无论模式/子代理 chip 多宽都取实测右缘
+							if (cr.width > 0 && cr.width < widthCap && cr.height >= 14 && cr.right > rowRight) rowRight = cr.right;
+						}
+					}
+					let branchLeft;
+					if (rowRight > 0) {
+						branchLeft = Math.round(rowRight + 8);
+					} else {
+						branchLeft = Math.round(rightEdge - (commitChip !== null ? commitChip.getBoundingClientRect().width + 6 : 0) - chip.getBoundingClientRect().width);
+					}
+					chip.style.position = "fixed";
+					chip.style.top = top + "px";
+					chip.style.left = branchLeft + "px";
+					chip.style.right = "";
+					chip.style.zIndex = "35";
+					chip.style.flex = "0 0 auto";
+					if (commitChip !== null) {
+						commitChip.style.position = "fixed";
+						commitChip.style.top = top + "px";
+						commitChip.style.left = Math.round(chip.getBoundingClientRect().right + 6) + "px";
+						commitChip.style.right = "";
+						commitChip.style.zIndex = "35";
+					}
+				} else {
+					chip.style.position = "";
+					chip.style.top = ""; chip.style.right = ""; chip.style.zIndex = "";
+				}
+			}
+			if (heroStack !== null && heroStack.className.includes("composerHero")) return;
 			// the row sits directly above the input card — the queue dock and
 			// anything else in the input-dock stack stays above it (the queue
 			// registers as the terminal dock entry; we take that spot instead)
@@ -411,6 +451,12 @@ async function buildRows() {
 				?? null;
 			const host = card?.parentElement ?? undefined;
 			if (host === undefined) return;
+			// goal 条排堆叠最下（custom-ui 给 [data-goal-bar] 设 order:999）：
+			// 输入卡根（host，flex 项）必须 order 更大，否则 goal 会排到卡片下面
+			if (host.style.order !== "1000") host.style.order = "1000";
+			// 卡片根自带 8px 顶部内边距，会让 goal↔卡片的视觉间距比条↔条多
+			// 8px——清零后所有间距统一为堆叠 gap（2026-08-19 用户要求全一致）
+			if (host.style.paddingTop !== "0px") host.style.paddingTop = "0";
 			let row = document.getElementById("dshc-goal-git-row");
 			if (row === null || row.parentElement !== host || row.nextElementSibling !== card) {
 				if (row === null) {
@@ -423,23 +469,40 @@ async function buildRows() {
 				}
 				host.insertBefore(row, card);
 			}
-			if (dock !== undefined && dock.parentElement !== row && !dock.contains(row)) {
-				dock.style.flex = "1 1 auto";
-				dock.style.minWidth = "0";
-				const bar = dock.firstElementChild;
-				if (bar !== null) bar.style.maxWidth = "none";
-				row.appendChild(dock);
-			}
-			if (chip !== undefined) {
-				const anchor = chip.parentElement;
-				if (anchor !== null && anchor !== row && (anchor.textContent ?? "").trim() === "") anchor.style.display = "none";
-				if (chip.parentElement !== row && !chip.contains(row)) {
-					chip.style.flex = "0 0 auto";
-					row.insertBefore(chip, row.firstChild);
+			// 全宽通则：composerStack 的所有 dock 条目（任务横条、排队消息、goal
+			// 条，穿过 display:contents 包装取真实 flex 项）逐像素对齐输入卡——
+			// width=卡片实测宽 + margin 0 auto，不依赖固定内缩假设（16px 假设
+			// 在窗口宽度变化时错位）。goal 条保留 -8px 底部上拉；custom-ui F9
+			// 只管 order 和内层 pill，几何全归这里。
+			{
+				const stackEl = document.querySelector('[class*="composerStack"]');
+				if (stackEl !== null) {
+					const cardW = Math.round(card.getBoundingClientRect().width) + "px";
+					const items = [];
+					for (const w of stackEl.children) {
+						if (getComputedStyle(w).display === "contents") {
+							for (const it of w.children) items.push(it);
+						} else {
+							items.push(w);
+						}
+					}
+					for (const it of items) {
+						if (it === host || it === row) continue;
+						if (it.getBoundingClientRect().height <= 0) continue;
+						const isGoal = it.hasAttribute("data-goal-bar") || it.querySelector("[data-goal-bar]") !== null;
+						// 条目可能再包一层非 contents 的 DIV（如 agent-teams 的
+						// OB_P1q_root），宽度限制在内层——样式下探一层
+						const targets = isGoal ? [it] : [it, it.firstElementChild];
+						for (const t of targets) {
+							if (t === null || t === host || t === row) continue;
+							if (t.getBoundingClientRect().height <= 0) continue;
+							if (t.style.width !== cardW) t.style.width = cardW;
+							const mg = "0 auto";
+							if (t.style.margin !== mg) t.style.margin = mg;
+							if (t.style.maxWidth !== "none") t.style.maxWidth = "none";
+						}
+					}
 				}
-				chip.style.height = "36px";
-				const inner = chip.querySelector("button");
-				if (inner !== null) inner.style.height = "100%";
 			}
 			// match the input card's width and center on the same axis (the
 			// host centers its children); recomputed per pass so sidebar
@@ -575,6 +638,7 @@ async function buildRows() {
 			host.style.gap = "6px";
 			syncRingTexture();
 			modelRingsAt = 0;
+			renderModelRings();
 			void refreshModelRings();
 		}
 
@@ -611,15 +675,22 @@ async function buildRows() {
 				modelRingHit = Number.isFinite(entry?.cacheHitRate) ? entry.cacheHitRate : null;
 				if (entry === undefined) {
 					// usage still folding after a host restart, or a brand-new
-					// model: render nothing and retry on the next tick rather
-					// than falling back to an unrelated provider's balance
+					// model: render the neutral placeholder (dot + dim ring) and
+					// retry on the next tick rather than falling back to an
+					// unrelated provider's balance. 绝不能只清空——活跃会话频繁
+					//重建按钮，空白态会永远刷不掉（2026-08-19 桌面端圆环消失事故）
 					modelRingsAt = 0;
-					if (modelRingsEl !== null) modelRingsEl.innerHTML = "";
+					modelRingMode = "none";
+					renderModelRings();
 					return;
 				}
 				const providerId = entry.model.split("/")[0];
 				const providers = providersRes.providers ?? [];
-				const matched = providers.find((p) => p.id === providerId) ?? providers.find((p) => providerId.endsWith(p.id));
+				// "-vision" 等后缀变体（zai-coding-cn-vision）的用量条目：provider
+				// 表里只有基座 id，endsWith 匹配不上（2026-08-19 三环消失末环），
+				// 前缀匹配兜底
+				const matched = providers.find((p) => p.id === providerId)
+					?? providers.find((p) => providerId.startsWith(p.id) || providerId.endsWith(p.id));
 				const target = matched?.id ?? null;
 				if (target === null) return;
 				modelRingProviderStatus = matched?.status ?? null;
@@ -646,6 +717,11 @@ async function buildRows() {
 		function renderModelRings() {
 			if (modelRingsEl === null || !modelRingsEl.isConnected) return;
 			renderHealthDot();
+			// 数据未就绪（新模型/宿主重启后用量折叠中）：占位环常驻，绝不空白
+			if (modelRingMode !== "balance" && modelRingMode !== "subscription") {
+				modelRingsEl.innerHTML = '<span title="用量数据载入中" style="font-size:10px;color:var(--dsw-alias-label-tertiary)">◌</span>';
+				return;
+			}
 			const hitRing = modelRingHit !== null
 				? '<span title="今日缓存命中率 ' + modelRingHit.toFixed(1) + '%">' + ringSvg(modelRingHit, "#46a06e") + modelRingHit.toFixed(1) + "%</span>"
 				: "";
@@ -829,6 +905,9 @@ async function buildRows() {
 			});
 			observer.observe(document.body, { childList: true, subtree: true });
 			const timer = window.setInterval(() => void refreshWidget(), REFRESH_MS);
+			// 顶部 chips 定位依赖实时几何（toggleCluster/会话区右缘），mutation
+			// observer 只看 childList，纯位置变化不触发——1s 低频重算兜底。
+			const chipsTimer = window.setInterval(() => { try { placeGoalGitRow(); } catch { /* 布局中途的瞬态 */ } }, 1000);
 			const statsTimer = window.setInterval(() => void updateStatsTotals(), 60_000);
 			const ringsTimer = window.setInterval(() => { renderModelRings(); void refreshModelRings(); }, 30_000);
 
@@ -836,9 +915,11 @@ async function buildRows() {
 				observer.disconnect();
 				if (observerTimer !== 0) window.clearTimeout(observerTimer);
 				window.clearInterval(timer);
+				window.clearInterval(chipsTimer);
 				window.clearInterval(statsTimer);
 				window.clearInterval(ringsTimer);
 				document.getElementById(WIDGET_ID)?.remove();
+				document.getElementById("dshc-top-chips")?.remove();
 				style.remove();
 			}, "desktop-chrome: window chrome + usage widget");
 		}

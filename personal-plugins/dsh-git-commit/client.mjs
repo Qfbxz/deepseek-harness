@@ -14,7 +14,7 @@ window.__ModuleLoader__.load({
     var PANEL_ID = "dsh-git-commit-panel";
 
     var CSS = [
-      "#" + CHIP_ID + "{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 12px;border:1px solid var(--dsw-alias-border-l2, rgba(168,200,232,0.18));border-radius:999px;background:var(--dsw-alias-bg-layer-3, transparent);cursor:pointer;font-size:12px;color:var(--dsw-alias-label-secondary, #a5b3da);flex:0 0 auto;transition:border-color .12s}",
+      "#" + CHIP_ID + "{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2, rgba(168,200,232,0.18));border-radius:999px;background:var(--dsw-alias-bg-layer-3, transparent);cursor:pointer;font-size:11.5px;color:var(--dsw-alias-label-secondary, #a5b3da);flex:0 0 auto;transition:border-color .12s}",
       "#" + CHIP_ID + ":hover{border-color:var(--dsw-alias-label-dimmed, rgba(168,200,232,0.4))}",
       "#" + CHIP_ID + ".dirty{color:var(--dsw-alias-label-primary, inherit);border-color:var(--dsw-alias-brand-primary, #4c8dff)}",
       "." + P + "Num{font-weight:600}",
@@ -46,6 +46,9 @@ window.__ModuleLoader__.load({
 
     // ---------- 状态 ----------
     var cwd = null;
+    var cwdTitle = null;   // 解析 cwd 时的选中会话标题——变了就必须重解析，
+                           // 否则切会话后提交面板还挂着上一个仓库的分支
+    // ... existing states ...
     var status = null;      // {branch, ahead, behind, staged, unstaged, untracked, dirty}
     var panelOpen = false;
     var busy = false;
@@ -80,7 +83,11 @@ window.__ModuleLoader__.load({
     }
 
     function resolveCwd(force) {
-      if (cwd !== null && !force) return Promise.resolve(cwd);
+      var title = selectedTitle();
+      // 选中会话变了就必须重解析——否则切会话后提交面板还挂着上一个仓库的
+      // 分支，与分支 chip（跟随活跃会话）不一致
+      if (cwd !== null && !force && title === cwdTitle) return Promise.resolve(cwd);
+      cwdTitle = title;
       return fetch("/api/session.list", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ type: "client-request", rpcId: "gc-cwd", method: "session.list", payload: {} })
@@ -152,14 +159,10 @@ window.__ModuleLoader__.load({
     }
 
     function placeChip() {
-      var row = document.getElementById("dshc-goal-git-row");
-      if (row === null) return;
-      var chip = document.getElementById(CHIP_ID);
-      if (chip === null) {
-        chip = buildChip();
-        row.appendChild(chip);
-      } else if (chip.parentElement !== row) {
-        row.appendChild(chip);
+      // chip 只需存在（挂在 body）；定位由 dsh-desktop-chrome 统一负责：
+      // position:fixed 钉在分支 chip 左边、与 tab 栏水平对齐。
+      if (document.getElementById(CHIP_ID) === null) {
+        document.body.appendChild(buildChip());
       }
     }
 

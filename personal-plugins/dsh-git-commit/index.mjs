@@ -52,7 +52,9 @@ async function statusOf(cwd) {
   let branch = '', ahead = 0, behind = 0, untracked = 0, stagedN = 0, unstagedN = 0
   for (const line of lines) {
     if (line.startsWith('##')) {
-      const m = line.match(/^## (.+?)(?:\.\.\.(.+))?/)
+      // 惰性组必须以 \.\.\. 或行尾收束：无锚点+可选尾组时 (.+?) 匹配到首字母
+      // 即成功——branch 变成 "z"（"zoubo" 的首字母），提交面板因此插入幽灵分支
+      const m = line.match(/^## (.+?)(?:\.\.\.|$)/)
       branch = (m ? m[1] : line.slice(3)).replace(/\s.*$/, '')
       const am = line.match(/ahead (\d+)/); if (am) ahead = parseInt(am[1], 10)
       const bm = line.match(/behind (\d+)/); if (bm) behind = parseInt(bm[1], 10)

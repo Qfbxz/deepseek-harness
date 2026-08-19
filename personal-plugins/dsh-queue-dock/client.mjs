@@ -10,16 +10,18 @@ window.__ModuleLoader__.load({
   factory: function () {
     var module = { exports: {} };
 
-    // 只认宿主的直接子元素——querySelectors 全子树会误抓 goal bar 自己的
-    // dock 容器（class 含 _dock），把它拽出 React 容器引发 removeChild 崩溃
+    // 官方 QueueDock 自带 data-queue-dock 属性——只认它，绝不碰 goal bar。
+    // 旧版按 [class*="_dock"] 类名匹配会误抓 goal bar 的 dock 容器（同为
+    // CSS-module *_dock 类名）：把它拽进 goal 行后 React 原位重渲染，出现
+    // 两个目标条、提交按钮挤到目标条左边（2026-08-19 会话切换竞态实测）。
     function findQueueDock(host, row) {
       if (host === null) return null;
       for (var i = 0; i < host.children.length; i++) {
         var c = host.children[i];
         if (c === row || (row !== null && row.contains(c))) continue;
-        // 真实排队 dock 渲染在插槽容器里：类名含 _dock，或容器内含 _dock 元素
-        if (/_dock/.test(String(c.className))) return c;
-        if (c.querySelector('[class*="_dock"]') !== null) return c;
+        // 真实排队 dock 渲染在插槽容器里：容器自身带 data-queue-dock，或内含该元素
+        if (c.hasAttribute("data-queue-dock")) return c;
+        if (c.querySelector("[data-queue-dock]") !== null) return c;
       }
       return null;
     }

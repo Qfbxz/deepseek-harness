@@ -84,6 +84,20 @@ window.__ModuleLoader__.load({
       ".hHd-Xa_footArea{padding-bottom:8px;}",
       // F7: hide the reasoning-effort tag on the model pill (GLM-5.2 Default → GLM-5.2)
       '[class*="_triggerEffort"]{display:none !important;}',
+      // F8: 官方 rc.6 把 goal bar 注册进发送按钮后的 send-after 槽（priority 5）。
+      // goal 只属于输入卡上方的原位 dock；send-after 里的实例整个隐藏
+      // （2026-08-19 用户指令：发送按钮后面不可能显示 goal，彻底删除）。
+      '[data-send-after] [data-goal-bar]{display:none !important;}',
+      // F9: goal 条排堆叠最下（order:999，输入卡根由 desktop-chrome 设 order:1000）；
+      // 宽度/边距几何由 desktop-chrome 的 pass 逐像素对齐输入卡（这里不设
+      // margin/width，!important 会压过内联样式）。内层 pill 自带 max-width
+      // 上限（748px < 卡片宽），一并解除。堆叠间距 6px → 3px。
+      '[data-goal-bar]{max-width:none !important;order:999 !important;}',
+      '[data-goal-bar] > div{width:100% !important;max-width:none !important;}',
+      '[class*="composerStack"]{gap:4px !important;}',
+      // F10: 右上角分支下拉+提交按钮统一高度（提交 chip 的 1px 边框曾让它比
+      // 分支 chip 高 2px）。
+      '[class*="chipWrap"], #dsh-git-commit-chip{box-sizing:border-box !important;height:24px !important;}',
       '',
       '.usg_panel{left:0 !important;border-radius:0 12px 12px 0 !important;}',
       // F4
