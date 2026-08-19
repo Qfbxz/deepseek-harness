@@ -176,6 +176,17 @@ node runtime-patches/replay-discard-diagnostic.mjs \
 
 watchdog 条目 `p12-discard-diagnostic`（marker=`clampBindingValue`，bad=`result discarded`，官方修复后自动退役）+ autorun 启动重放。
 
+## 补丁 13：git-graph 分支弹出层向下展开（@linxin666/dsh-client-ui-git-graph）
+
+第三方包（不在本仓库）：分支选择弹出层原以 `bottom:calc(100% + 4px)` 锚在 chip **上方**展开，而 chip 位于顶栏，整层顶出屏幕不可见；补丁对齐同包 `popoverHero` 的向下语义（`top:calc(100% + 4px); bottom:auto`）。升级重装该包后需重放：
+
+```sh
+node runtime-patches/replay-git-graph-popover-below.mjs \
+  ~/.dsh/profiles/web/node_modules/@linxin666/dsh-client-ui-git-graph/lib/client.js
+```
+
+watchdog 条目 `p13-popover-below`（marker=`patch(popover-below)`，bad=旧 `bottom:calc(100% + 4px);left:0` 定位；插件作者修复后自动退役）。生效需重启 dsh web 并刷新浏览器（client 插件按 rev 拉取）。
+
 ## 快照清单（backups/）
 
 | 文件 | 来源 | 时间 |
