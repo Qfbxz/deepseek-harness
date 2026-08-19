@@ -48,6 +48,9 @@ html { font-size: 93.75%; }
 #dshc-usage .dshc-row { display: flex; align-items: center; gap: 7px; font-size: 10px; color: var(--dsw-alias-label-primary); white-space: nowrap; }
 #dshc-usage .dshc-row2 { font-size: 10px; color: var(--dsw-alias-label-primary); font-variant-numeric: tabular-nums; padding-left: 1px; }
 #dshc-usage .dshc-cell { display: inline-flex; align-items: center; gap: 2px; }
+/* pin the green remaining-% at the row's right end: preceding cells may change
+ * width (clock ticks, token counters), the % must not move */
+#dshc-usage .dshc-row .dshc-cell:last-child { margin-left: auto; min-width: 34px; justify-content: flex-end; font-variant-numeric: tabular-nums; }
 #dshc-usage .dshc-dim { color: var(--dsw-alias-label-primary); }
 /* layout only — the glassy texture is synced live from the context-length
  * ring trigger so it follows theme switches and stays color-coordinated */
