@@ -49,12 +49,16 @@ window.__ModuleLoader__.load({
         if (qdock.style.maxWidth !== "") qdock.style.maxWidth = "";
         if (qdock.style.margin !== "") qdock.style.margin = "";
       } else {
-        // 有 goal：独立行在 goal 行上方，居中、宽度对齐输入卡
+        // patch(hard-align): 独立行与输入卡逐像素对齐——margin-auto 依赖 host
+        // 居中假设（desktop-chrome 改序后不成立），改为左缘+宽度双钉死
         if (qdock.parentElement !== host || qdock.nextElementSibling !== row) host.insertBefore(qdock, row);
-        var w = Math.round(card.getBoundingClientRect().width) + "px";
+        var cr = card.getBoundingClientRect();
+        var w = Math.round(cr.width) + "px";
+        var leftPx = Math.round(cr.left - host.getBoundingClientRect().left) + "px";
         if (qdock.style.width !== w) qdock.style.width = w;
         if (qdock.style.maxWidth !== "none") qdock.style.maxWidth = "none";
-        if (qdock.style.margin !== "0 auto 8px") qdock.style.margin = "0 auto 8px";
+        if (qdock.style.margin !== "0 0 8px") qdock.style.margin = "0 0 8px";
+        if (qdock.style.marginLeft !== leftPx) qdock.style.marginLeft = leftPx;
         if (qdock.style.flex !== "0 0 auto") qdock.style.flex = "0 0 auto";
       }
     }
