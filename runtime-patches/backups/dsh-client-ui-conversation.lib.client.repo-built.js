@@ -2881,23 +2881,23 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var ContextMeter_module_css_default = {
-			"track": "udhj7q_track",
-			"percent": "udhj7q_percent",
-			"headline": "udhj7q_headline",
-			"segment": "udhj7q_segment",
-			"colorMessages": "udhj7q_colorMessages",
 			"trigger": "udhj7q_trigger",
-			"row": "udhj7q_row",
-			"colorTools": "udhj7q_colorTools",
-			"swatch": "udhj7q_swatch",
-			"root": "udhj7q_root",
 			"panel": "udhj7q_panel",
-			"colorSystem": "udhj7q_colorSystem",
 			"fill": "udhj7q_fill",
-			"header": "udhj7q_header",
-			"rows": "udhj7q_rows",
+			"root": "udhj7q_root",
+			"headline": "udhj7q_headline",
+			"row": "udhj7q_row",
+			"percent": "udhj7q_percent",
+			"colorSystem": "udhj7q_colorSystem",
+			"segment": "udhj7q_segment",
+			"colorTools": "udhj7q_colorTools",
+			"colorMessages": "udhj7q_colorMessages",
+			"swatch": "udhj7q_swatch",
+			"track": "udhj7q_track",
+			"bar": "udhj7q_bar",
 			"figures": "udhj7q_figures",
-			"bar": "udhj7q_bar"
+			"rows": "udhj7q_rows",
+			"header": "udhj7q_header"
 		};
 		//#endregion
 		//#region lib/types/client/skeleton/ContextMeter.js
@@ -3069,11 +3069,11 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var PermissionSelect_module_css_default = {
+			"chevronOpen": "oTx5aW_chevronOpen",
+			"triggerLabel": "oTx5aW_triggerLabel",
 			"trigger": "oTx5aW_trigger",
 			"chevron": "oTx5aW_chevron",
-			"chevronOpen": "oTx5aW_chevronOpen",
-			"triggerIcon": "oTx5aW_triggerIcon",
-			"triggerLabel": "oTx5aW_triggerLabel"
+			"triggerIcon": "oTx5aW_triggerIcon"
 		};
 		//#endregion
 		//#region lib/types/client/skeleton/PermissionSelect.js
@@ -3277,38 +3277,38 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var InputBar_module_css_default = {
-			"input-pending": "lK-p5G_input-pending",
-			"scroll": "lK-p5G_scroll",
-			"row": "lK-p5G_row",
-			"root": "lK-p5G_root",
-			"primary": "lK-p5G_primary",
-			"select": "lK-p5G_select",
-			"modes": "lK-p5G_modes",
-			"accessory": "lK-p5G_accessory",
-			"add": "lK-p5G_add",
-			"hlSegment": "lK-p5G_hlSegment",
-			"overlayAnchor": "lK-p5G_overlayAnchor",
-			"cardWorkspaceTrigger": "lK-p5G_cardWorkspaceTrigger",
-			"pending": "lK-p5G_pending",
-			"noticeError": "lK-p5G_noticeError",
-			"mirror": "lK-p5G_mirror",
-			"sendAfter": "lK-p5G_sendAfter",
-			"chip": "lK-p5G_chip",
-			"hlToken": "lK-p5G_hlToken",
-			"hint": "lK-p5G_hint",
-			"input": "lK-p5G_input",
-			"hero": "lK-p5G_hero",
-			"chipInvalid": "lK-p5G_chipInvalid",
-			"tools": "lK-p5G_tools",
-			"backdrop": "lK-p5G_backdrop",
-			"card": "lK-p5G_card",
 			"notice": "lK-p5G_notice",
-			"chipLabel": "lK-p5G_chipLabel",
-			"trailing": "lK-p5G_trailing",
-			"retry": "lK-p5G_retry",
+			"modes": "lK-p5G_modes",
+			"primary": "lK-p5G_primary",
+			"chipInvalid": "lK-p5G_chipInvalid",
+			"overlayAnchor": "lK-p5G_overlayAnchor",
+			"grow": "lK-p5G_grow",
+			"sendAfter": "lK-p5G_sendAfter",
 			"attachments": "lK-p5G_attachments",
+			"tools": "lK-p5G_tools",
+			"select": "lK-p5G_select",
+			"add": "lK-p5G_add",
 			"textRef": "lK-p5G_textRef",
-			"grow": "lK-p5G_grow"
+			"chip": "lK-p5G_chip",
+			"accessory": "lK-p5G_accessory",
+			"trailing": "lK-p5G_trailing",
+			"hero": "lK-p5G_hero",
+			"input": "lK-p5G_input",
+			"retry": "lK-p5G_retry",
+			"scroll": "lK-p5G_scroll",
+			"cardWorkspaceTrigger": "lK-p5G_cardWorkspaceTrigger",
+			"backdrop": "lK-p5G_backdrop",
+			"mirror": "lK-p5G_mirror",
+			"noticeError": "lK-p5G_noticeError",
+			"hlSegment": "lK-p5G_hlSegment",
+			"chipLabel": "lK-p5G_chipLabel",
+			"hint": "lK-p5G_hint",
+			"row": "lK-p5G_row",
+			"card": "lK-p5G_card",
+			"hlToken": "lK-p5G_hlToken",
+			"root": "lK-p5G_root",
+			"pending": "lK-p5G_pending",
+			"input-pending": "lK-p5G_input-pending"
 		};
 		//#endregion
 		//#region lib/types/client/skeleton/InputBar.js
@@ -3956,11 +3956,11 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var EnterBehaviorRow_module_css_default = {
-			"desc": "_71pOSa_desc",
+			"chevron": "_71pOSa_chevron",
 			"row": "_71pOSa_row",
 			"title": "_71pOSa_title",
+			"desc": "_71pOSa_desc",
 			"selector": "_71pOSa_selector",
-			"chevron": "_71pOSa_chevron",
 			"rowText": "_71pOSa_rowText"
 		};
 		//#endregion
@@ -4034,33 +4034,33 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var MessageItem_module_css_default = {
-			"bubble": "hFwxlW_bubble",
-			"retry-shimmer": "hFwxlW_retry-shimmer",
-			"turnErrorTitle": "hFwxlW_turnErrorTitle",
 			"retrySummary": "hFwxlW_retrySummary",
-			"compactionContextIcon": "hFwxlW_compactionContextIcon",
-			"compactionLeading": "hFwxlW_compactionLeading",
+			"turnErrorDot": "hFwxlW_turnErrorDot",
 			"refChip": "hFwxlW_refChip",
+			"retryDetails": "hFwxlW_retryDetails",
+			"compactionContextIcon": "hFwxlW_compactionContextIcon",
+			"userRow": "hFwxlW_userRow",
+			"bubble": "hFwxlW_bubble",
+			"compactionBody": "hFwxlW_compactionBody",
+			"compactionLeading": "hFwxlW_compactionLeading",
+			"compactionDisclosureIcon": "hFwxlW_compactionDisclosureIcon",
+			"compactionSep": "hFwxlW_compactionSep",
+			"turnErrorTitle": "hFwxlW_turnErrorTitle",
+			"contextRow": "hFwxlW_contextRow",
+			"turnErrorMessage": "hFwxlW_turnErrorMessage",
+			"userStack": "hFwxlW_userStack",
+			"retryText": "hFwxlW_retryText",
 			"turnErrorRow": "hFwxlW_turnErrorRow",
+			"turnErrorCode": "hFwxlW_turnErrorCode",
+			"maxTokensTitle": "hFwxlW_maxTokensTitle",
+			"retry-shimmer": "hFwxlW_retry-shimmer",
+			"compactionTitle": "hFwxlW_compactionTitle",
+			"retryDetailLabel": "hFwxlW_retryDetailLabel",
 			"compactionSummary": "hFwxlW_compactionSummary",
 			"retryRow": "hFwxlW_retryRow",
-			"compactionSep": "hFwxlW_compactionSep",
-			"retryText": "hFwxlW_retryText",
-			"compactionBody": "hFwxlW_compactionBody",
-			"compactionTitle": "hFwxlW_compactionTitle",
-			"userStack": "hFwxlW_userStack",
 			"compactionRow": "hFwxlW_compactionRow",
-			"retryDetails": "hFwxlW_retryDetails",
-			"retryDetailLabel": "hFwxlW_retryDetailLabel",
-			"turnErrorDot": "hFwxlW_turnErrorDot",
 			"turnErrorCopy": "hFwxlW_turnErrorCopy",
-			"contextRow": "hFwxlW_contextRow",
-			"compactionDisclosureIcon": "hFwxlW_compactionDisclosureIcon",
-			"turnErrorMessage": "hFwxlW_turnErrorMessage",
-			"maxTokensTitle": "hFwxlW_maxTokensTitle",
-			"userRow": "hFwxlW_userRow",
-			"compactionButton": "hFwxlW_compactionButton",
-			"turnErrorCode": "hFwxlW_turnErrorCode"
+			"compactionButton": "hFwxlW_compactionButton"
 		};
 		//#endregion
 		//#region lib/types/client/chat/CompactionItem.js
@@ -4132,29 +4132,29 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var ContextBody_module_css_default = {
-			"section": "HuT_ka_section",
-			"entries": "HuT_ka_entries",
-			"files": "HuT_ka_files",
-			"entryName": "HuT_ka_entryName",
-			"recallLabel": "HuT_ka_recallLabel",
-			"field": "HuT_ka_field",
-			"filePath": "HuT_ka_filePath",
-			"sectionText": "HuT_ka_sectionText",
 			"fieldKey": "HuT_ka_fieldKey",
-			"entry": "HuT_ka_entry",
-			"sections": "HuT_ka_sections",
-			"recallCounts": "HuT_ka_recallCounts",
-			"text": "HuT_ka_text",
-			"fields": "HuT_ka_fields",
-			"catalogNotice": "HuT_ka_catalogNotice",
-			"fileAction": "HuT_ka_fileAction",
-			"fieldValue": "HuT_ka_fieldValue",
-			"recalls": "HuT_ka_recalls",
-			"recall": "HuT_ka_recall",
-			"entryDescription": "HuT_ka_entryDescription",
 			"file": "HuT_ka_file",
+			"fields": "HuT_ka_fields",
+			"entries": "HuT_ka_entries",
+			"recalls": "HuT_ka_recalls",
+			"sections": "HuT_ka_sections",
+			"recall": "HuT_ka_recall",
+			"field": "HuT_ka_field",
 			"sectionName": "HuT_ka_sectionName",
-			"relaySender": "HuT_ka_relaySender"
+			"entryName": "HuT_ka_entryName",
+			"fileAction": "HuT_ka_fileAction",
+			"recallCounts": "HuT_ka_recallCounts",
+			"section": "HuT_ka_section",
+			"text": "HuT_ka_text",
+			"entry": "HuT_ka_entry",
+			"recallLabel": "HuT_ka_recallLabel",
+			"catalogNotice": "HuT_ka_catalogNotice",
+			"filePath": "HuT_ka_filePath",
+			"entryDescription": "HuT_ka_entryDescription",
+			"fieldValue": "HuT_ka_fieldValue",
+			"sectionText": "HuT_ka_sectionText",
+			"relaySender": "HuT_ka_relaySender",
+			"files": "HuT_ka_files"
 		};
 		//#endregion
 		//#region lib/types/client/chat/ContextBody.js
@@ -4690,11 +4690,11 @@ window.__ModuleLoader__.load({
 		}
 		var ContextInjectionRow_module_css_default = {
 			"source": "c5_oIG_source",
+			"chevron": "c5_oIG_chevron",
 			"sep": "c5_oIG_sep",
-			"summary": "c5_oIG_summary",
 			"root": "c5_oIG_root",
-			"body": "c5_oIG_body",
-			"chevron": "c5_oIG_chevron"
+			"summary": "c5_oIG_summary",
+			"body": "c5_oIG_body"
 		};
 		//#endregion
 		//#region lib/types/client/chat/ContextInjectionRow.js
@@ -4789,12 +4789,12 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var MessageIconActions_module_css_default = {
-			"actions": "-p4KHW_actions",
-			"timeStart": "-p4KHW_timeStart",
-			"action": "-p4KHW_action",
 			"visuallyHidden": "-p4KHW_visuallyHidden",
+			"timeEnd": "-p4KHW_timeEnd",
+			"timeStart": "-p4KHW_timeStart",
 			"runTimeDot": "-p4KHW_runTimeDot",
-			"timeEnd": "-p4KHW_timeEnd"
+			"actions": "-p4KHW_actions",
+			"action": "-p4KHW_action"
 		};
 		//#endregion
 		//#region lib/types/client/chat/MessageIconActions.js
@@ -5187,19 +5187,19 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var ChatView_module_css_default = {
+			"scroll": "dtobma_scroll",
+			"flowItem": "dtobma_flowItem",
+			"hint": "dtobma_hint",
+			"openError": "dtobma_openError",
 			"older": "dtobma_older",
+			"toBottomSlot": "dtobma_toBottomSlot",
 			"column": "dtobma_column",
 			"dsh-turn-status-shimmer": "dtobma_dsh-turn-status-shimmer",
-			"flowItem": "dtobma_flowItem",
-			"callRow": "dtobma_callRow",
-			"root": "dtobma_root",
-			"hint": "dtobma_hint",
-			"toBottomSlot": "dtobma_toBottomSlot",
-			"scroll": "dtobma_scroll",
-			"turnStatus": "dtobma_turnStatus",
-			"toBottom": "dtobma_toBottom",
 			"turnStatusClock": "dtobma_turnStatusClock",
-			"openError": "dtobma_openError"
+			"toBottom": "dtobma_toBottom",
+			"turnStatus": "dtobma_turnStatus",
+			"callRow": "dtobma_callRow",
+			"root": "dtobma_root"
 		};
 		//#endregion
 		//#region lib/types/client/chat/ChatNodeSeat.js
@@ -5676,15 +5676,15 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var ApprovalPanel_module_css_default = {
-			"command": "HMxhdW_command",
 			"headline": "HMxhdW_headline",
+			"card": "HMxhdW_card",
 			"root": "HMxhdW_root",
+			"command": "HMxhdW_command",
 			"strip": "HMxhdW_strip",
-			"actionRow": "HMxhdW_actionRow",
 			"body": "HMxhdW_body",
-			"reject": "HMxhdW_reject",
 			"dot": "HMxhdW_dot",
-			"card": "HMxhdW_card"
+			"reject": "HMxhdW_reject",
+			"actionRow": "HMxhdW_actionRow"
 		};
 		//#endregion
 		//#region lib/types/client/skeleton/ApprovalPanel.js
@@ -6113,7 +6113,7 @@ window.__ModuleLoader__.load({
 		};
 		//#endregion
 		//#region \0dsh-css:/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/packages/client/ui-conversation/src/client/skeleton/TodoPanel.module.css.mjs
-		const css$9 = ".OB_P1q_root{box-sizing:border-box;width:calc(100% - var(--dsh-composer-side-clearance) - var(--dsh-composer-side-clearance) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset));max-width:calc(var(--dsh-composer-card-max-width) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset));border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-specific-tip);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:12px;flex:none;margin:0 auto;overflow:hidden}[data-send-after] .OB_P1q_root{width:100%;min-width:0;max-width:100%;margin:0}.OB_P1q_body{flex-direction:column;gap:8px;padding:6px 12px;display:flex}.OB_P1q_header{text-align:left;cursor:pointer;background:0 0;border:none;align-items:center;gap:10px;width:100%;padding:0;display:flex}.OB_P1q_lead{color:var(--dsw-alias-label-tertiary);flex:none;place-items:center;display:grid}.OB_P1q_title{color:var(--dsw-alias-label-primary);flex:none;font-size:13px;font-weight:500;line-height:24px}.OB_P1q_progress{min-width:0;color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;flex:auto;font-size:13px;font-weight:400;line-height:20px;overflow:hidden}.OB_P1q_chevron{color:var(--dsw-alias-label-tertiary);flex:none;place-items:center;display:grid}.OB_P1q_list{flex-direction:column;gap:8px;max-height:180px;margin:0;padding:0;list-style:none;display:flex;overflow-y:auto}.OB_P1q_item{min-width:0;color:var(--dsw-alias-label-secondary);align-items:center;gap:10px;font-size:13px;line-height:20px;display:flex}.OB_P1q_glyph{flex:none;place-items:center;width:16px;height:16px;display:grid}.OB_P1q_glyphCompleted{color:var(--dsw-alias-state-success-primary)}.OB_P1q_glyphPending{color:var(--dsw-alias-label-caption)}.OB_P1q_glyphProgress{color:var(--dsw-alias-state-business-primary);animation:1s linear infinite OB_P1q_todo-progress-spin}@keyframes OB_P1q_todo-progress-spin{to{transform:rotate(360deg)}}.OB_P1q_content{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}";
+		const css$9 = ".OB_P1q_root{box-sizing:border-box;width:calc(100% - var(--dsh-composer-side-clearance) - var(--dsh-composer-side-clearance) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset));max-width:calc(var(--dsh-composer-card-max-width) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset));border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-specific-tip);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:12px;flex:none;margin:0 auto;overflow:hidden}[data-send-after] .OB_P1q_root{width:100%;min-width:0;max-width:100%;margin:0;padding:0 10px}.OB_P1q_body{flex-direction:column;gap:8px;padding:6px 12px;display:flex}.OB_P1q_header{text-align:left;cursor:pointer;background:0 0;border:none;align-items:center;gap:10px;width:100%;padding:0;display:flex}.OB_P1q_lead{color:var(--dsw-alias-label-tertiary);flex:none;place-items:center;display:grid}.OB_P1q_title{color:var(--dsw-alias-label-primary);flex:none;font-size:13px;font-weight:500;line-height:24px}.OB_P1q_progress{min-width:0;color:var(--dsw-alias-label-tertiary);text-overflow:ellipsis;white-space:nowrap;flex:auto;font-size:13px;font-weight:400;line-height:20px;overflow:hidden}.OB_P1q_chevron{color:var(--dsw-alias-label-tertiary);flex:none;place-items:center;display:grid}.OB_P1q_list{flex-direction:column;gap:8px;max-height:180px;margin:0;padding:0;list-style:none;display:flex;overflow-y:auto}.OB_P1q_item{min-width:0;color:var(--dsw-alias-label-secondary);align-items:center;gap:10px;font-size:13px;line-height:20px;display:flex}.OB_P1q_glyph{flex:none;place-items:center;width:16px;height:16px;display:grid}.OB_P1q_glyphCompleted{color:var(--dsw-alias-state-success-primary)}.OB_P1q_glyphPending{color:var(--dsw-alias-label-caption)}.OB_P1q_glyphProgress{color:var(--dsw-alias-state-business-primary);animation:1s linear infinite OB_P1q_todo-progress-spin}@keyframes OB_P1q_todo-progress-spin{to{transform:rotate(360deg)}}.OB_P1q_content{text-overflow:ellipsis;white-space:nowrap;min-width:0;overflow:hidden}";
 		const tagId$9 = "@deepseek-ai/dsh-client-ui-conversation/TodoPanel.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId$9) + "]") === null) {
 			const tag = document.createElement("style");
@@ -6123,21 +6123,21 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var TodoPanel_module_css_default = {
-			"header": "OB_P1q_header",
+			"glyphProgress": "OB_P1q_glyphProgress",
+			"item": "OB_P1q_item",
+			"root": "OB_P1q_root",
 			"progress": "OB_P1q_progress",
 			"chevron": "OB_P1q_chevron",
-			"content": "OB_P1q_content",
-			"glyphCompleted": "OB_P1q_glyphCompleted",
-			"glyphProgress": "OB_P1q_glyphProgress",
-			"todo-progress-spin": "OB_P1q_todo-progress-spin",
-			"lead": "OB_P1q_lead",
-			"body": "OB_P1q_body",
 			"glyph": "OB_P1q_glyph",
-			"list": "OB_P1q_list",
-			"root": "OB_P1q_root",
+			"content": "OB_P1q_content",
+			"body": "OB_P1q_body",
+			"todo-progress-spin": "OB_P1q_todo-progress-spin",
 			"title": "OB_P1q_title",
 			"glyphPending": "OB_P1q_glyphPending",
-			"item": "OB_P1q_item"
+			"list": "OB_P1q_list",
+			"lead": "OB_P1q_lead",
+			"header": "OB_P1q_header",
+			"glyphCompleted": "OB_P1q_glyphCompleted"
 		};
 		//#endregion
 		//#region lib/types/client/skeleton/TodoPanel.js
@@ -6327,7 +6327,7 @@ window.__ModuleLoader__.load({
 		};
 		//#endregion
 		//#region \0dsh-css:/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/packages/client/ui-conversation/src/client/queue/QueueDock.module.css.mjs
-		const css$8 = ".sTnaRq_dock{box-sizing:border-box;width:calc(100% - var(--dsh-composer-side-clearance) - var(--dsh-composer-side-clearance) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset));max-width:calc(var(--dsh-composer-card-max-width) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset));margin:0 auto calc(0px - var(--dsh-composer-stack-gap) - 3px);padding:0 var(--dsh-composer-dock-inset);flex:none}[data-send-after] .sTnaRq_dock{width:100%;min-width:0;max-width:100%;margin:0;padding:0}.sTnaRq_panel{background:var(--dsw-specific-tip);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:12px 12px 0 0;width:100%;padding:2px 0;position:relative;overflow:hidden}.sTnaRq_panel:after{border:1px solid var(--dsw-alias-border-l1);border-radius:inherit;content:\"\";pointer-events:none;border-bottom:none;position:absolute;inset:0}.sTnaRq_header{box-sizing:border-box;width:100%;height:36px;color:var(--dsw-alias-label-primary);text-align:left;cursor:pointer;background:0 0;border:none;border-radius:8px;align-items:center;gap:10px;padding:4px 12px;display:flex}.sTnaRq_header:focus-visible{outline:2px solid var(--dsw-alias-label-tertiary);outline-offset:-2px}.sTnaRq_header:disabled{cursor:default}.sTnaRq_lead{color:var(--dsw-alias-label-tertiary);flex:none;place-items:center;display:grid}.sTnaRq_count{min-width:0;font-family:Inter, var(--dsw-font-family);flex:auto;font-size:13px;font-weight:500;line-height:24px}.sTnaRq_chevron{width:14px;height:14px;color:var(--dsw-alias-label-tertiary);flex:none;place-items:center;display:grid}.sTnaRq_list{max-height:180px;margin:0;padding:0;list-style:none;overflow-y:auto}.sTnaRq_row{box-sizing:border-box;border-radius:8px;align-items:center;gap:10px;width:100%;height:36px;padding:4px 5px 4px 12px;display:flex}.sTnaRq_row+.sTnaRq_row{box-shadow:inset 0 1px 0 var(--dsw-alias-border-l1)}.sTnaRq_preview,.sTnaRq_editor{min-width:0;font:var(--dsw-font-xs-13);font-family:Inter, var(--dsw-font-family);flex:auto}.sTnaRq_preview{color:var(--dsw-alias-label-primary-dimmed);text-overflow:ellipsis;white-space:nowrap;word-break:break-word;overflow:hidden}.sTnaRq_editor{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);width:100%;height:28px;color:var(--dsw-alias-label-primary);border-radius:6px;outline:none;padding:0 8px}.sTnaRq_editor:focus{border-color:var(--dsw-alias-state-business-primary)}.sTnaRq_actions{flex:none;align-items:center;gap:10px;display:flex}.sTnaRq_action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:999px;flex:none;place-items:center;padding:0;display:grid}.sTnaRq_action:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.sTnaRq_action:focus-visible{outline:2px solid var(--dsw-alias-label-tertiary);outline-offset:-2px}.sTnaRq_action:disabled{cursor:default;opacity:.45}";
+		const css$8 = ".sTnaRq_dock{box-sizing:border-box;width:calc(100% - var(--dsh-composer-side-clearance) - var(--dsh-composer-side-clearance) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset));max-width:calc(var(--dsh-composer-card-max-width) - var(--dsh-composer-dock-inset) - var(--dsh-composer-dock-inset));margin:0 auto calc(0px - var(--dsh-composer-stack-gap) - 3px);padding:0 var(--dsh-composer-dock-inset);flex:none}[data-send-after] .sTnaRq_dock{width:100%;min-width:0;max-width:100%;margin:0;padding:0 10px}.sTnaRq_panel{background:var(--dsw-specific-tip);--dsh-scrollbar-thumb:var(--dsw-alias-scrollbar-bg-l2);--dsh-scrollbar-thumb-hover:var(--dsw-alias-scrollbar-hover-l2);border-radius:12px 12px 0 0;width:100%;padding:2px 0;position:relative;overflow:hidden}.sTnaRq_panel:after{border:1px solid var(--dsw-alias-border-l1);border-radius:inherit;content:\"\";pointer-events:none;border-bottom:none;position:absolute;inset:0}.sTnaRq_header{box-sizing:border-box;width:100%;height:36px;color:var(--dsw-alias-label-primary);text-align:left;cursor:pointer;background:0 0;border:none;border-radius:8px;align-items:center;gap:10px;padding:4px 12px;display:flex}.sTnaRq_header:focus-visible{outline:2px solid var(--dsw-alias-label-tertiary);outline-offset:-2px}.sTnaRq_header:disabled{cursor:default}.sTnaRq_lead{color:var(--dsw-alias-label-tertiary);flex:none;place-items:center;display:grid}.sTnaRq_count{min-width:0;font-family:Inter, var(--dsw-font-family);flex:auto;font-size:13px;font-weight:500;line-height:24px}.sTnaRq_chevron{width:14px;height:14px;color:var(--dsw-alias-label-tertiary);flex:none;place-items:center;display:grid}.sTnaRq_list{max-height:180px;margin:0;padding:0;list-style:none;overflow-y:auto}.sTnaRq_row{box-sizing:border-box;border-radius:8px;align-items:center;gap:10px;width:100%;height:36px;padding:4px 5px 4px 12px;display:flex}.sTnaRq_row+.sTnaRq_row{box-shadow:inset 0 1px 0 var(--dsw-alias-border-l1)}.sTnaRq_preview,.sTnaRq_editor{min-width:0;font:var(--dsw-font-xs-13);font-family:Inter, var(--dsw-font-family);flex:auto}.sTnaRq_preview{color:var(--dsw-alias-label-primary-dimmed);text-overflow:ellipsis;white-space:nowrap;word-break:break-word;overflow:hidden}.sTnaRq_editor{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);width:100%;height:28px;color:var(--dsw-alias-label-primary);border-radius:6px;outline:none;padding:0 8px}.sTnaRq_editor:focus{border-color:var(--dsw-alias-state-business-primary)}.sTnaRq_actions{flex:none;align-items:center;gap:10px;display:flex}.sTnaRq_action{width:28px;height:28px;color:var(--dsw-alias-label-tertiary);cursor:pointer;background:0 0;border:none;border-radius:999px;flex:none;place-items:center;padding:0;display:grid}.sTnaRq_action:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}.sTnaRq_action:focus-visible{outline:2px solid var(--dsw-alias-label-tertiary);outline-offset:-2px}.sTnaRq_action:disabled{cursor:default;opacity:.45}";
 		const tagId$8 = "@deepseek-ai/dsh-client-ui-conversation/QueueDock.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId$8) + "]") === null) {
 			const tag = document.createElement("style");
@@ -6337,18 +6337,18 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var QueueDock_module_css_default = {
-			"editor": "sTnaRq_editor",
-			"preview": "sTnaRq_preview",
+			"lead": "sTnaRq_lead",
 			"actions": "sTnaRq_actions",
 			"row": "sTnaRq_row",
-			"chevron": "sTnaRq_chevron",
-			"header": "sTnaRq_header",
+			"count": "sTnaRq_count",
+			"editor": "sTnaRq_editor",
 			"list": "sTnaRq_list",
 			"panel": "sTnaRq_panel",
-			"lead": "sTnaRq_lead",
-			"count": "sTnaRq_count",
+			"chevron": "sTnaRq_chevron",
+			"dock": "sTnaRq_dock",
+			"header": "sTnaRq_header",
 			"action": "sTnaRq_action",
-			"dock": "sTnaRq_dock"
+			"preview": "sTnaRq_preview"
 		};
 		//#endregion
 		//#region lib/types/client/queue/QueueDock.js
@@ -6625,23 +6625,23 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var HeroShell_module_css_default = {
-			"previewBadge": "_27GjzW_previewBadge",
-			"body": "_27GjzW_body",
-			"folder": "_27GjzW_folder",
+			"root": "_27GjzW_root",
 			"headline": "_27GjzW_headline",
 			"workspaceRow": "_27GjzW_workspaceRow",
-			"fish": "_27GjzW_fish",
-			"chevron": "_27GjzW_chevron",
 			"stack": "_27GjzW_stack",
 			"modalInput": "_27GjzW_modalInput",
 			"modalError": "_27GjzW_modalError",
-			"modalAction": "_27GjzW_modalAction",
 			"workspaceLabel": "_27GjzW_workspaceLabel",
-			"headlineText": "_27GjzW_headlineText",
-			"workspace": "_27GjzW_workspace",
 			"hero-fish-swim": "_27GjzW_hero-fish-swim",
-			"root": "_27GjzW_root",
-			"fishHitbox": "_27GjzW_fishHitbox"
+			"workspace": "_27GjzW_workspace",
+			"fish": "_27GjzW_fish",
+			"fishHitbox": "_27GjzW_fishHitbox",
+			"body": "_27GjzW_body",
+			"chevron": "_27GjzW_chevron",
+			"folder": "_27GjzW_folder",
+			"headlineText": "_27GjzW_headlineText",
+			"modalAction": "_27GjzW_modalAction",
+			"previewBadge": "_27GjzW_previewBadge"
 		};
 		//#endregion
 		//#region lib/types/client/skeleton/EmptyHero.js
@@ -6791,28 +6791,28 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var ConversationRoot_module_css_default = {
-			"composerHero": "NX9AIq_composerHero",
-			"heroWorkspaceRow": "NX9AIq_heroWorkspaceRow",
-			"scrollBody": "NX9AIq_scrollBody",
-			"viewArea": "NX9AIq_viewArea",
-			"headerHidden": "NX9AIq_headerHidden",
-			"heroGlow": "NX9AIq_heroGlow",
-			"tabs": "NX9AIq_tabs",
-			"composerStack": "NX9AIq_composerStack",
-			"titleRow": "NX9AIq_titleRow",
-			"crumbCurrent": "NX9AIq_crumbCurrent",
 			"composerSeat": "NX9AIq_composerSeat",
+			"scrollBody": "NX9AIq_scrollBody",
+			"heroWorkspaceRow": "NX9AIq_heroWorkspaceRow",
+			"crumbSeg": "NX9AIq_crumbSeg",
+			"crumb": "NX9AIq_crumb",
+			"root": "NX9AIq_root",
 			"crumbSep": "NX9AIq_crumbSep",
+			"titleCluster": "NX9AIq_titleCluster",
+			"crumbs": "NX9AIq_crumbs",
+			"headerHidden": "NX9AIq_headerHidden",
+			"crumbCurrent": "NX9AIq_crumbCurrent",
+			"composerHero": "NX9AIq_composerHero",
+			"composerStack": "NX9AIq_composerStack",
+			"tabs": "NX9AIq_tabs",
+			"titleRow": "NX9AIq_titleRow",
+			"headerUtilities": "NX9AIq_headerUtilities",
+			"tabActive": "NX9AIq_tabActive",
+			"heroGlow": "NX9AIq_heroGlow",
+			"viewArea": "NX9AIq_viewArea",
 			"header": "NX9AIq_header",
 			"tab": "NX9AIq_tab",
-			"crumbSeg": "NX9AIq_crumbSeg",
-			"titleCluster": "NX9AIq_titleCluster",
-			"root": "NX9AIq_root",
-			"tabActive": "NX9AIq_tabActive",
-			"headerUtilities": "NX9AIq_headerUtilities",
-			"headerActions": "NX9AIq_headerActions",
-			"crumb": "NX9AIq_crumb",
-			"crumbs": "NX9AIq_crumbs"
+			"headerActions": "NX9AIq_headerActions"
 		};
 		//#endregion
 		//#region lib/types/client/skeleton/ConversationRoot.js
@@ -7090,14 +7090,14 @@ window.__ModuleLoader__.load({
 		}
 		var DetailsPanel_module_css_default = {
 			"title": "_3Gb9GW_title",
-			"sectionLabel": "_3Gb9GW_sectionLabel",
 			"close": "_3Gb9GW_close",
-			"empty": "_3Gb9GW_empty",
-			"body": "_3Gb9GW_body",
-			"code": "_3Gb9GW_code",
-			"header": "_3Gb9GW_header",
 			"section": "_3Gb9GW_section",
-			"root": "_3Gb9GW_root"
+			"code": "_3Gb9GW_code",
+			"root": "_3Gb9GW_root",
+			"header": "_3Gb9GW_header",
+			"empty": "_3Gb9GW_empty",
+			"sectionLabel": "_3Gb9GW_sectionLabel",
+			"body": "_3Gb9GW_body"
 		};
 		//#endregion
 		//#region lib/types/client/skeleton/DetailsPanel.js
@@ -8950,15 +8950,15 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var ReasoningRow_module_css_default = {
-			"dsh-reasoning-row-sweep": "HM1_Ya_dsh-reasoning-row-sweep",
-			"chevron": "HM1_Ya_chevron",
-			"row": "HM1_Ya_row",
-			"thinkBody": "HM1_Ya_thinkBody",
-			"summary": "HM1_Ya_summary",
 			"separator": "HM1_Ya_separator",
+			"row": "HM1_Ya_row",
+			"title": "HM1_Ya_title",
+			"dsh-reasoning-row-sweep": "HM1_Ya_dsh-reasoning-row-sweep",
+			"summary": "HM1_Ya_summary",
 			"root": "HM1_Ya_root",
+			"chevron": "HM1_Ya_chevron",
 			"leading": "HM1_Ya_leading",
-			"title": "HM1_Ya_title"
+			"thinkBody": "HM1_Ya_thinkBody"
 		};
 		//#endregion
 		//#region lib/types/client/chat/ReasoningRow.js
@@ -9047,8 +9047,8 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var AssistantMarkdown_module_css_default = {
-			"actions": "YfjDha_actions",
 			"root": "YfjDha_root",
+			"actions": "YfjDha_actions",
 			"stopped": "YfjDha_stopped",
 			"body": "YfjDha_body"
 		};
@@ -9163,15 +9163,15 @@ window.__ModuleLoader__.load({
 			document.head.appendChild(tag);
 		}
 		var GenericCommandCard_module_css_default = {
-			"row": "FclPja_row",
-			"chevron": "FclPja_chevron",
 			"summary": "FclPja_summary",
-			"dsh-command-row-sweep": "FclPja_dsh-command-row-sweep",
-			"body": "FclPja_body",
 			"leading": "FclPja_leading",
-			"root": "FclPja_root",
 			"title": "FclPja_title",
-			"separator": "FclPja_separator"
+			"dsh-command-row-sweep": "FclPja_dsh-command-row-sweep",
+			"chevron": "FclPja_chevron",
+			"separator": "FclPja_separator",
+			"body": "FclPja_body",
+			"row": "FclPja_row",
+			"root": "FclPja_root"
 		};
 		//#endregion
 		//#region lib/types/client/chat/GenericCommandCard.js
