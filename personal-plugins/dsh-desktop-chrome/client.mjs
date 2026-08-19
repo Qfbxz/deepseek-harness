@@ -495,13 +495,19 @@ async function buildRows() {
 			}
 			// 全宽通则：composerStack 的所有 dock 条目（任务横条、排队消息、goal
 			// 条，穿过 display:contents 包装取真实 flex 项）逐像素对齐输入卡——
-			// width=卡片实测宽 + margin 0 auto，不依赖固定内缩假设（16px 假设
-			// 在窗口宽度变化时错位）。goal 条保留 -8px 底部上拉；custom-ui F9
-			// 只管 order 和内层 pill，几何全归这里。
+			// 实测卡片左缘差值 + 宽度双钉死。禁用 margin:auto 居中假设：host 被
+			// 本插件改 order/padding 后居中失效，且 margin 简写会把 queue-dock
+			// 钉好的 marginLeft 整体清掉（两个 MutationObserver 互踩=错位闪烁，
+			// 2026-08-19）。这里只写 marginLeft/marginRight，垂直间距归各条目
+			// 自身；queue-dock 插件对排队条做同样的钉死，写入值一致互不冲突。
 			{
 				const stackEl = document.querySelector('[class*="composerStack"]');
 				if (stackEl !== null) {
-					const cardW = Math.round(card.getBoundingClientRect().width) + "px";
+					// 对齐参照 = 会话数据框（scrollBody 内的消息列），非输入卡：
+					// 实测输入卡每侧比消息列宽 16px（2026-08-19 用户指定）
+					const colEl = document.querySelector('[class*="scrollBody"] [class*="_column"]');
+					const cr0 = (colEl ?? card).getBoundingClientRect();
+					const cardW = Math.round(cr0.width) + "px";
 					const items = [];
 					for (const w of stackEl.children) {
 						if (getComputedStyle(w).display === "contents") {
@@ -515,15 +521,27 @@ async function buildRows() {
 						if (it.getBoundingClientRect().height <= 0) continue;
 						const isGoal = it.hasAttribute("data-goal-bar") || it.querySelector("[data-goal-bar]") !== null;
 						// 条目可能再包一层非 contents 的 DIV（如 agent-teams 的
-						// OB_P1q_root），宽度限制在内层——样式下探一层
-						const targets = isGoal ? [it] : [it, it.firstElementChild];
-						for (const t of targets) {
+						// OB_P1q_root），宽度限制在内层——宽度下探一层；左缘只钉
+						// 外层（内层随外层 100% 填充，marginLeft 归零）
+						const targets = isGoal ? [[it, true]] : [[it, true], [it.firstElementChild, false]];
+						for (const [t, outer] of targets) {
 							if (t === null || t === host || t === row) continue;
 							if (t.getBoundingClientRect().height <= 0) continue;
 							if (t.style.width !== cardW) t.style.width = cardW;
-							const mg = "0 auto";
-							if (t.style.margin !== mg) t.style.margin = mg;
 							if (t.style.maxWidth !== "none") t.style.maxWidth = "none";
+							if (outer) {
+								// 收敛式钉死：按当前实测误差自校正——相对公式（框左-
+								// 父左）在条目已有自身定位或前次残留 margin 时双重偏移，
+								// 两个 MutationObserver 互踩时复合把条推出屏幕
+								const cur = t.getBoundingClientRect();
+								const curML = parseFloat(getComputedStyle(t).marginLeft) || 0;
+								const ml = Math.round(curML + (cr0.left - cur.left)) + "px";
+								if (t.style.marginLeft !== ml) t.style.marginLeft = ml;
+								if (t.style.marginRight !== "0px") t.style.marginRight = "0px";
+							} else {
+								if (t.style.marginLeft !== "0px") t.style.marginLeft = "0px";
+								if (t.style.marginRight !== "0px") t.style.marginRight = "0px";
+							}
 						}
 					}
 				}
@@ -533,34 +551,25 @@ async function buildRows() {
 			// toggles re-align. Margin auto beats pixel math when the card
 			// overflows the host's content box.
 			if (card !== null) {
-				// patch(pixel-align): margin auto centers inside the host's CONTENT box,
-				// ignoring host padding — measured +16px inset on both sides vs the card.
-				// Pin left edge and width to the card's viewport rect instead.
-				const cr = card.getBoundingClientRect();
+				// 与通用 pass / queue-dock 同一收敛式：按当前实测误差自校正到
+				// 会话数据框左缘（相对公式在行已有 margin 残留时双重偏移）。
+				const colEl = document.querySelector('[class*="scrollBody"] [class*="_column"]');
+				const cr = (colEl ?? card).getBoundingClientRect();
 				const w = Math.round(cr.width) + "px";
 				if (row.style.width !== w) row.style.width = w;
-				// measured: card.left - host.contentLeft = 12 (host pad 8 + card negative
-				// margin 4). Goal row + queue dock share this rule and the side gap is
-				// tightened to 4px (match: pixel-align-tight).
-				const hostR = row.parentElement.getBoundingClientRect();
-				// -15 final: 14 measured + 1 (card border-box vs borderless row)
-				const ml = Math.round(cr.left - hostR.left - 15) + "px";
-				if (row.style.margin !== "0 0 4px") row.style.margin = "0 0 4px";
+				const rowCur = row.getBoundingClientRect();
+				const rowML = parseFloat(getComputedStyle(row).marginLeft) || 0;
+				const ml = Math.round(rowML + (cr.left - rowCur.left)) + "px";
+				if (row.style.marginBottom !== "4px") row.style.marginBottom = "4px";
 				if (row.style.marginLeft !== ml) row.style.marginLeft = ml;
 				// breathing room under the queue dock when one is open above
 				// (no gap when the row is the composer's first element)
 				const prev = row.previousElementSibling;
 				const top = prev !== null ? "14px" : "0px";
 				if (row.style.marginTop !== top) row.style.marginTop = top;
-				// the queue dock ships narrower than the card (side-clearance
-				// insets) with a negative bottom margin that eats the gap —
-				// align it to the card edges like the row
-				const qdock = prev?.querySelector('[class*="_dock"]');
-				if (qdock !== undefined && qdock !== null) {
-					if (qdock.style.width !== w) qdock.style.width = w;
-					if (qdock.style.maxWidth !== "none") qdock.style.maxWidth = "none";
-					if (qdock.style.margin !== "0 auto") qdock.style.margin = "0 auto";
-				}
+				// 排队条几何由 dsh-queue-dock 插件独占钉死（左缘差值+宽度
+				// 双钉死，margin 0 0 8px）；此处不再写入，避免第三个写入者
+				// 的 margin 简写清掉已钉好的 marginLeft
 			}
 		}
 

@@ -49,12 +49,17 @@ window.__ModuleLoader__.load({
         if (qdock.style.maxWidth !== "") qdock.style.maxWidth = "";
         if (qdock.style.margin !== "") qdock.style.margin = "";
       } else {
-        // patch(hard-align): 独立行与输入卡逐像素对齐——margin-auto 依赖 host
-        // 居中假设（desktop-chrome 改序后不成立），改为左缘+宽度双钉死
+        // patch(hard-align): 独立行与会话数据框逐像素对齐——收敛式：按当前实测
+        // 误差自校正（相对公式在条已有 margin 残留/自身定位时双重偏移出屏）
         if (qdock.parentElement !== host || qdock.nextElementSibling !== row) host.insertBefore(qdock, row);
-        var cr = card.getBoundingClientRect();
+        // 对齐参照 = 会话数据框（scrollBody 内的消息列），非输入卡
+        // （2026-08-19 用户指定：条与消息内容左右边界对齐）
+        var col = document.querySelector('[class*="scrollBody"] [class*="_column"]');
+        var cr = (col !== null ? col : card).getBoundingClientRect();
         var w = Math.round(cr.width) + "px";
-        var leftPx = Math.round(cr.left - host.getBoundingClientRect().left) + "px";
+        var qcur = qdock.getBoundingClientRect();
+        var qML = parseFloat(getComputedStyle(qdock).marginLeft) || 0;
+        var leftPx = Math.round(qML + (cr.left - qcur.left)) + "px";
         if (qdock.style.width !== w) qdock.style.width = w;
         if (qdock.style.maxWidth !== "none") qdock.style.maxWidth = "none";
         if (qdock.style.margin !== "0 0 8px") qdock.style.margin = "0 0 8px";
