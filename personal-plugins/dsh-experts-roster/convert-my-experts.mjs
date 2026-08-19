@@ -11,12 +11,11 @@ import { homedir } from 'node:os'
 const PETRO_DIV = '0-domain-masters'
 const IT_DIV = '0-engineering'
 const TARGETS = { petro: join(homedir(), '.dsh', 'experts', PETRO_DIV), it: join(homedir(), '.dsh', 'experts', IT_DIV) }
-/** 石油领域专家（其余归工程 IT）：10 位领域大师 + 实时分析。 */
+/** 石油领域专家（其余归工程 IT）：9 位领域大师 + 实时分析；软件架构/3D 可视化归工程 IT。 */
 const PETRO_SLUGS = new Set([
   'domain-master-drilling-engineering', 'domain-master-hydraulics', 'domain-master-torque-drag',
   'domain-master-geomechanics', 'domain-master-dynamics-vibration', 'domain-master-thermal',
-  'domain-master-petrophysics', 'domain-master-data-science', 'domain-master-3d-visualization',
-  'domain-master-software-architecture', 'drilling-realtime-analyst',
+  'domain-master-petrophysics', 'domain-master-data-science', 'drilling-realtime-analyst',
 ])
 const SOURCES = [join(homedir(), '.agents'), join(homedir(), '.kimi-code', 'agents')]
 const PALETTE = ['purple', 'blue', 'green', 'orange', 'pink', 'cyan', 'yellow', 'red']
@@ -77,7 +76,7 @@ function emojiFor(name, description) {
 mkdirSync(TARGETS.petro, { recursive: true })
 mkdirSync(TARGETS.it, { recursive: true })
 const seen = new Set()
-const produced = new Set()
+const produced = new Map()
 let written = 0
 for (const src of SOURCES) {
   if (!existsSync(src)) continue
@@ -99,14 +98,14 @@ for (const src of SOURCES) {
     const vibe = desc.split(/[：:，,]/)[0].slice(0, 24)
     const out = `---\nname: ${displayName}\ndescription: ${desc}\ndescriptionEn: ${descEn}\ncolor: ${color}\nemoji: ${emoji}\nvibe: ${vibe}\n---\n\n${parsed.body}\n`
     writeFileSync(join(target, `${slug}.md`), out)
-    produced.add(`${slug}.md`)
+    produced.set(`${slug}.md`, target)
     written += 1
   }
 }
-// 清掉本轮未产出的陈旧文件（如 slug 改名后的旧文件，避免与内置名册冲突），并移除旧的单分区目录
+// 清掉本轮未产出或产出在另一分区的陈旧文件（跨目录移动后旧位置必须清空）
 for (const dir of [TARGETS.petro, TARGETS.it]) {
   for (const f of readdirSync(dir)) {
-    if (f.endsWith('.md') && !produced.has(f)) rmSync(join(dir, f))
+    if (f.endsWith('.md') && produced.get(f) !== dir) rmSync(join(dir, f))
   }
 }
 rmSync(join(homedir(), '.dsh', 'experts', '0-masters'), { recursive: true, force: true })
