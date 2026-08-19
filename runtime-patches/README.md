@@ -228,5 +228,7 @@ watchdog 条目 `p16-ui-sidebar-settings-action`（marker=`sidebar.settings.acti
 | dsh-tool-bash.lib.index.profiles.patched.js | ~/.dsh/profiles 副本（rc.6 + 补丁） | 2026-08-18 |
 | dsh-client-ui-conversation.lib.client.repo-built.js | repo 源码构建的 GUI bundle | 2026-08-18 |
 | dsh-code-runtime-worker-thread.lib.index.patched.js | 全局安装副本（rc.6 + 补丁 2） | 2026-08-18 |
+| dsh-client-ui-sidebar.lib.client.official-rc7.js | 官方原版（补丁 16 同步前的回滚底） | 2026-08-20 |
+| dsh-client-ui-sidebar.lib.client.settings-action.js | repo 构建（含 settings.action 孔，补丁 16 的同步源） | 2026-08-20 |
 
 注意：快照是对应版本时刻的产物；跨版本恢复优先用重放脚本（补丁 1）或源码重建（补丁 2），快照仅作兜底。
