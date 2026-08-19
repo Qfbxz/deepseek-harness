@@ -177,7 +177,7 @@ window.__ModuleLoader__.load({
       var controller = Controller(scope);
       ctx.slots.inject("settings.plugin.item", function () {
         var unregister = ctx.slots.register({
-          name: "settings.plugin.item", id: "dsh-crawler", order: 92, locale: NS,
+          name: "settings.plugin.item", id: "dsh-crawler", key: "dsh-crawler", order: 92, locale: NS,
           inject: function () { return controller.inject(); },
         }, Card);
         return function () { unregister(); };

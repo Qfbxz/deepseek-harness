@@ -402,7 +402,7 @@ window.__ModuleLoader__.load({
       var controller = new Controller(scope);
       ctx.slots.inject("settings.plugin.item", function () {
         return ctx.slots.register(
-          { name: "settings.plugin.item", id: SETTINGS_NS, locale: NS, inject: function () { return controller.inject(); } },
+          { name: "settings.plugin.item", id: SETTINGS_NS, key: SETTINGS_NS, locale: NS, inject: function () { return controller.inject(); } },
           CrawlerSettingsCard);
       });
     }
