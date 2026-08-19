@@ -432,6 +432,9 @@ async function buildRows() {
 					} else {
 						branchLeft = Math.round(rightEdge - (commitChip !== null ? commitChip.getBoundingClientRect().width + 6 : 0) - chip.getBoundingClientRect().width);
 					}
+					// patch(viewport-clamp): Safari/窄窗口下标题行元素的实测右缘可能
+					// 越过视口，把分支 chip 钉到窗外不可见——钳回视口内（两侧各留 8px）。
+					branchLeft = Math.max(8, Math.min(branchLeft, Math.round(window.innerWidth - chip.getBoundingClientRect().width - 8)));
 					chip.style.position = "fixed";
 					chip.style.top = top + "px";
 					chip.style.left = branchLeft + "px";
