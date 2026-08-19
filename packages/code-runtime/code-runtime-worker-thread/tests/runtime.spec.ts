@@ -255,7 +255,7 @@ describe('WorkerThreadCodeRuntime — budgets and containment (real workers)', (
     const controller = new AbortController()
     setTimeout(() => { controller.abort('user-cancel') }, 150)
     const result = await runtime.run({ program: 'for (;;) {}', bindings: [], signal: controller.signal })
-    expect(result.error).toEqual({ kind: 'abort', message: 'user-cancel' })
+    expect(result.error).toEqual({ kind: 'abort', message: 'aborted: user-cancel' })
   }, 15_000)
 
   it('reports a pre-aborted signal without spawning', async () => {
@@ -263,7 +263,7 @@ describe('WorkerThreadCodeRuntime — budgets and containment (real workers)', (
     const controller = new AbortController()
     controller.abort('too-late')
     const result = await runtime.run({ program: 'return 1', bindings: [], signal: controller.signal })
-    expect(result.error).toEqual({ kind: 'abort', message: 'too-late' })
+    expect(result.error).toEqual({ kind: 'abort', message: 'aborted: too-late' })
   })
 
   it('applies the outer-output cap to failures before worker startup', async () => {
@@ -296,7 +296,7 @@ describe('WorkerThreadCodeRuntime — budgets and containment (real workers)', (
       }),
       signal: controller.signal,
     })
-    expect(result.error).toEqual({ kind: 'abort', message: 'cancel-now' })
+    expect(result.error).toEqual({ kind: 'abort', message: 'aborted: cancel-now' })
     // Let the late resolution actually fire so its reply executes instead of
     // being cancelled with the test.
     await replyDelivered

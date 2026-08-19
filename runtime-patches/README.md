@@ -108,6 +108,17 @@ cp runtime-patches/backups/dsh-client-ui-conversation.lib.client.repo-built.js \
 
 恢复后重启 GUI（退出 app 重开）即生效。
 
+## 补丁 7：abort reason 无损渲染 + parse 错误可疑行定位（dsh-code-runtime-worker-thread/lib/index.js）
+
+源码修复（`packages/code-runtime/code-runtime-worker-thread/src/index.ts`）：abort 路径的 `String(signal.reason)` 把 DOMException/对象压成 `[object Object]`——新增 `renderAbortReason`（Error.message → 字符串 → JSON → 兜底）并给两处 abort 构造加 `aborted:` 前缀；无位置的 amaro SyntaxError 新增 `parseErrorLocator`（扫描原始程序首个引号/括号/悬挂转义不配平行，附加 `suspicious line N: <原文>`）。replay 从新构建产物 `lib/types/index.js` 原样提取两函数注入（与源码零漂移；**换机先 `npx tsc -b packages/code-runtime/code-runtime-worker-thread --force` 重建产物再重放**）。
+
+```sh
+node runtime-patches/replay-abort-reason-and-parse-locator.mjs \
+  "$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-code-runtime-worker-thread/lib/index.js"
+```
+
+watchdog 条目 `p7-abort`（marker=`renderAbortReason`，bad=`String(request.signal?.reason)`，官方修复后自动退役）。
+
 ## 快照清单（backups/）
 
 | 文件 | 来源 | 时间 |

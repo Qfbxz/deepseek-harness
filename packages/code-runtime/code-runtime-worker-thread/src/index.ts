@@ -67,6 +67,23 @@ const ELU_POLL_INTERVAL_MS = 25
 const MIN_OUTPUT_BYTES = 4
 
 /**
+ * Render an AbortSignal reason for the abort-failure message: Error uses its
+ * message, a non-empty string passes through, anything else serializes
+ * losslessly (falling back to a fixed word). Replaces `String(reason)`, which
+ * collapsed DOMException and thrown objects to the opaque "[object Object]".
+ */
+function renderAbortReason(reason: unknown): string {
+  if (reason instanceof Error) return reason.message
+  if (typeof reason === 'string' && reason !== '') return reason
+  try {
+    const serialized = JSON.stringify(reason)
+    return typeof serialized === 'string' && serialized !== '' ? serialized : 'aborted'
+  } catch {
+    return 'aborted'
+  }
+}
+
+/**
  * The seam's language-portable identifier subset (see
  * `CodeBindingNamespace.global`): no `$`, which is JS-only spelling — the same
  * namespace list must be usable against every backend regardless of language.
@@ -166,6 +183,44 @@ function unclosedLiteralHint(program: string): string {
 /** Render an unknown thrown value as a message, `Error` or not. */
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * Locate the first suspicious source line for a parse failure whose SyntaxError
+ * carries no position (amaro strips locations). Heuristic, order-free, and
+ * strictly additive: scans the ORIGINAL program for lines with unbalanced
+ * quotes/backticks/braces or a dangling escape — the shapes that produce
+ * `Expected ',', got ...` from a synthetic function body. Appends
+ * ` (suspicious line N: <source>)` when a candidate is found; returns '' when
+ * nothing stands out (the caller's message stays unchanged).
+ */
+function parseErrorLocator(program: string): string {
+  const lines = program.split('\n')
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (line === undefined) continue
+    const lineNo = i + 1
+    // strip line comments so a quoted // inside a string cannot fake a comment cut
+    const code = line.replace(/\/\/.*$/, '')
+    let sq = 0, dq = 0, bt = 0
+    for (const ch of code) {
+      if (ch === "'") sq++
+      else if (ch === '"') dq++
+      else if (ch === '`') bt++
+    }
+    const oddQuotes = sq % 2 === 1 || dq % 2 === 1 || bt % 2 === 1
+    let braceDelta = 0
+    for (const ch of code) {
+      if (ch === '{' || ch === '(') braceDelta++
+      else if (ch === '}' || ch === ')') braceDelta--
+    }
+    const unbalancedBrace = braceDelta !== 0 && /[{(]\s*$/.test(code.trimEnd()) === false && /^\s*[})]/.test(code) === false
+    const danglingEscape = /\\[a-zA-Z]?$/m.test(line) && /\\$/.test(line.trimEnd())
+    if (oddQuotes || unbalancedBrace || danglingEscape) {
+      return ` (suspicious line ${lineNo}: ${line.trim().slice(0, 70)})`
+    }
+  }
+  return ''
 }
 
 /** Resolve after a worker pipe emits all queued data, or closes/errors during termination. */
@@ -352,7 +407,7 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
     if (this.disposed) throw new Error('dsh-code-runtime-worker-thread: run() after disposal')
     const bindings = this.validateBindings(request)
     if (request.signal?.aborted) {
-      return this.failureBeforeWorker({ kind: 'abort', message: String(request.signal.reason) })
+      return this.failureBeforeWorker({ kind: 'abort', message: `aborted: ${renderAbortReason(request.signal.reason)}` })
     }
 
     let code: string
@@ -366,7 +421,7 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
       // amaro's SyntaxError carries no line or column, so a parse failure
       // gains the unclosed-literal location and the shared remediation hint.
       const message = error instanceof SyntaxError
-        ? `${messageOf(error)}${unclosedLiteralHint(request.program)}${SYNTAX_HINT}`
+        ? `${messageOf(error)}${unclosedLiteralHint(request.program)}${parseErrorLocator(request.program)}${SYNTAX_HINT}`
         : messageOf(error)
       return this.failureBeforeWorker({ kind: 'exception', message })
     }
@@ -607,7 +662,7 @@ export class WorkerThreadCodeRuntime extends CodeRuntime {
         finish(() => output.failure([...logs, ...strayLogs], { kind: 'timeout', message: `wall-clock ceiling reached (${this.config.maxWallMs}ms)` }))
       }, this.config.maxWallMs)
       const onAbort = (): void => {
-        finish(() => output.failure([...logs, ...strayLogs], { kind: 'abort', message: String(request.signal?.reason) }))
+        finish(() => output.failure([...logs, ...strayLogs], { kind: 'abort', message: `aborted: ${renderAbortReason(request.signal?.reason)}` }))
       }
       request.signal?.addEventListener('abort', onAbort, { once: true })
 
