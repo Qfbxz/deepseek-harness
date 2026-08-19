@@ -32,12 +32,18 @@
    its own module) provides the flex item sizing through `flex: 1 1 0`; here
    we drop the standalone-card width calc so the bar fits the row's slack
    instead of overrunning the card. Same DOM, same `.dock` class — the
-   attribute bridge is the only cross-module hook. */
+   attribute bridge is the only cross-module hook. The horizontal padding
+   keeps the bar's edge off the Send button and the row's right wall; the
+   bar's own children carry their internal spacing. */
 :global([data-send-after]) .dock {
   width: 100%;
   max-width: 100%;
   margin: 0;
   min-width: 0;
+  padding: 0 10px;
+}
+:global([data-send-after]) .dock > * + * {
+  margin-left: 8px;
 }
 
 .bar {
