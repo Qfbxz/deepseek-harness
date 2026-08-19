@@ -261,13 +261,18 @@
   /* A footer occupant inline-styles this container to column, stacking every
      action full-width; the shell's row policy wins with !important. Slot DOM
      order is nondeterministic across restarts, so visual grouping comes from
-     the order rules below, not entry position. */
+     the order rules below, not entry position. The -6px right margin aligns
+     the flush-right export with the Settings trigger one row below. */
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: wrap !important;
   align-items: center;
   justify-content: flex-start;
   gap: 1px;
+  /* width:auto lets the column stretch plus the negative margin extend the
+     box, so the flush-right export lands on the Settings trigger's edge */
+  width: auto;
+  margin-right: -6px;
 }
 
 /* Three groups: 导入 left-aligned with the usage badge below (its outlet
@@ -284,7 +289,7 @@
 .footerActions :has(button[aria-label="检查更新"]) {
   order: 2;
   gap: 32px;
-  margin-left: 25px;
+  margin-left: 28px;
 }
 
 .footerActions :has(button[aria-label="导出"]) {
