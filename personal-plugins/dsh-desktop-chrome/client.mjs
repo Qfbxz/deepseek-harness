@@ -51,6 +51,13 @@ html { font-size: 93.75%; }
 /* pin the green remaining-% at the row's right end: preceding cells may change
  * width (clock ticks, token counters), the % must not move */
 #dshc-usage .dshc-row .dshc-cell:last-child { margin-left: auto; min-width: 34px; justify-content: flex-end; font-variant-numeric: tabular-nums; }
+/* Safari blank-chip fix: the theme's gradient-clipped text leaves
+ * -webkit-text-fill-color transparent when the gradient function is
+ * unsupported (older Safari), painting the branch chip's label and chevron
+ * invisible while the box stays clickable. Force the fill back to the
+ * resolved currentColor. */
+[data-gitgraph-chip], [data-gitgraph-chip] * { -webkit-text-fill-color: currentColor !important; }
+[data-gitgraph-chip] { color: var(--dsw-alias-label-primary, #e3f4ec) !important; }
 #dshc-usage .dshc-dim { color: var(--dsw-alias-label-primary); }
 /* layout only — the glassy texture is synced live from the context-length
  * ring trigger so it follows theme switches and stays color-coordinated */
