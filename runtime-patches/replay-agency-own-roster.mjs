@@ -15,29 +15,40 @@ const CANDIDATES = [
 const target = process.argv[2] ?? CANDIDATES.find(p => { try { readFileSync(p); return true } catch { return false } })
 if (!target) { console.error('usage: replay-agency-own-roster.mjs <client.js>'); process.exit(1) }
 
-const SRC = join(homedir(), '.dsh', 'experts', '0-masters')
+const SRC_ROOT = join(homedir(), '.dsh', 'experts')
+const OWN_DIVISIONS = [
+  { dir: '0-domain-masters', zh: '石油领域专家' },
+  { dir: '0-engineering', zh: '工程 IT 专家' },
+]
 const personas = []
-for (const f of readdirSync(SRC).filter(f => f.endsWith('.md')).sort()) {
-  const raw = readFileSync(join(SRC, f), 'utf8')
-  const m = raw.match(/^---\n([\s\S]*?)\n---/)
-  if (m === null) continue
-  const get = (k) => { const km = m[1].match(new RegExp(`^${k}\\s*:\\s*(.*)$`, 'm')); return km ? km[1].trim() : '' }
-  personas.push({ slug: f.replace(/\.md$/, ''), name: get('name'), desc: get('description'), descEn: get('descriptionEn'), emoji: get('emoji') })
+for (const d of OWN_DIVISIONS) {
+  const dir = join(SRC_ROOT, d.dir)
+  for (const f of readdirSync(dir).filter(f => f.endsWith('.md')).sort()) {
+    const raw = readFileSync(join(dir, f), 'utf8')
+    const m = raw.match(/^---\n([\s\S]*?)\n---/)
+    if (m === null) continue
+    const get = (k) => { const km = m[1].match(new RegExp(`^${k}\\s*:\\s*(.*)$`, 'm')); return km ? km[1].trim() : '' }
+    personas.push({ slug: f.replace(/\.md$/, ''), name: get('name'), desc: get('description'), descEn: get('descriptionEn'), emoji: get('emoji'), division: d.dir })
+  }
 }
-if (personas.length === 0) throw new Error('no personas in ' + SRC)
+if (personas.length === 0) throw new Error('no personas under ' + SRC_ROOT)
 
 const esc = (s) => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-const rosterEntries = personas.map(p => `\t\t\t{\n\t\t\t\t"slug": "${p.slug}",\n\t\t\t\t"nameEn": "${esc(p.name)}",\n\t\t\t\t"emoji": "${p.emoji}",\n\t\t\t\t"division": "0-masters",\n\t\t\t\t"description": "${esc(p.desc)}",\n\t\t\t\t"descriptionEn": "${esc(p.descEn)}"\n\t\t\t},\n`).join('')
+const rosterEntries = personas.map(p => `\t\t\t{\n\t\t\t\t"slug": "${p.slug}",\n\t\t\t\t"nameEn": "${esc(p.name)}",\n\t\t\t\t"emoji": "${p.emoji}",\n\t\t\t\t"division": "${p.division}",\n\t\t\t\t"description": "${esc(p.desc)}",\n\t\t\t\t"descriptionEn": "${esc(p.descEn)}"\n\t\t\t},\n`).join('')
 const zhNames = personas.map(p => `\t\t\t"${p.slug}": "${esc(p.name)}",\n`).join('')
+const zhDivisions = OWN_DIVISIONS.map(d => `\t\t\t"${d.dir}": "${d.zh}",\n`).join('')
+const divisionOrder = OWN_DIVISIONS.map(d => `"${d.dir}",`).join('\n')
 
 let s = readFileSync(target, 'utf8')
 const MARK = '/*patch(own-roster)*/'
 const block = (body) => `\t\t${MARK} ${body} /*end-own-roster*/\n`
 const injections = [
   ['const ROSTER = [\n', block(rosterEntries)],
-  ['const DIVISION_ORDER = [\n', block(`"0-masters",`)],
-  ['const ZH_DIVISION = {\n', block(`"0-masters": "我的专家",`)],
+  ['const DIVISION_ORDER = [\n', block(divisionOrder)],
+  ['const ZH_DIVISION = {\n', block(zhDivisions)],
   ['const ZH_NAME = {\n', block(zhNames)],
+  ['"division.academic": ZH_DIVISION.academic,\n', block(OWN_DIVISIONS.map(d => `"division.${d.dir}": ZH_DIVISION[${JSON.stringify(d.dir)}],`).join('\n'))],
+  ['"division.academic": EN_DIVISION.academic,\n', block(OWN_DIVISIONS.map(d => `"division.${d.dir}": ${JSON.stringify(d.zh)},`).join('\n'))],
 ]
 // 先剥掉旧标记块（重跑刷新），再逐点注入
 s = s.replace(/^\t\t\/\*patch\(own-roster\)\*\/[\s\S]*?\/\*end-own-roster\*\/\n/gm, '')

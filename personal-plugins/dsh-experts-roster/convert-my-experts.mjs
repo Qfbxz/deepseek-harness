@@ -8,7 +8,16 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, rmSync
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
-const TARGET = join(homedir(), '.dsh', 'experts', '0-masters')
+const PETRO_DIV = '0-domain-masters'
+const IT_DIV = '0-engineering'
+const TARGETS = { petro: join(homedir(), '.dsh', 'experts', PETRO_DIV), it: join(homedir(), '.dsh', 'experts', IT_DIV) }
+/** 石油领域专家（其余归工程 IT）：10 位领域大师 + 实时分析。 */
+const PETRO_SLUGS = new Set([
+  'domain-master-drilling-engineering', 'domain-master-hydraulics', 'domain-master-torque-drag',
+  'domain-master-geomechanics', 'domain-master-dynamics-vibration', 'domain-master-thermal',
+  'domain-master-petrophysics', 'domain-master-data-science', 'domain-master-3d-visualization',
+  'domain-master-software-architecture', 'drilling-realtime-analyst',
+])
 const SOURCES = [join(homedir(), '.agents'), join(homedir(), '.kimi-code', 'agents')]
 const PALETTE = ['purple', 'blue', 'green', 'orange', 'pink', 'cyan', 'yellow', 'red']
 
@@ -65,7 +74,8 @@ function emojiFor(name, description) {
   return '🎓'
 }
 
-mkdirSync(TARGET, { recursive: true })
+mkdirSync(TARGETS.petro, { recursive: true })
+mkdirSync(TARGETS.it, { recursive: true })
 const seen = new Set()
 const produced = new Set()
 let written = 0
@@ -79,6 +89,7 @@ for (const src of SOURCES) {
     if (seen.has(parsed.name) || seen.has(sourceSlug)) continue
     seen.add(parsed.name); seen.add(sourceSlug)
     const slug = SLUG_OVERRIDES[sourceSlug] ?? sourceSlug
+    const target = PETRO_SLUGS.has(sourceSlug) ? TARGETS.petro : TARGETS.it
     const cur = CURATED[sourceSlug]
     const displayName = cur ? cur[0] : parsed.name
     const desc = cur ? cur[1] : parsed.description.split(/[。；;]/)[0] + '。'
@@ -87,13 +98,16 @@ for (const src of SOURCES) {
     const color = cur ? cur[4] : PALETTE[seen.size % PALETTE.length]
     const vibe = desc.split(/[：:，,]/)[0].slice(0, 24)
     const out = `---\nname: ${displayName}\ndescription: ${desc}\ndescriptionEn: ${descEn}\ncolor: ${color}\nemoji: ${emoji}\nvibe: ${vibe}\n---\n\n${parsed.body}\n`
-    writeFileSync(join(TARGET, `${slug}.md`), out)
+    writeFileSync(join(target, `${slug}.md`), out)
     produced.add(`${slug}.md`)
     written += 1
   }
 }
-// 清掉本轮未产出的陈旧文件（如 slug 改名后的旧文件，避免与内置名册冲突）
-for (const f of readdirSync(TARGET)) {
-  if (f.endsWith('.md') && !produced.has(f)) rmSync(join(TARGET, f))
+// 清掉本轮未产出的陈旧文件（如 slug 改名后的旧文件，避免与内置名册冲突），并移除旧的单分区目录
+for (const dir of [TARGETS.petro, TARGETS.it]) {
+  for (const f of readdirSync(dir)) {
+    if (f.endsWith('.md') && !produced.has(f)) rmSync(join(dir, f))
+  }
 }
-console.log(`[experts] ${written} personas → ${TARGET}`)
+rmSync(join(homedir(), '.dsh', 'experts', '0-masters'), { recursive: true, force: true })
+console.log(`[experts] ${written} personas → ${TARGETS.petro} (petroleum) + ${TARGETS.it} (engineering)`)
