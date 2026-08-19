@@ -16,7 +16,15 @@ function isBuildFaceClient(value: unknown): boolean {
 export default defineConfig(({ env }) => {
   const client = isBuildFaceClient(env?.DSH_BUILD_FACE)
   return {
-    workspace: ['vendor/*', 'packages/*/*', 'apps/cli'],
+    // packages/community/* is not repo source: a profile link: install hoists
+    // dependency skeletons (bare node_modules, no package.json/lib) there on
+    // machines developing against a local profile; the workspace enumeration
+    // would inherit the root entry glob per empty dir and fail with a
+    // misleading dsh-root label. Excluded to keep the build reproducible.
+    workspace: {
+      include: ['vendor/*', 'packages/*/*', 'apps/cli'],
+      exclude: ['**/node_modules/**', 'packages/community/**'],
+    },
     entry: client ? '' : ['lib/types/{index,invariant,startup}.js'],
     outDir: 'lib',
     format: ['esm'],

@@ -347,8 +347,8 @@ async def run_engine(cmd, cfg, items):
                 if mode in ("text", "markdown"): r["text"] = strip_html(f["html"])[: int(it.get("maxChars") or 50000)]
                 elif mode == "html": r["html"] = f["html"][: int(it.get("maxChars") or 200000)]
                 if mode == "links" or it.get("_wantLinks"): r["links"] = links_of(f["html"], f["url"])
-                if it.get("meta") or want.get("meta"): r["meta"] = meta_of(f["html"])
                 want = it.get("extract") or {}
+                if it.get("meta") or want.get("meta"): r["meta"] = meta_of(f["html"])
                 if want.get("images") or it.get("extractImages"):
                     imgs = []
                     for m in re.finditer(r'<img[^>]+src=["\']([^"\']{8,300})["\']', f["html"]):

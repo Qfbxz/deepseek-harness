@@ -11,6 +11,8 @@
  *   POST /dsh-local/bocha-search/config  → save { apiKey?, baseURL, totalCalls }
  *   POST /dsh-local/bocha-search/reset   → count := 0
  */
+import { WebError } from '@deepseek-ai/dsh-web'
+import { DeepSeekSearchProvider } from '@deepseek-ai/dsh-web-search-deepseek'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
@@ -52,6 +54,27 @@ async function writeCount(count) {
   await writeFile(USAGE_FILE, JSON.stringify({ count, updatedAt: Date.now() }) + '\n', 'utf-8')
 }
 
+/** Search defaults (Bocha caps `count` at 50). */
+const DEFAULT_SEARCH_COUNT = 10
+
+/**
+ * Increment the persisted call counter. Serialized through one promise chain so
+ * parallel searches cannot lose updates; counting failures never break a search.
+ */
+let usageChain = Promise.resolve()
+function recordUsage() {
+  usageChain = usageChain.then(async () => {
+    try {
+      let count = 0
+      try {
+        count = JSON.parse(await readFile(USAGE_FILE, 'utf8')).count ?? 0
+      } catch { /* absent file means zero uses so far */ }
+      await writeFile(USAGE_FILE, `${JSON.stringify({ count: count + 1, updatedAt: Date.now() })}\n`)
+    } catch { /* a failed counter write only costs the status display */ }
+  })
+  return usageChain
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = []
@@ -65,6 +88,112 @@ function readBody(req) {
 }
 
 export function apply(ctx) {
+  // Free-first search chain behind one provider id: the harness `web_search`
+  // tool resolves a single provider, so this plugin registers `bocha` as a
+  // wrapper that tries the FREE leg first (DeepSeek official web search —
+  // costs a model turn, no separate search billing) and falls back to the
+  // PAID Bocha API (counted) only when the free leg errors or returns no
+  // sources. The argo MCP stays a separate free path the model can pick.
+  const freeProvider = new DeepSeekSearchProvider(() => ({
+    resolveApiKey: async () => {
+      const credentials = ctx.get('credentials')
+      if (credentials !== undefined) {
+        const value = (await credentials.resolve(credentialRefLike('DEEPSEEK_API_KEY')))?.value
+        if (value !== undefined && value.length > 0) return value
+      }
+      return process.env.DEEPSEEK_API_KEY
+    },
+    baseURL: 'https://api.deepseek.com/anthropic/v1',
+    model: 'deepseek-v4-flash',
+    maxTokens: 4096,
+    maxUses: 5,
+    apiVersion: '2023-06-01',
+  }))
+
+  ctx.inject(['web'], async (web) => {
+    web.effect(() => web.web.registerSearchProvider({
+      id: 'bocha',
+      available: async () => {
+        const config = await readConfig()
+        return config.apiKey !== ''
+      },
+      search: async (request, signal) => {
+        // Free leg first: only an error or an empty result page falls through
+        // to the paid Bocha call. A signal abort must propagate, not fall back.
+        if (signal?.aborted === true) throw new WebError('search aborted', 'WEB_ABORTED')
+        if (freeProvider.available()) {
+          try {
+            const free = await freeProvider.search(request, signal)
+            if (free.sources.length > 0) return free
+          } catch (error) {
+            if (signal?.aborted === true) throw new WebError('search aborted', 'WEB_ABORTED')
+            // free leg failed — fall through to Bocha below
+          }
+        }
+        const config = await readConfig()
+        if (config.apiKey === '') {
+          throw new WebError(
+            'Bocha search has no API key; set it in the Bocha settings panel (~/.dsh/bocha-search.json)',
+            'WEB_PROVIDER_CREDENTIAL_MISSING',
+          )
+        }
+        if (signal?.aborted === true) throw new WebError('Bocha search aborted', 'WEB_ABORTED')
+        const count = Math.min(50, Math.max(1, request.maxResults ?? DEFAULT_SEARCH_COUNT))
+        let response
+        try {
+          response = await fetch(`${config.baseURL}/v1/web-search`, {
+            method: 'POST',
+            redirect: 'error',
+            headers: {
+              authorization: `Bearer ${config.apiKey}`,
+              'content-type': 'application/json',
+              accept: 'application/json',
+              'user-agent': 'dsh-bocha-search/0.2.0',
+            },
+            body: JSON.stringify({ query: request.query, freshness: 'noLimit', summary: true, count, page: 1 }),
+            ...signal !== undefined ? { signal } : {},
+          })
+        } catch (error) {
+          if (signal?.aborted === true) throw new WebError('Bocha search aborted', 'WEB_ABORTED')
+          throw new WebError(`Bocha search request failed: ${String(error)}`, 'WEB_PROVIDER_ERROR', { cause: error })
+        }
+        let payload
+        try {
+          payload = await response.json()
+        } catch (error) {
+          throw new WebError(`Bocha API error (HTTP ${response.status})`, 'WEB_PROVIDER_ERROR', { cause: error })
+        }
+        if (!response.ok || payload.code !== 200) {
+          const detail = payload.msg ?? payload.message
+          throw new WebError(
+            detail !== undefined && detail.length > 0 ? String(detail) : `Bocha API error (HTTP ${response.status}, code ${payload.code})`,
+            'WEB_PROVIDER_ERROR',
+          )
+        }
+        recordUsage()
+        const seen = new Set()
+        const sources = []
+        for (const item of payload.data?.webPages?.value ?? []) {
+          if (typeof item?.url !== 'string' || item.url.length === 0 || seen.has(item.url)) continue
+          seen.add(item.url)
+          const snippet = typeof item.summary === 'string' && item.summary.length > 0 ? item.summary : item.snippet
+          const publishedAt = typeof item.datePublished === 'string' && item.datePublished.length > 0
+            ? item.datePublished
+            : typeof item.dateLastCrawled === 'string' && item.dateLastCrawled.length > 0
+              ? item.dateLastCrawled.replace(/Z$/u, '+08:00')
+              : undefined
+          sources.push({
+            url: item.url,
+            ...typeof item.name === 'string' && item.name.length > 0 ? { title: item.name } : {},
+            ...typeof snippet === 'string' && snippet.length > 0 ? { snippet } : {},
+            ...publishedAt !== undefined ? { publishedAt } : {},
+          })
+        }
+        return { sources, truncated: false }
+      },
+    }), 'bocha-search: search provider')
+  })
+
   ctx.inject(['webServer'], (host) => {
     const json = (res, code, body) => {
       res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
