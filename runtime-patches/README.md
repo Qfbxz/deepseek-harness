@@ -27,7 +27,16 @@ node runtime-patches/replay-run-code-optional-description.mjs \
   "$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tools/lib/index.js"
 `
 
-## 补丁 3：run_code 解析失败提示与未闭合字面量定位（dsh-code-runtime-worker-thread）
+## 补丁 3：省略的绑定参数记录归一为空对象（worker.cjs makeNamespaces）
+
+源码修复已提交（a24b60b73c，见 Agent Note 2026-08-19-binding-omitted-args-empty-object）。全可选 schema 的零参调用（`tools.job_list()`）此前被误判为不可序列化并以 `binding arguments must be lossless JSON` 拒绝。补丁在 worker.cjs 的绑定包装器注入 `args === undefined ? {} : args` 归一（注意：worker.cjs 与 index.js 是同包两个文件，本补丁打 worker.cjs，补丁 2 打 index.js，升级后都要重放）：
+
+`sh`
+node runtime-patches/replay-worker-binding-omitted-args.mjs \
+  "$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-code-runtime-worker-thread/lib/worker.cjs"
+`
+
+## 补丁 4：run_code 解析失败提示与未闭合字面量定位（dsh-code-runtime-worker-thread）
 
 源码修复已提交（见 Agent Note 2026-08-16-session-friction-fixes 第 5 条 + 3f95abbcf0 补强）。补丁让 `stripTypeScriptTypes` 阶段的 SyntaxError 携带补救提示与未闭合字符串/模板的起始行 —— 此前 `Expected ',', got '<eof>'` 毫无位置信息。注意 `~/.dsh/profiles` 下该包软链到全局，只需打全局一份：
 
