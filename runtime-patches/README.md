@@ -132,6 +132,17 @@ node runtime-patches/replay-skill-explorer-symlinks.mjs \
 
 watchdog 条目 `p8-explorer-symlink`（marker=`patch(symlink-support)`，bad=原始 isFile 判定行）+ autorun 启动重放；插件作者修复（或改用其他扫描实现）后自动退役。
 
+## 补丁 12：run_code discard 诊断 + 绑定结果 24k 钳制（dsh-tools/lib/types/code-mode.js）
+
+源码修复：discard 诊断部分已提交（`de98efaac`，`packages/core/tools/src/code-mode.ts`）；`clampBindingValue` 增量在源码中、待提交。旧形态 `run is over ... result discarded` 不区分工具成败，模型只能盲重试；超大绑定返回值（如 50 KB bash stdout）会撑爆输出账本并以不透明 abort 收场。replay 从本仓库构建产物 `packages/core/tools/lib/types/code-mode.js` 原样提取注入（新 discard 诊断：errored/succeeded + JSON 尺寸签名 + side-effects 提示；`clampBindingValue`：字符串 24k 截断、数组/对象递归逐元素钳制）。**换机先 `npx tsc -b packages/core/tools --force` 重建产物再重放**。
+
+```sh
+node runtime-patches/replay-discard-diagnostic.mjs \
+  "$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tools/lib/types/code-mode.js"
+```
+
+watchdog 条目 `p12-discard-diagnostic`（marker=`clampBindingValue`，bad=`result discarded`，官方修复后自动退役）+ autorun 启动重放。
+
 ## 快照清单（backups/）
 
 | 文件 | 来源 | 时间 |

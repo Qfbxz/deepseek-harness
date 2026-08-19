@@ -1538,6 +1538,31 @@ describe('the run_code dispatch bridge', () => {
     expect(result.content[0]).toEqual({ type: 'text', text: 'proto-tool-ok' })
   })
 
+  it('clamps a binding result beyond the per-value cap before it reaches the program', async () => {
+    const { ctx, runtime } = await setup({ mode: 'code' })
+    ctx.tools.register(defineTool({
+      name: 'big_read',
+      description: 'Returns one huge payload.',
+      parameters: { id: { type: 'string', required: true } },
+      output: {
+        schema: { type: 'string' },
+        render: (_args, value) => [{ type: 'text', text: String(value) }],
+      },
+      async execute() { return 'x'.repeat(30_000) },
+    }))
+    const { agent } = fakeAgent()
+    let received = ''
+    runtime.behavior = async (request) => {
+      received = String(await request.bindings[0]!.functions.big_read!({ id: 'a' }))
+      return { logs: [], value: 'ok' }
+    }
+    const result = await runCode(ctx, 'program', { agent })
+    expect(result.isError).toBe(false)
+    const marker = '…[truncated 6000 of 30000 chars]'
+    expect(received.length).toBe(24_000 + marker.length)
+    expect(received.endsWith(marker)).toBe(true)
+  })
+
   it('renders every non-string JSON root as pretty JSON while preserving strings raw', async () => {
     const { ctx, runtime } = await setup({ mode: 'code' })
     runtime.behavior = () => Promise.resolve({ logs: [], value: { n: 42, ok: true } })

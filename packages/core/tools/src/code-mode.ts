@@ -295,6 +295,30 @@ function renderValue(value: JsonValue): string {
   return typeof value === 'string' ? value : renderJsonValue(value)
 }
 
+/** Safety cap for one binding result carried into the run's completion value. */
+const BINDING_VALUE_MAX_CHARS = 24_000
+
+/**
+ * Depth-clamp one binding result so a huge tool payload (e.g. a 50 KB bash
+ * stdout) cannot overflow the outer output ledger and surface as an opaque
+ * abort. Strings beyond the cap truncate with an explicit marker; arrays and
+ * objects clamp per-element/key recursively, preserving the JSON shape.
+ */
+function clampBindingValue(value: JsonValue): JsonValue {
+  if (typeof value === 'string') {
+    return value.length > BINDING_VALUE_MAX_CHARS
+      ? value.slice(0, BINDING_VALUE_MAX_CHARS) + `…[truncated ${value.length - BINDING_VALUE_MAX_CHARS} of ${value.length} chars]`
+      : value
+  }
+  if (Array.isArray(value)) return value.map(clampBindingValue)
+  if (typeof value === 'object' && value !== null) {
+    const out: Record<string, JsonValue> = {}
+    for (const [k, v] of Object.entries(value)) out[k] = clampBindingValue(v)
+    return out
+  }
+  return value
+}
+
 /**
  * Compact outcome signature for a discard diagnostic: names the JSON kind and
  * a size measure (string length, array length, or object key count) so the
@@ -573,7 +597,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
             // chain cannot reject).
             resolve(result.isError
               ? { isError: true, message: result.error.message }
-              : { isError: false, value: result.value })
+              : { isError: false, value: clampBindingValue(result.value) })
             const agent = exec.agent
             if (agent === undefined) return
             const task: Promise<void> = (async () => {
