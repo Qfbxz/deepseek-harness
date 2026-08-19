@@ -58,6 +58,10 @@ for (const [anchor, blk] of injections) {
   s = s.replace(anchor, anchor + blk)
   injected += 1
 }
+// 菜单向上展开时顶部会超出视口（首组专家不可达）——钳制高度为 55vh，内部滚动可达全部
+const MH_OLD = 'max-height:calc(100vh - 24px);overflow-y:auto'
+const MH_NEW = '/*patch(own-roster)*/max-height:55vh;overflow-y:auto'
+if (s.includes(MH_OLD)) { s = s.replace(MH_OLD, MH_NEW); injected += 1 }
 writeFileSync(target, s)
 execFileSync(process.execPath, ['--check', target], { stdio: 'pipe' })
 console.log(`[patched] ${target} (${personas.length} experts, ${injected} injection points)`)
