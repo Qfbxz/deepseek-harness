@@ -29,10 +29,17 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'sidebar.settings': { kind: 'single'; scope: 'root'; owner: SidebarSettingsOwnerProps }
     /**
-     * Optional actions beside Settings at the sidebar foot. Declared by this
-     * package's 'sidebar' entry; each action receives only the column state.
+     * Optional actions stacked above the settings seat at the sidebar foot.
+     * Declared by this package's 'sidebar' entry; each action receives only
+     * the column state.
      */
     'sidebar.footer.action': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps }
+    /**
+     * Actions beside the Settings trigger on the settings row — for entries
+     * that anchor to Settings instead of stacking above it. Declared by this
+     * package's 'sidebar' entry; each action receives only the column state.
+     */
+    'sidebar.settings.action': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps }
   }
 }
 

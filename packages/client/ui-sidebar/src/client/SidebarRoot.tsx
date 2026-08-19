@@ -7,7 +7,8 @@
  * same top-down order) on one fade that ends with the slide. The bottom-pinned
  * settings control only fades. The workspace/session browsing region between
  * the New Session button and the foot is the `sidebar.workspaces` registrant's,
- * and the foot holds `sidebar.settings` plus `sidebar.footer.action`; the shell
+ * and the foot holds `sidebar.settings` with `sidebar.settings.action` beside
+ * it, plus `sidebar.footer.action` stacked above; the shell
  * hands them the wide flag (plus an expand request callback for the browser).
  *
  * The column also owns whether the scroll regions nested in it draw a
@@ -178,12 +179,14 @@ export function SidebarRoot({
         })}
       </div>
 
-      {/* Footer actions stack above Settings in both sidebar widths. */}
+      {/* Footer actions stack above the settings row; settings-row actions
+          sit beside the Settings trigger. */}
       <div className={css.footArea}>
         <div className={css.footerActions}>
           {renderSlot('sidebar.footer.action', { wide })}
         </div>
         <div className={css.settingsArea}>
+          {renderSlot('sidebar.settings.action', { wide })}
           {renderSlot('sidebar.settings', { wide })}
         </div>
       </div>

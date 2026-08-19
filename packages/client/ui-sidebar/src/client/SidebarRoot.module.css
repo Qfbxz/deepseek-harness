@@ -241,8 +241,9 @@
   padding-left: 0;
 }
 
-/* Footer seats: additive actions stack above Settings. Each occupant owns its
-   button geometry and hover chrome. */
+/* Footer seats: additive actions stack above the settings row, whose own
+   actions sit beside the Settings trigger. Each occupant owns its button
+   geometry and hover chrome. */
 .footArea {
   flex: none;
   display: flex;
@@ -257,11 +258,60 @@
 }
 
 .footerActions {
+  /* A footer occupant inline-styles this container to column, stacking every
+     action full-width; the shell's row policy wins with !important. */
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+/* Occupants ship their own geometry — inline width:100% and flex:1 sheet
+   rules only a scoped !important can yield; the footer packs every action
+   into one wrapping row instead of one full-width row per button. */
+.footerActions > * {
+  flex: none;
+  width: auto;
+}
+
+.footerActions button {
+  width: auto !important;
+  flex: none !important;
+}
+
+.settingsArea {
   display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.settingsArea > * {
+  flex: none;
+}
+
+/* Occupants own their geometry, but the settings trigger's full-width rule
+   would push row-mates off-screen: on this row it sizes to content like its
+   neighbours. */
+.settingsArea button {
+  width: auto;
 }
 
 .collapsed .footArea {
   align-items: center;
+}
+
+.collapsed .settingsArea,
+.collapsed .footerActions {
+  display: flex;
+  justify-content: center;
+  width: auto;
+}
+
+.collapsed .settingsArea {
+  flex-direction: column;
 }
 
 .collapsed .settingsArea,

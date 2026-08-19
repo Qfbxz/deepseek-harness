@@ -27,6 +27,7 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
   let regionOwner: SidebarSectionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
+  let settingsActionOwner: SidebarFooterActionOwnerProps | undefined
   let current = { collapsed, width }
   const root = () => (
     <SidebarRoot
@@ -44,6 +45,10 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
         if (key === 'sidebar.footer.action') {
           footerActionOwner = owner
           return <div data-testid="footer-action-seat" data-wide={owner.wide} />
+        }
+        if (key === 'sidebar.settings.action') {
+          settingsActionOwner = owner
+          return <div data-testid="settings-action-seat" data-wide={owner.wide} />
         }
         regionOwner = owner as SidebarSectionOwnerProps
         return <div data-testid="region" data-wide={owner.wide} />
@@ -65,6 +70,10 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
     footerActionOwner: () => {
       if (footerActionOwner === undefined) throw new Error('footer action owner not rendered')
       return footerActionOwner
+    },
+    settingsActionOwner: () => {
+      if (settingsActionOwner === undefined) throw new Error('settings action owner not rendered')
+      return settingsActionOwner
     },
     rerender(next: Partial<typeof current>) {
       current = { ...current, ...next }
@@ -91,6 +100,7 @@ describe('SidebarRoot shell', () => {
     // The settings seat rides the same wide flag (ui-settings renders the row).
     expect(b.settingsOwner().wide).toBe(true)
     expect(b.footerActionOwner().wide).toBe(true)
+    expect(b.settingsActionOwner().wide).toBe(true)
     // Expanded: the request is a no-op (no accidental collapse).
     b.regionOwner().expandSidebar()
     expect(b.toggleSidebar).not.toHaveBeenCalled()
@@ -106,6 +116,7 @@ describe('SidebarRoot shell', () => {
     b.rerender({})
     expect(b.regionOwner().wide).toBe(false)
     expect(b.footerActionOwner().wide).toBe(false)
+    expect(b.settingsActionOwner().wide).toBe(false)
     expect(screen.getByTestId('region')).toBeTruthy()
     b.regionOwner().expandSidebar()
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
