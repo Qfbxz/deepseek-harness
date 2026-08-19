@@ -1,5 +1,7 @@
 # runtime-patches（运行时手工补丁备份）
 
+> **客户端插件（client.mjs）补丁生效链（2026-08-19 实测）**：生产模式 client 插件不在主 bundle——host 启动读源码经 `/plugins/<pkg>/client.js?rev=<内容哈希>` 服务（manifest 在 `window.__DSH_BOOT__.entries`）。改 client.mjs 后必须：**重启 dsh web（host 重读+rev 更新）→ 刷新浏览器（拉新 rev）**。`/plugin/...`（单数）是 SPA 404 兜底假 200，勿信。dev:web 同跑才有热更。
+
 官方 npm 包尚未携带、但已在本机运行时手工落地的修复。任何 `@deepseek-ai/dsh` 全局重装或 `~/.dsh/profiles` 重建（含升级 rc.7+）都会覆盖这些文件——**2026-08-24 起无需手动重放**：启动自愈 + 运行中看护 + 文件监听三层插件按三态机理（见「自动化」节）自动恢复或退役；本 README 的手动重放命令保留作兜底与离线恢复路径。
 
 ## 构建管线已修复（2026-08-24）
