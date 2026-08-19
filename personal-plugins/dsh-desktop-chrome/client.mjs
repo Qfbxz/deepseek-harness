@@ -396,8 +396,13 @@ async function buildRows() {
 					// 垂直对齐会话标题行（"PTC 模式" chip 所在行 = tablist 的上一个
 					// 兄弟）；行不在时退回 tab 栏/收缩按钮行
 					const titleRow = tabs !== null ? tabs.previousElementSibling : null;
-					const anchorRow = titleRow !== null ? titleRow.getBoundingClientRect() : (tabs !== null ? tabs.getBoundingClientRect() : clusterRect);
-					const top = Math.round(anchorRow.top + (anchorRow.height - 24) / 2);
+					// patch(anchor-fallback): a collapsed panelHeader (height 0) yields
+					// top = -12 and pins the git chips off-screen. Fall back to the tabs
+					// row, then the cluster rect; clamp any remainder to the viewport top.
+					let anchorRow = titleRow !== null ? titleRow.getBoundingClientRect() : (tabs !== null ? tabs.getBoundingClientRect() : clusterRect);
+					if (anchorRow.height < 14) anchorRow = tabs !== null ? tabs.getBoundingClientRect() : clusterRect;
+					if (anchorRow.height < 14) anchorRow = clusterRect;
+					const top = Math.max(2, Math.round(anchorRow.top + (anchorRow.height - 24) / 2));
 					// 水平：钉在标题行最右侧可见元素（"PTC 模式"或其他模式 chip）后面，
 					// 按实测右缘排布，任何模式下都不与已有 chip 重叠。顺序 [分支][提交]。
 					const commitChip = document.getElementById("dsh-git-commit-chip");
