@@ -265,7 +265,7 @@
   flex-direction: row !important;
   flex-wrap: wrap !important;
   align-items: center;
-  justify-content: space-between;
+  justify-content: space-evenly;
   gap: 1px;
 }
 
@@ -285,6 +285,17 @@
   white-space: nowrap;
 }
 
+/* The update-check and remote-control icons arrive as one slot entry with a
+   6px internal gap; widen that pair so the row reads in three groups. The
+   last action flushes right, its label aligning with the Settings label. */
+.footerActions button[aria-label="移动端远程控制"] {
+  margin-left: 14px;
+}
+
+.footerActions button:last-of-type {
+  margin-left: auto;
+}
+
 .settingsArea {
   display: flex;
   align-items: center;
@@ -298,10 +309,12 @@
 
 /* Occupants own their geometry, but the settings trigger's full-width rule
    would push row-mates off-screen: on this row it sizes to content like its
-   neighbours. Row labels never wrap to two lines. */
+   neighbours. Row labels never wrap and match the footer's 12px. */
 .settingsArea button {
   width: auto;
   white-space: nowrap;
+  font-size: 12px !important;
+  padding-inline: 4px !important;
 }
 
 .collapsed .footArea {
