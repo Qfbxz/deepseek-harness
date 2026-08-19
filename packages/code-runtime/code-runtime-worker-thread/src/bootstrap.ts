@@ -326,7 +326,13 @@ export function wireReplies(port: BootstrapPort, pending: Map<number, PendingCal
       if (value === undefined) entry.reject(new CapturedError('binding resolution must be lossless JSON'))
       else entry.resolve(value)
     } else {
-      entry.reject(new CapturedError(message.message))
+      // Host error replies may carry a non-string message; String() on objects
+      // yields "[object Object]" and surfaces as opaque abort failures.
+      const raw = message.message
+      const text = typeof raw === 'string'
+        ? raw
+        : (() => { try { return JSON.stringify(raw) } catch { return String(raw) } })()
+      entry.reject(new CapturedError(text))
     }
   })
 }

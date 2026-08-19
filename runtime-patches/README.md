@@ -263,6 +263,16 @@ node runtime-patches/replay-agency-own-roster.mjs
 
 watchdog 条目 `p20-agency-own-roster`（marker=`/*patch(own-roster)*/`，bad=原版 ROSTER 首条目；上游改为动态名册后自动退役）。启用状态在 `~/.dsh/settings.yaml` 的 `agency-agents.enabled`（插件默认全部停用）。
 
+## 补丁 21：worker 绑定回复的对象错误消息（dsh-code-runtime-worker-thread/lib/worker.cjs）
+
+源码修复已提交（`bootstrap.ts` wireReplies）。宿主错误回复的 `message.message` 可为对象，worker 直接 `CapturedError(message.message)` → String() 成 `[object Object]`，以不透明的 `code run failed (abort): [object Object]` 冒出（vision_describe 等工具中止即此形态）。补丁改为 JSON 序列化优先、String 兜底。
+
+```sh
+node runtime-patches/replay-worker-abort-object-message.mjs
+```
+
+watchdog 条目 `p21-worker-abort-object`（marker=`abort-[object Object] fix`，bad=原 CapturedError(message.message) 行；官方修复后自动退役）。
+
 ## 快照清单（backups/）
 
 | 文件 | 来源 | 时间 |
