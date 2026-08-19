@@ -44,7 +44,7 @@ html { font-size: 93.75%; }
 .usg_dayTokens { flex: none !important; margin-left: auto !important; }
 .usg_dayHit { flex: none !important; width: auto !important; }
 .usg_panel .usg_header, .usg_panel section { padding: 8px 10px; }
-#dshc-usage { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; flex: 1; text-align: left; line-height: 1; user-select: none; }
+#dshc-usage { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; flex: 1; text-align: left; line-height: 1; user-select: none; padding-right: 12px; }
 #dshc-usage .dshc-row { display: flex; align-items: center; gap: 7px; font-size: 10px; color: var(--dsw-alias-label-primary); white-space: nowrap; }
 #dshc-usage .dshc-row2 { font-size: 10px; color: var(--dsw-alias-label-primary); font-variant-numeric: tabular-nums; padding-left: 1px; }
 #dshc-usage .dshc-cell { display: inline-flex; align-items: center; gap: 2px; }
