@@ -273,6 +273,16 @@ node runtime-patches/replay-worker-abort-object-message.mjs
 
 watchdog 条目 `p21-worker-abort-object`（marker=`abort-[object Object] fix`，bad=原 CapturedError(message.message) 行；官方修复后自动退役）。
 
+## 补丁 22：list_experts 返回形状与自有分区键写入工具描述（@michengai/dsh-agency-agents）
+
+第三方包：工具描述不含返回形状——模型猜 `r.experts` 直接 `TypeError: Cannot read properties of undefined`；也不知道自有分区键，猜 `engineering` 落到全停用的内置分区（ summon 报"已停用"）。描述补上 `{divisions: [{division, count?, experts?}], total}` 精确形状、`divisions[0].experts` 读取路径、以及 `0-domain-masters`/`0-engineering` 两个自有分区键。
+
+```sh
+node runtime-patches/replay-agency-list-experts-shape.mjs
+```
+
+watchdog 条目 `p22-list-experts-shape`（marker=`patch(list-experts-shape)`，bad=原描述结尾句）。
+
 ## 快照清单（backups/）
 
 | 文件 | 来源 | 时间 |
