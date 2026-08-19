@@ -443,6 +443,12 @@ async function buildRows() {
 					// 越过视口，把分支 chip 钉到窗外不可见——钳回视口内（两侧各留 8px）。
 					branchLeft = Math.max(8, Math.min(branchLeft, Math.round(window.innerWidth - chip.getBoundingClientRect().width - 8)));
 					chip.style.position = "fixed";
+					// patch(inline-chip-color): 某些 Safari 版本解析不了主题的渐变/
+					// oklch 色函数，文字填充保持透明——内联颜色绕过整条 CSS 链，保底可见。
+					chip.style.color = "#e3f4ec";
+					chip.style.webkitTextFillColor = "#e3f4ec";
+					const chipLabel = chip.querySelector("span");
+					if (chipLabel !== null) { chipLabel.style.color = "#e3f4ec"; chipLabel.style.webkitTextFillColor = "#e3f4ec"; }
 					chip.style.top = top + "px";
 					chip.style.left = branchLeft + "px";
 					chip.style.right = "";
