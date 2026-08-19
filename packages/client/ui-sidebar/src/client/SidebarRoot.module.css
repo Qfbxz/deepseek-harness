@@ -259,14 +259,37 @@
 
 .footerActions {
   /* A footer occupant inline-styles this container to column, stacking every
-     action full-width; the shell's row policy wins with !important. Row
-     density (padding, font, gap) is compressed so four entries fit one line. */
+     action full-width; the shell's row policy wins with !important. Slot DOM
+     order is nondeterministic across restarts, so visual grouping comes from
+     the order rules below, not entry position. */
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: wrap !important;
   align-items: center;
-  justify-content: space-evenly;
+  justify-content: flex-start;
   gap: 1px;
+}
+
+/* Three groups: 导入 left-aligned with the usage badge below (its outlet
+   wrapper is display:contents, so the button itself is the flex item), the
+   update/remote pair centered with a wide internal gap, 导出 flush right
+   past the phantom zero-width entry the outlet keeps for hidden actions.
+   The :has() selectors also match the contents wrapper itself — harmless,
+   display:contents ignores box properties. */
+.footerActions button[aria-label="导入"] {
+  order: 1;
+  margin-left: 10px;
+}
+
+.footerActions :has(button[aria-label="检查更新"]) {
+  order: 2;
+  gap: 32px;
+  margin-left: 25px;
+}
+
+.footerActions :has(button[aria-label="导出"]) {
+  order: 4;
+  margin-left: auto;
 }
 
 /* Occupants ship their own geometry — inline width:100% and flex:1 sheet
@@ -283,17 +306,6 @@
   padding-inline: 2px !important;
   font-size: 12px !important;
   white-space: nowrap;
-}
-
-/* The update-check and remote-control icons arrive as one slot entry with a
-   6px internal gap; widen that pair so the row reads in three groups. The
-   last action flushes right, its label aligning with the Settings label. */
-.footerActions button[aria-label="移动端远程控制"] {
-  margin-left: 14px;
-}
-
-.footerActions button:last-of-type {
-  margin-left: auto;
 }
 
 .settingsArea {
@@ -326,6 +338,30 @@
   display: flex;
   justify-content: center;
   width: auto;
+}
+
+/* Rail: icons only, strictly centered — labels and the wide-mode group
+   margins (auto/offsets) must not leak into the column. */
+.collapsed .footerActions {
+  flex-direction: column;
+  align-items: center;
+}
+
+.collapsed .footerActions button span {
+  display: none;
+}
+
+.collapsed .footerActions button,
+.collapsed .footerActions div {
+  margin-left: 0 !important;
+}
+
+.collapsed .footerActions div {
+  gap: 6px;
+}
+
+.collapsed .settingsArea button span {
+  display: none;
 }
 
 .collapsed .settingsArea {
