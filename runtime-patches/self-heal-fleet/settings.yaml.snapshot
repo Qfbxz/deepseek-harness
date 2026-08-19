@@ -1,0 +1,258 @@
+# dsh-web-ui settings 卡白名单：家族默认 + 自建插件 namespace（缺省时仅家族）
+web_settings_namespaces:
+  [
+    dsh-ssh,
+    task-board,
+    remote-web-ui,
+    live-stats,
+    pet,
+    skin-background,
+    pawl,
+    context-ring
+  ]
+ui-onboarding:
+  welcomeNoticeVersion: 2026-08-13.1
+llm-pi-ai:
+  providers:
+    zai-coding-cn:
+      apiKeyEnv: ZAI_CODING_CN_API_KEY
+      models:
+        - id: glm-4.5-air
+          name: GLM-4.5-Air
+          contextWindow: 131072
+          maxTokens: 98304
+        - id: glm-4.7
+          name: GLM-4.7
+          contextWindow: 204800
+          maxTokens: 131072
+        - id: glm-5-turbo
+          name: GLM-5-Turbo
+          contextWindow: 200000
+          maxTokens: 131072
+        - id: glm-5.1
+          name: GLM-5.1
+          contextWindow: 200000
+          maxTokens: 131072
+        - id: glm-5.2
+          name: GLM-5.2
+          contextWindow: 1000000
+          maxTokens: 131072
+        - id: glm-5v-turbo
+          name: GLM-5V-Turbo
+          contextWindow: 200000
+          maxTokens: 131072
+        - id: glm-5.3
+          name: GLM-5.3
+          contextWindow: 1000000
+          maxTokens: 131072
+    minimax-cn:
+      apiKeyEnv: MINIMAX_CN_API_KEY
+      models:
+        - id: MiniMax-M2.7
+          name: MiniMax-M2.7
+          contextWindow: 204800
+          maxTokens: 131072
+        - id: MiniMax-M2.7-highspeed
+          name: MiniMax-M2.7-highspeed
+          contextWindow: 204800
+          maxTokens: 131072
+        - id: MiniMax-M3
+          name: MiniMax-M3
+          contextWindow: 1000000
+          maxTokens: 128000
+    opencode:
+      apiKeyEnv: OPENCODE_API_KEY
+      models:
+        - id: deepseek-v4-flash-free
+          name: DeepSeek V4 Flash Free
+          contextWindow: 200000
+          maxTokens: 128000
+        - id: laguna-s-2.1-free
+          name: Laguna S 2.1 Free
+          contextWindow: 256000
+          maxTokens: 32000
+        - id: ling-3.0-flash-free
+          name: Ling-3.0-flash Free
+          contextWindow: 262144
+          maxTokens: 32768
+        - id: mimo-v2.5-free
+          name: MiMo V2.5 Free
+          contextWindow: 200000
+          maxTokens: 32000
+        - id: nemotron-3-ultra-free
+          name: Nemotron 3 Ultra Free
+          contextWindow: 1000000
+          maxTokens: 128000
+        - id: north-mini-code-free
+          name: North Mini Code Free
+          contextWindow: 256000
+          maxTokens: 64000
+    kimi-coding:
+      models:
+        - id: k3
+          name: Kimi K3
+          contextWindow: 1048576
+          maxTokens: 131072
+        - id: k3-256k
+          name: Kimi K3-256K
+          contextWindow: 262144
+          maxTokens: 131072
+        - id: kimi-for-coding
+          name: Kimi K2.7 Code
+          contextWindow: 262144
+          maxTokens: 32768
+        - id: kimi-for-coding-highspeed
+          name: Kimi For Coding HighSpeed
+          contextWindow: 262144
+          maxTokens: 32768
+      apiKeyEnv: KIMI_CODING_API_KEY
+    lm-stuido:
+      displayName: LM Studio
+      apiKeyEnv: LM_STUIDO_API_KEY
+      api: openai-completions
+      baseURL: http://127.0.0.1:1234/v1
+      models:
+        - id: ornith-1.0-35b-mlx
+          name: ornith-1.0-35b-mlx
+          contextWindow: 256000
+          maxTokens: 128000
+        - id: gemma-4-31b-it-mlx
+          name: gemma-4-31b-it-mlx
+          contextWindow: 256000
+          maxTokens: 128000
+        - id: qwen3.6-35b-a3b-mlx
+          name: qwen3.6-35b-a3b-mlx
+          contextWindow: 256000
+          maxTokens: 128000
+        - id: qwen3-coder-next
+          name: qwen3-coder-next
+          contextWindow: 256000
+          maxTokens: 128000
+        - id: gpt-oss-120b-fable-5-distilled
+          name: gpt-oss-120b-fable-5-distilled
+          contextWindow: 128000
+          maxTokens: 64000
+        - id: gpt-oss-120b-mlx-claude-4.6-opus-reasoning-distilled
+          name: gpt-oss-120b-mlx-claude-4.6-opus-reasoning-distilled
+          contextWindow: 128000
+          maxTokens: 64000
+        - id: qwen3.8-27b-mlx
+          name: qwen3.8-27b-mlx
+permission:
+  defaultPreset: danger-full-access
+ui-theme:
+  preference: dark
+agent-default-model:
+  provider: zai-coding-cn-vision
+  model: glm-5.2
+locale:
+  preference: zh
+agent-loop:
+  maxParallelToolCalls: 20
+skin-background:
+  backgroundOpacity: 5
+  backgroundBlurEmpty: 0
+  backgroundBlurContent: 0
+pet:
+  size: 160
+  right: 1201
+  bottom: 144
+  name: 鲸鱼娘
+  visible: true
+  petId: whale-girl
+remote-web-ui:
+  publicBaseUrl: https://nas.boergege.top
+  autoTunnel: false
+  enabled: true
+vision-toolkit:
+  provider:
+    baseUrl: http://127.0.0.1:1234/v1
+    credential: LM_STUDIO_API_KEY
+    model: ornith-1.0-35b-mlx
+  language: zh
+  degradePastedImages: true
+  timeoutMs: 60000
+  maxImageBytes: 10485760
+  maxImagePixels: 40000000
+  concurrency: 4
+  runtime:
+    mode: managed
+  allowedDirs: []
+agent-presets:
+  default: code
+ui-conversation:
+  busyEnter: steer
+dsh-better-sidebar:
+  titleBarCompat: true
+  defaultWidthPercent: 20
+  openByDefault: false
+  titleBarStripPx: 40
+  tabsEnabled:
+    editor: true
+  agentTerminalTools: true
+  browserNoSandbox: true
+  browserInterceptHttps: true
+  htmlViewerNoSandbox: true
+  htmlViewerDefaultUnsafe: true
+describe-image:
+  apiKey: sk-lm-qWWUOHxd:FvDdz92rVQrmiR9Tl8Um
+  baseURL: http://127.0.0.1:1234/v1
+  model: ornith-1.0-35b-mlx
+  apiKeyEnv: LM_STUDIO_API_KEY
+vision-router:
+  onboardingSeen: true
+  providers:
+    - provider: minimax-cn
+      model: MiniMax-M3
+    - provider: lm-stuido
+      model: ornith-1.0-35b-mlx
+  desktopScreenshot: true
+  localLmStudio:
+    enabled: false
+    baseURL: http://localhost:1234/v1
+    model: ornith-1.0-35b-mlx
+    format: openai
+    temperature: 0.2
+    top_p: 0.9
+  stealth: false
+  textProvider:
+    provider: zai-coding-cn
+    model: glm-5.3
+  structuredVisionBootstrap: false
+  autoWrapProviders: true
+aionui-panel: { enabled: false }
+context-ring:
+  warnAt: 50
+pawl:
+  engine: auto
+auto-continue:
+  maxConsecutive: 100
+  notify: true
+task-board:
+  preventIdleSleep: true
+skin-wallpaper:
+  enabled: true
+agency-agents:
+  enabled:
+    - domain-master-drilling-engineering
+    - domain-master-hydraulics
+    - domain-master-torque-drag
+    - domain-master-geomechanics
+    - domain-master-dynamics-vibration
+    - domain-master-thermal
+    - domain-master-petrophysics
+    - domain-master-data-science
+    - domain-master-3d-visualization
+    - domain-master-software-architecture
+    - drilling-realtime-analyst
+    - algorithm-dev
+    - physics-reviewer
+    - backend-dev
+    - frontend-dev
+    - code-reviewer
+    - plan-reviewer
+    - product-manager-pro
+    - qa
+    - tester
+    - software-doc-writer
+    - leader

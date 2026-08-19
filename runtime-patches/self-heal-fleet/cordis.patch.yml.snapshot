@@ -1,0 +1,67 @@
+# Your patch layer for this dsh profile, applied after every bundle layer:
+# a top-level YAML array of loader patch entries (id-targeted config
+# overrides, disables, and insert lists; `!!js` expressions allowed).
+
+# --- 2026-08-18 核心卫生哨兵 v2：启动时统一 dsh-tools 调度器符号 + 自动重打思考块
+# 自动展开/完成折叠补丁（CLI 更新后自愈）。档案 ~/.dsh/INCIDENT-2026-08-16-prepare-error.md
+- insert:
+    - id: core-hygiene
+      name: ./plugins/dsh-local/core-hygiene.mjs
+- insert:
+    - id: peer-range-autofix
+      name: ./plugins/dsh-local/peer-range-autofix.mjs
+- insert:
+    - id: runtime-patches-autorun
+      name: ./plugins/dsh-local/runtime-patches-autorun.mjs
+- insert:
+    - id: reasoning-row-watch
+      name: ./plugins/dsh-local/reasoning-row-watch.mjs
+- insert:
+    - id: runtime-patches-watchdog
+      name: ./plugins/dsh-local/runtime-patches-watchdog.mjs
+- insert:
+    - id: spe-lit-trigger
+      name: ./plugins/dsh-local/spe-lit-trigger.mjs
+
+
+- insert:
+    - id: goal-expand
+      name: dsh-goal-expand
+- insert:
+    - id: queue-dock
+      name: dsh-queue-dock
+
+# --- 2026-08-19 恢复 bocha 搜索 provider（计数写回 ~/.dsh/bocha-usage.json）---
+# profile 重构时 provider 遗留在了 web.old-fork-20260817；状态栏因此停在旧计数。
+- id: web
+  config:
+    searchProvider: bocha
+
+# --- 2026-08-20 专家名册：自有 22 位专家置顶（0-masters 分区排序在 academic 前）+
+# 内置 271 同步到 ~/.dsh/experts；升级经 dsh-experts-roster 脚本自动刷新 ---
+- id: agency-agents
+  config:
+    root: /Users/boergege/.dsh/experts
+    divisions:
+      - 0-domain-masters
+      - 0-engineering
+      - academic
+      - design
+      - engineering
+      - finance
+      - game-development
+      - gis
+      - healthcare
+      - marketing
+      - paid-media
+      - product
+      - project-management
+      - sales
+      - security
+      - spatial-computing
+      - specialized
+      - support
+      - testing
+- insert:
+    - id: experts-roster-watch
+      name: ./plugins/dsh-local/experts-roster-watch.mjs
