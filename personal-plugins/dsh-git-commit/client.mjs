@@ -16,9 +16,10 @@ window.__ModuleLoader__.load({
     var PANEL_ID = "dsh-git-commit-panel";
 
     var CSS = [
-      "#" + CHIP_ID + "{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2, rgba(168,200,232,0.18));border-radius:999px;background:var(--dsw-alias-bg-layer-3, transparent);cursor:pointer;font-size:11.5px;color:var(--dsw-alias-label-secondary, #a5b3da);flex:0 0 auto;transition:border-color .12s}",
-      "#" + CHIP_ID + ":hover{border-color:var(--dsw-alias-label-dimmed, rgba(168,200,232,0.4))}",
-      "#" + CHIP_ID + ".dirty{color:var(--dsw-alias-label-primary, inherit);border-color:var(--dsw-alias-brand-primary, #4c8dff)}",
+      "#" + CHIP_ID + "{display:inline-flex;align-items:center;gap:4px;min-height:28px;padding:0 8px;line-height:20px;border:none;border-radius:16px;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--dsw-alias-label-primary, inherit);flex:0 0 auto;transition:background-color .12s}",
+      "#" + CHIP_ID + ":hover{background:var(--dsw-alias-interactive-bg-hover, transparent)}",
+      "#" + CHIP_ID + ":active{background:var(--dsw-alias-interactive-bg-active, transparent)}",
+      "#" + CHIP_ID + ".dirty ." + P + "Num{color:var(--dsw-alias-brand-primary, #4c8dff)}",
       "." + P + "Num{font-weight:600}",
       "." + P + "Clean{opacity:.7}",
       "#" + PANEL_ID + "{position:fixed;z-index:60;width:380px;box-sizing:border-box;display:none;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--dsw-alias-border-l2, rgba(168,200,232,0.18));border-radius:12px;background:var(--dsw-alias-bg-layer-2, #16233f);box-shadow:0 12px 32px rgba(0,0,0,.35);font:inherit}",
