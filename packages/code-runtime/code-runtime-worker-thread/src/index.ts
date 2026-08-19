@@ -107,18 +107,20 @@ interface LiveRun {
 const WORKER_PATH = fileURLToPath(new URL(new URL(import.meta.url).pathname.endsWith('.ts') ? './worker.ts' : './worker.cjs', import.meta.url))
 
 /**
- * Best-effort location for the dominant strip-phase syntax failure: a string or
- * template literal left unclosed (its opening quote then swallows the rest of the
- * program). `stripTypeScriptTypes` reports a bare `SyntaxError` with no line or
- * column, so this scan names the opening line when it can pin one.
+ * Best-effort location for the dominant strip-phase syntax failures: an
+ * unterminated string or template literal (the opening quote swallows the rest
+ * of the program), and adjacent literals with no separator (a comma dropped
+ * between two string elements — amaro reports both shapes as
+ * `Expected ',', got 'string literal'`). `stripTypeScriptTypes` emits no line or
+ * column, so this scan names the offending line when it can pin one.
  * @param program - the program body as received, before type-stripping.
- * @returns a suffix naming the unclosed literal's opening line, or '' when the
- * breakage is not an unclosed literal this scan can see.
+ * @returns a suffix naming the failure's line, or '' when this scan sees none.
  */
 function unclosedLiteralHint(program: string): string {
   let state: 'code' | 'sq' | 'dq' | 'tpl' | 'line-comment' | 'block-comment' = 'code'
   let line = 1
   let openLine = 0
+  let lastClosedAt = -1
   for (let i = 0; i < program.length; i += 1) {
     const c = program[i]
     const next = program[i + 1]
@@ -135,12 +137,23 @@ function unclosedLiteralHint(program: string): string {
     if (state === 'sq' || state === 'dq' || state === 'tpl') {
       const quote = state === 'sq' ? "'" : state === 'dq' ? '"' : '`'
       if (c === '\\') { i += 1; continue }
-      if (c === quote) state = 'code'
+      if (c === quote) { state = 'code'; lastClosedAt = i }
       continue
     }
     if (c === '/' && next === '/') { state = 'line-comment'; i += 1; continue }
     if (c === '/' && next === '*') { state = 'block-comment'; i += 1; continue }
     if (c === "'" || c === '"' || c === '`') {
+      // Adjacent-literal check: a quote opening directly after a closed literal
+      // with only whitespace between them is a dropped separator (concat needs
+      // `+`, sequence needs `,`). Template expressions and tagged templates carry
+      // non-whitespace in that gap and stay silent.
+      if (lastClosedAt >= 0) {
+        const gap = program.slice(lastClosedAt + 1, i)
+        if (gap.trim().length === 0) {
+          const opening = (program.split('\n')[line - 1] ?? '').trim().slice(0, 60)
+          return ` (adjacent literals at line ${line} — a comma or operator between them is missing: ${opening})`
+        }
+      }
       state = c === "'" ? 'sq' : c === '"' ? 'dq' : 'tpl'
       openLine = line
     }

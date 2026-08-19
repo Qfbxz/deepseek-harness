@@ -144,6 +144,27 @@ describe('WorkerThreadCodeRuntime — programs and bindings (real workers)', () 
     expect(result.error?.message).toContain('failed to parse before any code ran')
   })
 
+  it('locates adjacent literals with a dropped separator for a strip-phase parse failure', async () => {
+    const { runtime } = await setup()
+    const result = await runtime.run({
+      program: 'const rows = [\n  "first element" "second element"\n];\nreturn rows',
+      bindings: [],
+    })
+    expect(result.error?.kind).toBe('exception')
+    expect(result.error?.message).toContain('adjacent literals at line 2')
+    expect(result.error?.message).toContain('comma or operator between them is missing')
+    expect(result.error?.message).toContain('failed to parse before any code ran')
+  })
+
+  it('stays silent for concatenated and templated strings that are legal', async () => {
+    const { runtime } = await setup()
+    const result = await runtime.run({
+      program: 'const a = "x" + "y"\nconst b = `t${a}u`\nreturn a + b',
+      bindings: [],
+    })
+    expect(result.value).toBe('xytxyu')
+  })
+
   it('locates an unterminated template literal for a strip-phase parse failure', async () => {
     const { runtime } = await setup()
     const result = await runtime.run({
