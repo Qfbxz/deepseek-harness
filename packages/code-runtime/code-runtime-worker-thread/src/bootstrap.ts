@@ -214,6 +214,25 @@ function prepareFailure(
 export const SYNTAX_HINT = ' — the program body failed to parse before any code ran; fix the syntax, or move complex logic into a file written first and keep this body minimal'
 
 /**
+ * Render a non-string thrown value for the failure message. A plain object
+ * must serialize losslessly (JSON first, util.inspect for cycles) — `String()`
+ * would collapse it to the opaque literal `[object Object]`, leaving the
+ * model nothing to self-correct from.
+ */
+function renderThrownValue(detail: unknown): string {
+  if (typeof detail === 'object' && detail !== null) {
+    try {
+      const serialized = JSON.stringify(detail)
+      if (typeof serialized === 'string') return serialized
+    } catch {
+      /* circular — fall through to inspect */
+    }
+    return inspect(detail, { depth: 3, breakLength: 120 })
+  }
+  return String(detail)
+}
+
+/**
  * Prepare a thrown program value without sending an unbounded stack or
  * string across the worker port.
  * @param error - the value thrown by the program.
@@ -234,7 +253,7 @@ export function prepareException(
     const detail: unknown = error instanceof SyntaxError
       ? error.message
       : error instanceof CapturedError ? error.stack ?? error.message : error
-    message = typeof detail === 'string' ? detail : String(detail)
+    message = typeof detail === 'string' ? detail : renderThrownValue(detail)
     if (error instanceof SyntaxError) message += SYNTAX_HINT
   } catch {
     message = 'program threw an unrenderable value'

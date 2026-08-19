@@ -22,7 +22,7 @@ export interface WorkerBootData {
 }
 
 /** Worker → host: one bridged binding call. */
-interface CallMessage {
+export interface CallMessage {
   type: 'call'
   /** Worker-issued correlation id; the host answers each id at most once and ignores duplicates. */
   id: number

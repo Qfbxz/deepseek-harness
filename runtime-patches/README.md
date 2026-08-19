@@ -1,6 +1,32 @@
 # runtime-patches（运行时手工补丁备份）
 
-官方 npm 包尚未携带、但已在本机运行时手工落地的修复。任何 `@deepseek-ai/dsh` 全局重装或 `~/.dsh/profiles` 重建（含升级 rc.7+）都会覆盖这些文件——覆盖后按本 README 重放即可。
+官方 npm 包尚未携带、但已在本机运行时手工落地的修复。任何 `@deepseek-ai/dsh` 全局重装或 `~/.dsh/profiles` 重建（含升级 rc.7+）都会覆盖这些文件——**2026-08-24 起无需手动重放**：启动自愈 + 运行中看护 + 文件监听三层插件按三态机理（见「自动化」节）自动恢复或退役；本 README 的手动重放命令保留作兜底与离线恢复路径。
+
+## 构建管线已修复（2026-08-24）
+
+`pnpm run build:lib`（host+client，342 单元）已在本机跑通。此前 `[@deepseek-ai/dsh-root] Cannot find entry` 的根因：profile `link:` 安装把社区插件依赖骨架（空 node_modules、无 package.json/lib）提升到 `packages/community/*`，tsdown workspace 枚举把每个骨架当构建单元、继承根 entry glob 相对空目录解析为空，报错标签经向上 config 查找误取根包名。修复：`tsdown.config.ts` 的 workspace 改对象形式并 exclude `packages/community/**`（源码级，非环境妥协）。**「从本仓库源码重建 bundle」路径自此可用**：`pnpm run build:lib` 后将产物同步到全局/profiles 即可。
+
+## 自动化（2026-08-24 起；2026-08-24 二次升级为三态全自动）
+
+### 三态检测机理（现行）
+
+幂等基准是**官方产物的坏形态**（`badPattern`），不是我们注入的好代码：
+
+| 检测 | 判定 | 动作 |
+|---|---|---|
+| marker（我们的修复）在场 | 已打补丁 | 零动作 |
+| marker 缺 + 坏形态在场 | 官方仍坏 | 自动重放恢复 |
+| marker 缺 + 坏形态也缺 | 官方已修复/重构掉 | **RETIRED 自动退役**：日志一次，永不再试 |
+
+唯一人工态：坏形态在场但 replay 锚点失配（官方重构且坏行为原样保留）→ 状态感知提醒（首条详记 + 每 50 次摘要 + 恢复转场），不刷屏。官方修复版发布后补丁**自动退役**，无需人工删除 replay 脚本（确认日志后可顺手清理）。
+
+### 载体（三层）
+
+1. **启动全量重放**：`~/.dsh/profiles/web/plugins/dsh-local/runtime-patches-autorun.mjs`（id `runtime-patches-autorun`）——每次 dsh web 启动重放全部 replay 脚本（幂等、单一事实源指向本目录）。已实测 `npm install -g --force` 冲掉后一次跑齐 5 个 `[patched]`。
+2. **运行中看护**：`~/.dsh/profiles/web/plugins/dsh-local/runtime-patches-watchdog.mjs`（id `runtime-patches-watchdog`）——默认 30s 巡检 6 个标记，按上表三态处置；服务运行中发生的重装/升级无需等重启。双场景实测：官方原版覆盖 → restored；构造官方修复近似形态 → RETIRED。日志 `~/.dsh/runtime-patches-watchdog.log`。
+3. **文件监听**：`~/.dsh/profiles/web/plugins/dsh-local/reasoning-row-watch.mjs`（id `reasoning-row-watch`，补丁 3 专用）——启动检查 + `fs.watch` 监听 client.js，升级写入瞬间防抖 2s 重打。
+
+三个插件均在 cordis.patch.yml 注册，仓库目录（本 README 所在处）不在时静默跳过，不阻塞启动。
 
 ## 补丁 1：bash description 可选（dsh-tool-bash）
 
@@ -53,9 +79,27 @@ node runtime-patches/replay-code-runtime-parse-hint.mjs \
   "$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-code-runtime-worker-thread/lib/index.js"
 ```
 
-## 补丁 3：Think 行流式自动展开/折叠（dsh-client-ui-conversation）
+## 补丁 5：对象抛错结构化序列化（worker.cjs + dsh-tools 双副本）
 
-源码已提交（`packages/client/ui-conversation/src/client/chat/ReasoningRow.tsx`，fc78ffeb9f）。GUI 加载的是 `~/.dsh/profiles/.../dsh-client-ui-conversation/lib/client.js`，若被官方更新覆盖：优先从本仓库源码重建 bundle（`pnpm run build:lib:client` 后同步到 profiles），或临时用快照恢复：
+源码修复已提交（`packages/code-runtime/code-runtime-worker-thread/src/bootstrap.ts` 新增 `renderThrownValue`、`packages/core/tools/src/code-mode.ts` 新增 `errorMessage`）。真根因在 worker 序列化层：`prepareException` 用 `String(detail)` 把程序抛出的对象压成 `[object Object]` 字面量，host 端任何修复都来不及介入（到达时已是字符串）。补丁把三个运行时副本一并落地：
+
+- `dsh-code-runtime-worker-thread/lib/worker.cjs`：注入 `renderThrownValue`（对象→`JSON.stringify`，循环引用→`util.inspect`），抛点改用它
+- `dsh-tools/lib/index.js`：该文件自带 `errorMessage` helper，抛点接入
+- `dsh-tools/lib/types/code-mode.js`：注入 helper + `node:util` import + 抛点接入
+
+重放（幂等，可重复执行；升级 dsh 后跑一次）：
+
+```sh
+node runtime-patches/replay-object-throw-serialization.mjs
+```
+
+效果：`throw { code: 499 }` 从 `Error: code run failed (exception): [object Object]` 变为 `Error: code run failed (exception): {"code":499}` —— 模型可读的结构化诊断，可自我纠正。
+
+已在 0.1.0-rc.7 全量重放验证（补丁 1–5 一次过）。锚点引号风格随 tsc 版本漂移（rc.6 双引号、rc.7 单引号），`RUN_CODE_NAME` 锚点已做双引号回退兼容；若未来版本再失配报 `fn anchor missing`，先核对产物引号。
+
+## 补丁 6：Think 行流式自动展开/折叠（dsh-client-ui-conversation）— 已插件化自愈
+
+源码已提交（`packages/client/ui-conversation/src/client/chat/ReasoningRow.tsx`，fc78ffeb9f）。**2026-08-24 起升级免疫**：web profile 的启动+运行时自愈插件 `~/.dsh/profiles/web/plugins/dsh-local/reasoning-row-watch.mjs`（cordis.patch.yml 注册，id `reasoning-row-watch`）在 dsh web 启动时检查一次（覆盖启动前发生的升级），并 `fs.watch` 监听全局 `dsh-client-ui-conversation/lib/client.js`——CLI 升级写入的瞬间防抖 2s 后自动重打（npm pack 官方原版覆盖实测通过）。官方将 fc78ffeb9f 修复发进 npm 版后，原始坏形态消失，插件自动停止尝试（日志 `~/.dsh/reasoning-row-watch.log` 一条 pattern not found，可忽略）。补丁逻辑与 core-hygiene 的 patchReasoning 同源。手动恢复路径保留（源码重建或快照）：
 
 `sh`
 cp runtime-patches/backups/dsh-client-ui-conversation.lib.client.repo-built.js \

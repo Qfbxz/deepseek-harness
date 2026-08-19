@@ -6,6 +6,7 @@
  * @module @deepseek-ai/dsh-tools/src/code-mode
  */
 
+import { inspect } from 'node:util'
 import { CallId, HarnessError } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { CodeBindingFunction, CodeRunResult, CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
@@ -18,6 +19,44 @@ import type {} from './types.ts'
 
 /** The model-facing name of the Code Mode tool. */
 export const RUN_CODE_NAME = 'run_code'
+
+/**
+ * Best-effort human-readable message from an arbitrary thrown value: Error
+ * instances use `.message`; non-Error objects with a string `message`
+ * property (e.g. `throw { message: 'denied' }`) use it too; everything else
+ * is serialized losslessly to JSON (and falls back to `String(x)` when the
+ * value contains non-JSON-able parts). The JSON path replaces the prior
+ * `String(error)` fallback so a thrown object no longer surfaces to the
+ * model as the opaque literal `[object Object]`.
+ */
+export function errorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'object' && error !== null) {
+    if ('message' in error && typeof (error as { message: unknown }).message === 'string') {
+      return (error as { message: string }).message
+    }
+    // Plain object / array: serialize losslessly so the model can read the
+    // shape. A circular reference throws — fall through to util.inspect
+    // (which marks cycles as `<Circular>`) instead of leaking
+    // `[object Object]` from String().
+    try {
+      const serialized = JSON.stringify(error)
+      if (typeof serialized === 'string') return serialized
+    } catch {
+      // Circular reference: JSON.stringify threw; util.inspect marks cycles
+      // as `[Circular]` instead of leaking `[object Object]` from String().
+      return inspect(error, { depth: 3, breakLength: 120 })
+    }
+  }
+  try {
+    const str = String(error)
+    // String() returns '[object Object]' for any non-special plain object —
+    // the very leak this helper exists to prevent. Mask that single case.
+    return str === '[object Object]' ? '<unprintable object>' : str
+  } catch {
+    return '<unprintable thrown value>'
+  }
+}
 
 /** The `tools:sdk` section order: inside the 100–199 tool-guidance band, after per-tool guidance sections. */
 export const SDK_SECTION_ORDER = 150
@@ -659,7 +698,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
 
         if (result.error) {
           const logsText = result.logs.length > 0 ? `\nCaptured output:\n${result.logs.join('\n')}` : ''
-          throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${result.error.message}${logsText}`)
+          throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${errorMessage(result.error)}${logsText}`)
         }
         return {
           logs: result.logs,

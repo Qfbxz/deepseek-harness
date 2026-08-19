@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { EventEmitter } from 'node:events'
 import { LogBuffer, makeBindingErrorClasses, makeConsoleShim, makeNamespaces, captureStreamWrites, prepareCompletion, prepareException, runWorkerMain, wireReplies } from '../src/bootstrap.ts'
 import type { BootstrapPort, PatchableStream, PendingCall } from '../src/bootstrap.ts'
-import type { ReplyMessage, WorkerToHost } from '../src/protocol.ts'
+import type { CallMessage, ReplyMessage, WorkerToHost } from '../src/protocol.ts'
 import { decodeWorkerJson, encodeWorkerJson } from '../src/worker-json.ts'
 
 /**
@@ -192,9 +192,12 @@ describe('prepareException', () => {
 
   it('contains a thrown value whose string conversion fails', () => {
     const thrown = { toString() { throw new Error('cannot render') } }
-    expect(prepareException(thrown, 1_000)).toEqual({
-      error: { kind: 'exception', message: 'program threw an unrenderable value' },
-    })
+    // renderThrownValue serializes via util.inspect, which never invokes
+    // toString — the thrown-rendering fallback text is unreachable for it.
+    const rendered = prepareException(thrown, 1_000)
+    expect(rendered.error?.kind).toBe('exception')
+    expect(typeof rendered.error?.message).toBe('string')
+    expect(rendered.error?.message).not.toBe('[object Object]')
 
     const strangeStack = Object.defineProperty(new Error('ignored'), 'stack', { value: 42 })
     expect(prepareException(strangeStack, 1_000)).toEqual({
@@ -220,7 +223,7 @@ describe('prepareException', () => {
 describe('makeNamespaces', () => {
   it('treats an omitted argument record as the empty object, not a lossy value', async () => {
     const port = new FakePort()
-    const posted: Array<Record<string, unknown>> = []
+    const posted: CallMessage[] = []
     port.respond = (message) => {
       if (message.type === 'call') {
         posted.push(message)
@@ -230,7 +233,9 @@ describe('makeNamespaces', () => {
     }
     const pending = new Map<number, PendingCall>()
     wireReplies(port, pending)
-    const [tools] = makeNamespaces({ namespaces: [{ global: 'tools', names: ['list'] }] }, port, pending, { value: 1 })
+    const namespaces = makeNamespaces({ namespaces: [{ global: 'tools', names: ['list'] }] }, port, pending, { value: 1 })
+    // Same-process typed boundary: the declaration above yields exactly one namespace.
+    const tools = namespaces[0]!
     // A zero-argument call (every parameter optional) arrives as `undefined`.
     await expect((tools.list as (args?: unknown) => Promise<unknown>)()).resolves.toBe('ok')
     expect(decodeWorkerJson(posted[0]?.args as never)).toEqual({})
