@@ -4,7 +4,7 @@
 // academic 之前 → 名册置顶）。幂等：同名以 ~/.agents 优先。
 // CURATED 按 slug 提供插件范式的精炼元数据（展示名/一句话中文/一句话英文/emoji/色），
 // 未收录的新文件回退到自动推导。
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 
@@ -38,6 +38,9 @@ const CURATED = {
   'leader': ['团队负责人', '接收需求、拆解分发、先审后派、汇总交付，统筹全流程进度与质量。', 'Team leader: requirement breakdown, review-first dispatch, delivery.', '👑', 'orange'],
 }
 
+/** 与内置名册的 slug 冲突规避：改写输出文件名（curated 键随之变化）。 */
+const SLUG_OVERRIDES = { 'product-manager': 'product-manager-pro' }
+
 const EMOJI = [
   [/钻井|drilling/, '🛢️'], [/水力|hydraul/, '💧'], [/物理|physics/, '⚛️'], [/数据|data/, '📊'],
   [/测试|qa|tester/i, '🧪'], [/文档|doc/i, '📝'], [/实时|realtime/i, '🛰️'], [/领导|leader/i, '👑'],
@@ -64,6 +67,7 @@ function emojiFor(name, description) {
 
 mkdirSync(TARGET, { recursive: true })
 const seen = new Set()
+const produced = new Set()
 let written = 0
 for (const src of SOURCES) {
   if (!existsSync(src)) continue
@@ -71,10 +75,11 @@ for (const src of SOURCES) {
     if (!f.endsWith('.md')) continue
     const parsed = parseAgentMd(readFileSync(join(src, f), 'utf8'))
     if (parsed === null) continue
-    const slug = f.replace(/\.md$/, '')
-    if (seen.has(parsed.name) || seen.has(slug)) continue
-    seen.add(parsed.name); seen.add(slug)
-    const cur = CURATED[slug]
+    const sourceSlug = f.replace(/\.md$/, '')
+    if (seen.has(parsed.name) || seen.has(sourceSlug)) continue
+    seen.add(parsed.name); seen.add(sourceSlug)
+    const slug = SLUG_OVERRIDES[sourceSlug] ?? sourceSlug
+    const cur = CURATED[sourceSlug]
     const displayName = cur ? cur[0] : parsed.name
     const desc = cur ? cur[1] : parsed.description.split(/[。；;]/)[0] + '。'
     const descEn = cur ? cur[2] : parsed.description.split(/[。；;]/)[0]
@@ -83,7 +88,12 @@ for (const src of SOURCES) {
     const vibe = desc.split(/[：:，,]/)[0].slice(0, 24)
     const out = `---\nname: ${displayName}\ndescription: ${desc}\ndescriptionEn: ${descEn}\ncolor: ${color}\nemoji: ${emoji}\nvibe: ${vibe}\n---\n\n${parsed.body}\n`
     writeFileSync(join(TARGET, `${slug}.md`), out)
+    produced.add(`${slug}.md`)
     written += 1
   }
+}
+// 清掉本轮未产出的陈旧文件（如 slug 改名后的旧文件，避免与内置名册冲突）
+for (const f of readdirSync(TARGET)) {
+  if (f.endsWith('.md') && !produced.has(f)) rmSync(join(TARGET, f))
 }
 console.log(`[experts] ${written} personas → ${TARGET}`)

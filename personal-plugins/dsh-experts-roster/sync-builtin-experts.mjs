@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 
-const DIVISIONS = ['academic', 'design', 'engineering', 'finance', 'game-development', 'gis', 'healthcare', 'marketing', 'paid-media', 'product', 'project-management', 'sales', 'security', 'spatial-computing', 'specialized', 'support', 'testing']
+const DIVISIONS = ['academic', 'design', 'engineering', 'finance', 'game-development', 'gis', 'healthcare', 'integrations', 'marketing', 'paid-media', 'product', 'project-management', 'sales', 'security', 'spatial-computing', 'specialized', 'support', 'testing']
 const globalRoot = execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim()
 const CANDIDATES = [
   join(homedir(), '.dsh', 'profiles', 'web', 'node_modules', '@michengai', 'dsh-agency-agents'),
