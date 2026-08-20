@@ -305,3 +305,12 @@ watchdog 条目 `p24-auto-continue-inflight`（marker=`patch(inflight-guard)`，
 | dsh-client-ui-sidebar.lib.client.settings-action.js | repo 构建（含 settings.action 孔，补丁 16 的同步源） | 2026-08-20 |
 
 注意：快照是对应版本时刻的产物；跨版本恢复优先用重放脚本（补丁 1）或源码重建（补丁 2），快照仅作兜底。
+## 补丁 25：关机按钮移顶部（@linxin666/dsh-desktop-launcher）
+
+第三方包：浮动关机按钮 fixed 在右下（`bottom:24px;right:24px`），与发送消息按钮重叠。移到顶部右上（`top:24px;right:24px`），与 git chip 行水平错开。
+
+```sh
+node runtime-patches/replay-launcher-power-top.mjs
+```
+
+watchdog 条目 `p25-launcher-power-top`（marker=`patch(power-top)`，bad=原 bottom 定位）。
