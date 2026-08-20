@@ -312,6 +312,19 @@
   width: 100%;
 }
 
+/* Usage badge must share the row with memory/settings — the plugin's
+   .usg_layer defaults to full width, wrapping everything else below. */
+.settingsArea :global(.usg_layer) {
+  flex: 0 1 auto;
+  max-width: 130px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.settingsArea {
+  flex-wrap: nowrap;
+}
+
 .footerActions {
   /* A footer occupant inline-styles this container to column, stacking every
      action full-width; the shell's row policy wins with !important. Slot DOM
@@ -370,6 +383,8 @@
 
 .settingsArea {
   display: flex;
+  flex-direction: row !important;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
