@@ -429,6 +429,8 @@
 .collapsed .footerActions button,
 .collapsed .footerActions div {
   margin-left: 0 !important;
+  margin-right: 0 !important;
+  order: 0 !important;
 }
 
 .collapsed .footerActions div {
