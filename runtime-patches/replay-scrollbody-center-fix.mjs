@@ -17,7 +17,7 @@ let s = readFileSync(target, 'utf8')
 if (s.includes('patch(center-fix)')) { console.log('[skip] already patched:', target); process.exit(0) }
 // justify-content:center → flex-start，子元素 margin:auto 0 补偿居中
 const OLD = 'scrollBody{justify-content:center;overflow-y:auto}'
-const NEW = 'scrollBody{/*patch(center-fix)*/justify-content:flex-start;overflow-y:auto}'
+const NEW = 'scrollBody{/*patch(center-fix)*/justify-content:center;overflow-y:auto}'
 if (!s.includes(OLD)) throw new Error('scrollBody justify-content anchor missing — upstream restructured, review manually')
 s = s.replace(OLD, NEW)
 writeFileSync(target, s)

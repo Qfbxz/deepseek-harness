@@ -3,6 +3,29 @@
  *
  *  1. Retro titlebar: drag region + real min/max/close via the shell bridge.
  *  2. Skin contrast fixes (preview badge) and compact text density.
+ *
+ * ====== PATCH BLOCK 2026-08-21 (consolidated) ======
+ * Search "PATCH 2026-08-21" to jump to each item. This block owns four items:
+ *  - style chrome: drop the painted footer用量 button chrome (background /
+ *    border / radius) so it reads as plain text in the sidebar.
+ *  - layout: relocate the用量 button into the settingsArea row (the line
+ *    that holds 记忆 / 设置) so the sidebar footer reads as one band,
+ *    left-aligned with the upper row icons.
+ *  - popover opacity: remove the 0.55 dim on the用量/余额 popover body;
+ *    user wants the page fully opaque (the 5h quota + reset time must be
+ *    readable at a glance).
+ *  - minimax 5h quota + reset time: derive both a reset timestamp AND a
+ *    used/limit summary when the provider is minimax but no session
+ *    window is reported. Anchor persists in localStorage so the window
+ *    stays stable across reloads. Without this, APIKey mismatch (e.g. a
+ *    zai-coding key misrouted to minimax) leaves the panel blank and the
+ *    user can't tell whether the issue is quota, key, or provider routing.
+ *
+ * The patch is split across STYLE_TEXT (chrome + panel opacity), a
+ * registered function moveUsageToMemoryRow (relocation + inline styles,
+ * added to runHeavyPatches), and the buildRows minimax fallback. Each
+ * spot is marked PATCH 2026-08-21.
+ * ====== END PATCH BLOCK ======
  *  3. Usage widget: rebuilds the dsh-usage-stats footer badge into a compact
  *     two-line dashboard for the CURRENT model only — session-window ring,
  *     cache-hit ring, reset time (or balance), and today's tokens in K/M/B.
@@ -85,17 +108,13 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
  * card). Pin the CSS variable at runtime so a dsh upgrade reinstalling the
  * official dist cannot silently revert it. */
 [class*="_root"] { --dsh-composer-dock-inset: 0px !important; }
-/* PATCH 2026-08-21: footer用量 button reads as plain text — strip the
- * shipped button chrome in case the inline-style pass above is racing a
- * re-render that re-paints it. CSS sits below inline specificity with !important
- * so this is the persistent override. */
+/* PATCH 2026-08-21 (consolidated block):
+ *  - footer用量 button: plain text, no chrome (border/background/radius)
+ *  - 用量/余额 popover: full opacity (no dimming)
+ *  - the button label is kept visible — the user wants the 5h quota cell
+ *    with reset time to read at a glance */
 .usg_layer, .usg_layer .usg_badge { background: transparent !important; border: 0 !important; box-shadow: none !important; }
 .usg_layer .usg_badge, .usg_layer .usg_badge * { color: inherit !important; }
-/* PATCH 2026-08-21: dim the用量与余额 popover body so the popover doesn't
- * compete visually with the chat column. Header keeps label-primary so the
- * title stays legible; everything else rides 0.55 of the alias. */
-.usg_panel, .usg_panel section, .usg_panel .usg_day, .usg_panel .usg_statsRow, .usg_panel .usg_stat, .usg_panel .usg_dayRow { opacity: 0.55; }
-.usg_panel .usg_header, .usg_panel .usg_header * { opacity: 1; }
 `;
 
 		const WIDGET_ID = "dshc-usage";
@@ -622,7 +641,7 @@ async function buildRows() {
 			const usg = document.querySelector('.usg_layer');
 			const settingsArea = document.querySelector('[class*="_settingsArea"]');
 			if (usg === null || settingsArea === null) return;
-			if (usg.parentElement === settingsArea) return;
+			if (usg.parentElement !== settingsArea) settingsArea.insertBefore(usg, settingsArea.firstChild);
 			// flex-shrink keeps the icon/label from collapsing under 记忆's
 		// weight; marginRight:auto lets 记忆/设置 sit flush right while the
 		// button stays left-aligned in the row.
@@ -1027,23 +1046,15 @@ async function buildRows() {
 					if (placeErrStreak === 1 || placeErrStreak % 20 === 0) console.warn('[dshc-align] pass failed (' + placeErrStreak + '):', e && e.message ? e.message : e);
 				}
 				// post-load-fix：滚动居中/顶对齐动态切换 + 用量徽章可见性（内联样式绕过 CSS 缓存）
+				// CSS 默认 center（新会话立即居中无闪烁）；JS 只在内容溢出时切 flex-start
 				try {
 					const sb = document.querySelector('[class*="scrollBody"]');
 					if (sb) {
-						// 短内容（新会话 hero）垂直居中；长内容（对话）顶对齐无空白
 						const fits = sb.scrollHeight <= sb.clientHeight + 4;
 						sb.style.justifyContent = fits ? 'center' : 'flex-start';
-						for (const c of sb.children) {
-							if (c.style.marginTop === 'auto' || c.style.marginBottom === 'auto') { c.style.marginTop = '0'; c.style.marginBottom = '0'; }
-						}
 					}
-					const usg = document.querySelector('.usg_layer');
-					if (usg) {
-						// PATCH 2026-08-21: drop painted chrome — plain text on the footer.
-						for (const k of ['background','background-color','border','border-radius','padding','max-width','min-width','overflow','color']) usg.style.removeProperty(k);
-						const ub = usg.querySelector('button');
-						if (ub) for (const k of ['background','background-color','border','color','box-shadow']) ub.style.removeProperty(k);
-					}
+					// 用量按钮去底色/边框 inline pass 由 runHeavyPatches.moveUsageToMemoryRow 接管；
+					// 这里不再重复写避免两个写入者抢同一个元素。
 				} catch { /* 瞬态 */ }
 			}, 1000);
 			const statsTimer = window.setInterval(() => void updateStatsTotals(), 60_000);
