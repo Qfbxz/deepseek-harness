@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import { AssistantMarkdown } from '../src/client/chat/AssistantMarkdown.tsx'
+import { AssistantMarkdown, type AssistantMarkdownProps } from '../src/client/chat/AssistantMarkdown.tsx'
 import { zh } from '../src/client/locales.ts'
 
 let nextAnimationFrameId = 1
@@ -37,6 +37,7 @@ afterEach(() => {
 })
 
 const t = makeTranslate(zh, commonZh)
+const renderMessageImages: AssistantMarkdownProps['renderMessageImages'] = () => null
 
 describe('ReasoningRow', () => {
   it('streams expanded, follows the latest line after a manual fold, then settles folded to the first line', () => {
@@ -45,6 +46,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nNewest reasoning tokens' }]}
         streaming
+        renderMessageImages={renderMessageImages}
       />,
     )
     const row = view.getByRole('button')
@@ -67,6 +69,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nNewest reasoning tokens keep arriving' }]}
         streaming
+        renderMessageImages={renderMessageImages}
       />,
     )
     expect(summary.scrollLeft).toBe(0)
@@ -81,6 +84,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nNewest reasoning tokens keep arriving\n' }]}
         streaming={false}
+        renderMessageImages={renderMessageImages}
       />,
     )
     flushAnimationFrames(3)
@@ -98,6 +102,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nCheck persistence' }]}
         streaming={false}
+        renderMessageImages={renderMessageImages}
       />,
     )
     const row = view.getByRole('button')
@@ -116,6 +121,7 @@ describe('ReasoningRow', () => {
         t={t}
         blocks={[{ kind: 'reasoning', text: 'Inspect the session\nCheck persistence' }]}
         streaming={false}
+        renderMessageImages={renderMessageImages}
       />,
     )
     fireEvent.click(view.getByText('Think'))

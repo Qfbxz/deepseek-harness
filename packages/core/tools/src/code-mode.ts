@@ -6,8 +6,7 @@
  * @module @deepseek-ai/dsh-tools/src/code-mode
  */
 
-import { inspect } from 'node:util'
-import { CallId, HarnessError } from '@deepseek-ai/dsh-llm'
+import { CallId, createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { CodeBindingFunction, CodeRunResult, CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
 import { snapshotJsonValue } from '@deepseek-ai/dsh-session'
@@ -19,44 +18,6 @@ import type {} from './types.ts'
 
 /** The model-facing name of the Code Mode tool. */
 export const RUN_CODE_NAME = 'run_code'
-
-/**
- * Best-effort human-readable message from an arbitrary thrown value: Error
- * instances use `.message`; non-Error objects with a string `message`
- * property (e.g. `throw { message: 'denied' }`) use it too; everything else
- * is serialized losslessly to JSON (and falls back to `String(x)` when the
- * value contains non-JSON-able parts). The JSON path replaces the prior
- * `String(error)` fallback so a thrown object no longer surfaces to the
- * model as the opaque literal `[object Object]`.
- */
-export function errorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message
-  if (typeof error === 'object' && error !== null) {
-    if ('message' in error && typeof (error as { message: unknown }).message === 'string') {
-      return (error as { message: string }).message
-    }
-    // Plain object / array: serialize losslessly so the model can read the
-    // shape. A circular reference throws — fall through to util.inspect
-    // (which marks cycles as `<Circular>`) instead of leaking
-    // `[object Object]` from String().
-    try {
-      const serialized = JSON.stringify(error)
-      if (typeof serialized === 'string') return serialized
-    } catch {
-      // Circular reference: JSON.stringify threw; util.inspect marks cycles
-      // as `[Circular]` instead of leaking `[object Object]` from String().
-      return inspect(error, { depth: 3, breakLength: 120 })
-    }
-  }
-  try {
-    const str = String(error)
-    // String() returns '[object Object]' for any non-special plain object —
-    // the very leak this helper exists to prevent. Mask that single case.
-    return str === '[object Object]' ? '<unprintable object>' : str
-  } catch {
-    return '<unprintable thrown value>'
-  }
-}
 
 /** The `tools:sdk` section order: inside the 100–199 tool-guidance band, after per-tool guidance sections. */
 export const SDK_SECTION_ORDER = 150
@@ -84,11 +45,12 @@ interface RunCodeFlavor {
  */
 const TYPESCRIPT_FLAVOR: RunCodeFlavor = {
   description:
-    'Execute a TypeScript program against the available tools. Takes `code`, the '
-    + 'BODY of an async function (erasable syntax only; top-level `await` and '
-    + '`return` work), and `description`, a short summary of what the program does. '
-    + 'Call tools as `await tools.name(args)` per the declarations in the system '
-    + 'prompt. Only what you print or return comes back — curate it.',
+    'Execute a TypeScript program against the available tools. Takes two required '
+    + 'arguments: `code`, the BODY of an async function (erasable syntax only; top-level '
+    + '`await` and `return` work), and `description`, a short summary of what the program '
+    + 'does. Call tools as `await tools.name(args)` per the declarations in the system '
+    + 'prompt. Only what you print or return is program output — curate it. Image-bearing '
+    + 'subtool results are attached after the run.',
   codeDescription: 'The program: the body of an async TypeScript function.',
 }
 
@@ -99,11 +61,12 @@ const TYPESCRIPT_FLAVOR: RunCodeFlavor = {
  */
 const PYTHON_FLAVOR: RunCodeFlavor = {
   description:
-    'Execute a Python program against the available tools. Takes `code`, the BODY '
-    + 'of an async function (top-level `await` and `return` work), and '
-    + '`description`, a short summary of what the program does. Call tools as '
-    + '`await tools.name(args)` per the declarations in the system prompt. Answer '
-    + 'with `print(...)` and/or `return <value>` — only that comes back, so curate it.',
+    'Execute a Python program against the available tools. Takes two required '
+    + 'arguments: `code`, the BODY of an async function (top-level `await` and `return` '
+    + 'work), and `description`, a short summary of what the program does. Call tools as '
+    + '`await tools.name(args)` per the declarations in the system prompt. Use '
+    + '`print(...)` and/or `return <value>` for program output — curate it. Image-bearing '
+    + 'subtool results are attached after the run.',
   codeDescription: 'The program: the body of an async Python function.',
 }
 
@@ -295,73 +258,8 @@ function renderValue(value: JsonValue): string {
   return typeof value === 'string' ? value : renderJsonValue(value)
 }
 
-/** Safety cap for one binding result carried into the run's completion value. */
-const BINDING_VALUE_MAX_CHARS = 24_000
-
-/**
- * Depth-clamp one binding result so a huge tool payload (e.g. a 50 KB bash
- * stdout) cannot overflow the outer output ledger and surface as an opaque
- * abort. Strings beyond the cap truncate with an explicit marker; arrays and
- * objects clamp per-element/key recursively, preserving the JSON shape.
- */
-function clampBindingValue(value: JsonValue): JsonValue {
-  if (typeof value === 'string') {
-    return value.length > BINDING_VALUE_MAX_CHARS
-      ? value.slice(0, BINDING_VALUE_MAX_CHARS) + `…[truncated ${value.length - BINDING_VALUE_MAX_CHARS} of ${value.length} chars]`
-      : value
-  }
-  if (Array.isArray(value)) return value.map(clampBindingValue)
-  if (typeof value === 'object' && value !== null) {
-    const out: Record<string, JsonValue> = {}
-    for (const [k, v] of Object.entries(value)) out[k] = clampBindingValue(v)
-    return out
-  }
-  return value
-}
-
-/**
- * Compact outcome signature for a discard diagnostic: names the JSON kind and
- * a size measure (string length, array length, or object key count) so the
- * model can gauge what the discarded tool produced without dumping it.
- */
-function summarizeJsonValue(value: JsonValue): string {
-  if (typeof value === 'string') return `string ${value.length} chars`
-  if (Array.isArray(value)) return `array ${value.length} items`
-  if (typeof value === 'object' && value !== null) return `object ${Object.keys(value).length} keys`
-  return `${typeof value} ${JSON.stringify(value)}`
-}
-
 /** Canonical value returned by the outer Code Mode transport. */
 type RunCodeOutput = { logs: string[]; result?: JsonValue }
-
-/** Cap for the derived call label; long enough to identify, short enough for a header. */
-const DERIVED_TITLE_MAX_CHARS = 60
-
-/** Strip one leading line-comment or doc-comment marker with its trailing space. */
-function stripCommentMarker(line: string): string {
-  if (line.startsWith('//')) return line.slice(2).trimStart()
-  if (line.startsWith('/*')) return line.slice(2).replace(/^\*+/, '').trimStart()
-  return line
-}
-
-/**
- * Present-tense label for a call whose model omitted `description`: the first
- * meaningful program line (after a comment marker, if any), trimmed and capped.
- * Pure — replay of logged args reproduces it exactly.
- * @param code - the program body.
- * @returns a non-empty label.
- */
-export function deriveRunCodeTitle(code: string): string {
-  for (const rawLine of code.split('\n')) {
-    const line = rawLine.trim()
-    if (line.length === 0) continue
-    const stripped = stripCommentMarker(line)
-    return stripped.length > DERIVED_TITLE_MAX_CHARS
-      ? stripped.slice(0, DERIVED_TITLE_MAX_CHARS - 1) + '…'
-      : stripped
-  }
-  return '(empty program)'
-}
 
 /**
  * Registry-private capabilities the bridge receives at construction — the
@@ -408,12 +306,9 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
     description: TYPESCRIPT_FLAVOR.description,
     parameters: {
       code: { type: 'string', required: true, description: TYPESCRIPT_FLAVOR.codeDescription },
-      // Optional by design: a missing or blank description must never fail the
-      // call — presentCall derives a fallback label from the program instead.
-      // Models omit it under context pressure and a hard requirement turned
-      // that into a wasted round-trip ("missing required property").
       description: {
         type: 'string',
+        required: true,
         description: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION,
       },
     },
@@ -433,6 +328,9 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
       },
     },
     async execute(args, exec): Promise<RunCodeOutput> {
+      if (args.description.trim().length === 0) {
+        throw new Error('invalid description: expected a non-empty string')
+      }
       const runtime = requireRuntime()
 
       // The run-scoped abort: follows the outer signal in, and fires when the
@@ -597,7 +495,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
             // chain cannot reject).
             resolve(result.isError
               ? { isError: true, message: result.error.message }
-              : { isError: false, value: clampBindingValue(result.value) })
+              : { isError: false, value: result.value })
             const agent = exec.agent
             if (agent === undefined) return
             const task: Promise<void> = (async () => {
@@ -663,6 +561,12 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
               const result = parked.kind === 'post-result'
                 ? await scheduler.finalize(parked.exec, parked.result)
                 : scheduler.finish(parked.exec, parked.result)
+              if (!result.isError && result.content.some(block => block.type === 'image')) {
+                exec.deferContext(createUserMessage({
+                  content: result.content,
+                  source: { kind: 'plugin', plugin: 'tools-code-mode' },
+                }))
+              }
               for (const context of result.additionalContexts ?? []) {
                 exec.deferContext(context)
               }
@@ -686,15 +590,9 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
         })
         // A budget expiry or outer cancel that occurs while this call was in
         // flight already aborted the dispatch; stop the program now rather
-        // than hand it a result from a run that is over. The tool itself may
-        // have SUCCEEDED — surface its name, outcome kind, and (for object
-        // values) a size signature in the discard diagnostic, so the model
-        // can tell "the write actually landed" from "the tool failed".
+        // than hand it a result from a run that is over.
         if (runOver()) {
-          const done = outcome.isError
-            ? `errored: ${outcome.message.slice(0, 120)}`
-            : `succeeded (value ${summarizeJsonValue(outcome.value)})`
-          throw new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} already ${done} — its side effects stand; do NOT retry blindly, verify state first`)
+          throw new Error(`run_code run is over (${String(runController.signal.reason)}); ${name} result discarded`)
         }
         // The worker turns a binding rejection into ToolCallError and adds
         // only the binding name. Native content and internal error metadata
@@ -740,7 +638,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
 
         if (result.error) {
           const logsText = result.logs.length > 0 ? `\nCaptured output:\n${result.logs.join('\n')}` : ''
-          throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${errorMessage(result.error)}${logsText}`)
+          throw new CodeRunFailedError(`code run failed (${result.error.kind}): ${result.error.message}${logsText}`)
         }
         return {
           logs: result.logs,
@@ -752,15 +650,12 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
     },
     // The model-authored description is the call's always-visible UI label
     // (the bash `description` precedent); the program itself rides rawInput.
-    presentCall: (args) => {
-      const given = args.description?.trim()
-      return {
-        card: 'generic',
-        title: given !== undefined && given.length > 0 ? given : deriveRunCodeTitle(args.code),
-        kind: 'execute',
-        rawInput: args.code,
-      }
-    },
+    presentCall: args => ({
+      card: 'generic',
+      title: args.description,
+      kind: 'execute',
+      rawInput: args.code,
+    }),
     // Deliberately no presentResult: the generic card fallback keeps this
     // title and reads durable result content without duplicating a large raw
     // result into the host view payload.
@@ -779,7 +674,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
     // the emitted schema always matches the validated specification.
     get: () => parameterSchemaSpecToJsonSchema({
       code: { type: 'string', required: true, description: resolveFlavor(peekRuntime).codeDescription },
-      description: { type: 'string', description: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION },
+      description: { type: 'string', required: true, description: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION },
     }) as unknown as Record<string, unknown>,
   })
   return definition
