@@ -975,6 +975,29 @@ async function buildRows() {
 					placeErrStreak++;
 					if (placeErrStreak === 1 || placeErrStreak % 20 === 0) console.warn('[dshc-align] pass failed (' + placeErrStreak + '):', e && e.message ? e.message : e);
 				}
+				// post-load-fix：强制修复滚动空白 + 用量徽章可见性（内联样式绕过 CSS 缓存）
+				try {
+					const sb = document.querySelector('[class*="scrollBody"]');
+					if (sb) {
+						sb.style.justifyContent = 'flex-start';
+						for (const c of sb.children) {
+							if (c.style.marginTop === 'auto' || c.style.marginBottom === 'auto') { c.style.marginTop = '0'; c.style.marginBottom = '0'; }
+						}
+					}
+					const usg = document.querySelector('.usg_layer');
+					if (usg) {
+						usg.style.setProperty('background', '#1e2a4a', 'important');
+						usg.style.setProperty('border', '1px solid rgba(100,160,255,0.3)', 'important');
+						usg.style.setProperty('border-radius', '8px', 'important');
+						usg.style.setProperty('padding', '4px 8px', 'important');
+						usg.style.setProperty('max-width', '200px', 'important');
+						usg.style.setProperty('min-width', '140px', 'important');
+						usg.style.setProperty('overflow', 'hidden', 'important');
+						usg.style.setProperty('color', '#d0d8e8', 'important');
+						const ub = usg.querySelector('button');
+						if (ub) ub.style.setProperty('color', '#d0d8e8', 'important');
+					}
+				} catch { /* 瞬态 */ }
 			}, 1000);
 			const statsTimer = window.setInterval(() => void updateStatsTotals(), 60_000);
 			const ringsTimer = window.setInterval(() => { renderModelRings(); void refreshModelRings(); }, 30_000);
