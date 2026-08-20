@@ -470,8 +470,10 @@ async function buildRows() {
 			// the row sits directly above the input card — the queue dock and
 			// anything else in the input-dock stack stays above it (the queue
 			// registers as the terminal dock entry; we take that spot instead)
-			const card = document.querySelector('[data-dshc-wide="1"][class*="_card"]')
-				?? document.querySelector("textarea")?.closest('[class*="_card"]')
+			// 卡片查找：textarea 所在卡优先——data-dshc-wide 标记可能落在别的卡
+			// （如 goal 面板）上，钉错参照整条错位（2026-08-20 实测）
+			const card = document.querySelector("textarea")?.closest('[class*="_card"]')
+				?? document.querySelector('[data-dshc-wide="1"][class*="_card"]')
 				?? null;
 			const host = card?.parentElement ?? undefined;
 			if (host === undefined) return;
@@ -503,10 +505,8 @@ async function buildRows() {
 			{
 				const stackEl = document.querySelector('[class*="composerStack"]');
 				if (stackEl !== null) {
-					// 对齐参照 = 会话数据框（scrollBody 内的消息列），非输入卡：
-					// 实测输入卡每侧比消息列宽 16px（2026-08-19 用户指定）
-					const colEl = document.querySelector('[class*="scrollBody"] [class*="_column"]');
-					const cr0 = (colEl ?? card).getBoundingClientRect();
+					// 对齐参照 = 输入卡（2026-08-20 用户定稿：条与输入框左右边界对齐）
+					const cr0 = card.getBoundingClientRect();
 					const cardW = Math.round(cr0.width) + "px";
 					const items = [];
 					for (const w of stackEl.children) {
@@ -552,9 +552,8 @@ async function buildRows() {
 			// overflows the host's content box.
 			if (card !== null) {
 				// 与通用 pass / queue-dock 同一收敛式：按当前实测误差自校正到
-				// 会话数据框左缘（相对公式在行已有 margin 残留时双重偏移）。
-				const colEl = document.querySelector('[class*="scrollBody"] [class*="_column"]');
-				const cr = (colEl ?? card).getBoundingClientRect();
+				// 输入卡左缘（相对公式在行已有 margin 残留时双重偏移）。
+				const cr = card.getBoundingClientRect();
 				const w = Math.round(cr.width) + "px";
 				if (row.style.width !== w) row.style.width = w;
 				const rowCur = row.getBoundingClientRect();
@@ -951,7 +950,14 @@ async function buildRows() {
 			const timer = window.setInterval(() => void refreshWidget(), REFRESH_MS);
 			// 顶部 chips 定位依赖实时几何（toggleCluster/会话区右缘），mutation
 			// observer 只看 childList，纯位置变化不触发——1s 低频重算兜底。
-			const chipsTimer = window.setInterval(() => { try { placeGoalGitRow(); } catch { /* 布局中途的瞬态 */ } }, 1000);
+			let placeErrStreak = 0;
+			const chipsTimer = window.setInterval(() => {
+				try { placeGoalGitRow(); placeErrStreak = 0 } catch (e) {
+					/* 布局中途的瞬态常见，但持续性失败不能静默——首错详记、其后每 20 次摘要 */
+					placeErrStreak++;
+					if (placeErrStreak === 1 || placeErrStreak % 20 === 0) console.warn('[dshc-align] pass failed (' + placeErrStreak + '):', e && e.message ? e.message : e);
+				}
+			}, 1000);
 			const statsTimer = window.setInterval(() => void updateStatsTotals(), 60_000);
 			const ringsTimer = window.setInterval(() => { renderModelRings(); void refreshModelRings(); }, 30_000);
 
