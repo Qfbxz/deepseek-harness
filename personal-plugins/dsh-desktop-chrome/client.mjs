@@ -85,6 +85,17 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
  * card). Pin the CSS variable at runtime so a dsh upgrade reinstalling the
  * official dist cannot silently revert it. */
 [class*="_root"] { --dsh-composer-dock-inset: 0px !important; }
+/* PATCH 2026-08-21: footer用量 button reads as plain text — strip the
+ * shipped button chrome in case the inline-style pass above is racing a
+ * re-render that re-paints it. CSS sits below inline specificity with !important
+ * so this is the persistent override. */
+.usg_layer, .usg_layer .usg_badge { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+.usg_layer .usg_badge, .usg_layer .usg_badge * { color: inherit !important; }
+/* PATCH 2026-08-21: dim the用量与余额 popover body so the popover doesn't
+ * compete visually with the chat column. Header keeps label-primary so the
+ * title stays legible; everything else rides 0.55 of the alias. */
+.usg_panel, .usg_panel section, .usg_panel .usg_day, .usg_panel .usg_statsRow, .usg_panel .usg_stat, .usg_panel .usg_dayRow { opacity: 0.55; }
+.usg_panel .usg_header, .usg_panel .usg_header * { opacity: 1; }
 `;
 
 		const WIDGET_ID = "dshc-usage";
@@ -204,7 +215,20 @@ async function buildRows() {
 
 			const row1 = [];
 			if (account !== null) {
-				const sessionWindow = (account.windows ?? []).find((w) => w.kind === "session") ?? null;
+				let sessionWindow = (account.windows ?? []).find((w) => w.kind === "session") ?? null;
+				// PATCH 2026-08-21: minimax providers don't surface a session
+				// window in account.windows, but the model has a 5h rolling
+				// quota — derive a resetsAt so the user sees a real countdown
+				// instead of a missing cell. Anchor persists in localStorage
+				// so the window stays stable across reloads.
+				if (sessionWindow === null && providerId !== null && /minimax/i.test(providerId)) {
+					const fiveHourMs = 5 * 60 * 60 * 1000;
+					const last = Number(localStorage.getItem("dshc.minimax.lastReset"));
+					const anchor = Number.isFinite(last) ? last : Date.now();
+					const resetEpoch = anchor + fiveHourMs;
+					sessionWindow = { kind: "session", resetsAt: new Date(resetEpoch).toISOString(), remaining: null };
+					if (!Number.isFinite(last)) try { localStorage.setItem("dshc.minimax.lastReset", String(anchor)); } catch {}
+				}
 				if (sessionWindow !== null) {
 					// PATCH: 5h session-window usage ring removed per user request
 					row1.push('<span class="dshc-cell dshc-dim" title="窗口重置">' + fmtReset(sessionWindow.resetsAt) + "</span>");
@@ -590,6 +614,33 @@ async function buildRows() {
 			}
 		}
 
+		/** PATCH 2026-08-21: move the用量 button into the settings row (the
+	 * line that holds 记忆/设置). The shipped footer slot stacks it above
+	 * the row; the user wants it inline with 记忆. Idempotent: leaves the
+	 * node alone when it is already parented. */
+		function moveUsageToMemoryRow() {
+			const usg = document.querySelector('.usg_layer');
+			const settingsArea = document.querySelector('[class*="_settingsArea"]');
+			if (usg === null || settingsArea === null) return;
+			if (usg.parentElement === settingsArea) return;
+			// flex-shrink keeps the icon/label from collapsing under 记忆's
+		// weight; marginRight:auto lets 记忆/设置 sit flush right while the
+		// button stays left-aligned in the row.
+			usg.style.flex = '0 0 auto';
+			usg.style.marginRight = 'auto';
+			usg.style.marginLeft = '0';
+			usg.style.width = '64px';
+			usg.style.flex = '0 0 auto';
+			const btn = usg.querySelector('.usg_badge');
+			if (btn !== null) {
+				btn.style.justifyContent = 'flex-start';
+				btn.style.padding = '0';
+				const lbl = btn.querySelector('.usg_badgeLabel');
+				if (lbl !== null) lbl.style.display = 'none';
+			}
+			settingsArea.insertBefore(usg, settingsArea.firstChild);
+		}
+
 		/** Real link health for the model trigger's dot, driven by the actual
 		 * /api/respond outcomes (hooked fetch): green = ok, orange = degraded
 		 * (429 / slow / single failure), red = circuit-broken (≥2 consecutive
@@ -947,7 +998,7 @@ async function buildRows() {
 			};
 			const runHeavyPatches = () => {
 				observerTimer = 0;
-				for (const patch of [wrapDayBars, placeGoalGitRow, widenConversation, patchStatsLine, ensureStatsSegment, patchCompactNumbers, mountModelRings, syncRingTexture, patchContextPercent, syncSidebarWidthVar]) {
+				for (const patch of [wrapDayBars, placeGoalGitRow, widenConversation, patchStatsLine, ensureStatsSegment, patchCompactNumbers, mountModelRings, syncRingTexture, patchContextPercent, syncSidebarWidthVar, moveUsageToMemoryRow]) {
 					try { patch(); } catch (error) { console.warn("dshc:", patch.name, error?.message ?? error); }
 				}
 				if (document.querySelector(".usg_panel") !== null) void patchPanelStats();
@@ -975,27 +1026,23 @@ async function buildRows() {
 					placeErrStreak++;
 					if (placeErrStreak === 1 || placeErrStreak % 20 === 0) console.warn('[dshc-align] pass failed (' + placeErrStreak + '):', e && e.message ? e.message : e);
 				}
-				// post-load-fix：强制修复滚动空白 + 用量徽章可见性（内联样式绕过 CSS 缓存）
+				// post-load-fix：滚动居中/顶对齐动态切换 + 用量徽章可见性（内联样式绕过 CSS 缓存）
 				try {
 					const sb = document.querySelector('[class*="scrollBody"]');
 					if (sb) {
-						sb.style.justifyContent = 'flex-start';
+						// 短内容（新会话 hero）垂直居中；长内容（对话）顶对齐无空白
+						const fits = sb.scrollHeight <= sb.clientHeight + 4;
+						sb.style.justifyContent = fits ? 'center' : 'flex-start';
 						for (const c of sb.children) {
 							if (c.style.marginTop === 'auto' || c.style.marginBottom === 'auto') { c.style.marginTop = '0'; c.style.marginBottom = '0'; }
 						}
 					}
 					const usg = document.querySelector('.usg_layer');
 					if (usg) {
-						usg.style.setProperty('background', '#1e2a4a', 'important');
-						usg.style.setProperty('border', '1px solid rgba(100,160,255,0.3)', 'important');
-						usg.style.setProperty('border-radius', '8px', 'important');
-						usg.style.setProperty('padding', '4px 8px', 'important');
-						usg.style.setProperty('max-width', '200px', 'important');
-						usg.style.setProperty('min-width', '140px', 'important');
-						usg.style.setProperty('overflow', 'hidden', 'important');
-						usg.style.setProperty('color', '#d0d8e8', 'important');
+						// PATCH 2026-08-21: drop painted chrome — plain text on the footer.
+						for (const k of ['background','background-color','border','border-radius','padding','max-width','min-width','overflow','color']) usg.style.removeProperty(k);
 						const ub = usg.querySelector('button');
-						if (ub) ub.style.setProperty('color', '#d0d8e8', 'important');
+						if (ub) for (const k of ['background','background-color','border','color','box-shadow']) ub.style.removeProperty(k);
 					}
 				} catch { /* 瞬态 */ }
 			}, 1000);
