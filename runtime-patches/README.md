@@ -314,3 +314,13 @@ node runtime-patches/replay-launcher-power-top.mjs
 ```
 
 watchdog 条目 `p25-launcher-power-top`（marker=`patch(power-top)`，bad=原 bottom 定位）。
+
+## 补丁 30：scrollBody 垂直居中空白修复（@deepseek-ai/dsh-client-ui-conversation）
+
+官方包：`scrollBody` 的 `justify-content:center` 在内容溢出时产生对称溢出——顶部溢出不可达（滚动起点为 0），底部出现等量空白（滚到底后大片空白）。改为 `flex-start` + 子元素 `margin:auto 0`：短内容仍垂直居中，长内容无空白。
+
+```sh
+node runtime-patches/replay-scrollbody-center-fix.mjs
+```
+
+watchdog 条目 `p30-scrollbody-center`（marker=`patch(center-fix)`，bad=原 justify-content:center 行）。
