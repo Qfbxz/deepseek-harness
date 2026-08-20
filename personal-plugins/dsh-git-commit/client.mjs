@@ -16,10 +16,10 @@ window.__ModuleLoader__.load({
     var PANEL_ID = "dsh-git-commit-panel";
 
     var CSS = [
-      "#" + CHIP_ID + "{display:inline-flex;align-items:center;gap:4px;min-height:28px;padding:0 8px;line-height:20px;border:1px solid var(--dsw-alias-border-l2, rgba(168,200,232,0.18));border-radius:16px;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--dsw-alias-label-secondary, #a5b3da);flex:0 0 auto;transition:background-color .12s,border-color .12s,color .12s}",
+      "#" + CHIP_ID + "{display:inline-flex;align-items:center;gap:4px;min-height:28px;padding:0 8px;line-height:20px;border:0;border-radius:16px;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--dsw-alias-label-primary, inherit);flex:0 0 auto;transition:background-color .12s,color .12s}",
       "#" + CHIP_ID + ":hover{background:var(--dsw-alias-interactive-bg-hover, transparent)}",
       "#" + CHIP_ID + ":active{background:var(--dsw-alias-interactive-bg-active, transparent)}",
-      "#" + CHIP_ID + ".dirty{color:var(--dsw-alias-label-primary, inherit);border-color:var(--dsw-alias-brand-primary, #4c8dff)}",
+      "#" + CHIP_ID + ".dirty{color:var(--dsw-alias-brand-primary, #4c8dff)}",
       "." + P + "Num{font-weight:600}",
       "." + P + "Clean{opacity:.7}",
       "#" + PANEL_ID + "{position:fixed;z-index:60;width:380px;box-sizing:border-box;display:none;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--dsw-alias-border-l2, rgba(168,200,232,0.18));border-radius:12px;background:var(--dsw-alias-bg-layer-2, #16233f);box-shadow:0 12px 32px rgba(0,0,0,.35);font:inherit}",
@@ -183,10 +183,25 @@ window.__ModuleLoader__.load({
       }
     }
 
+    // patch(subagent-guard): 子代理页面不显示提交按钮（子代理不提交）。
+    // 检测：会话层级导航存在多个 crumb（父/子层级，用“/”分隔）→ 子代理页面。
+    function isSubagentPage() {
+      // 子代理页面：会话层级导航存在多于 1 个 crumb（父/子层级，用“/”分隔）。
+      // 普通页面只有当前会话 1 个 crumb，无分隔符。
+      var nav = document.querySelector('nav[aria-label="会话层级"]');
+      if (nav === null) return false;
+      return nav.querySelectorAll('[class*="crumbSep"]').length > 0;
+    }
     function placeChip() {
       // chip 只需存在（挂在 body）；定位由 dsh-desktop-chrome 统一负责：
       // position:fixed 钉在分支 chip 左边、与 tab 栏水平对齐。
-      if (document.getElementById(CHIP_ID) === null) {
+      // 子代理页面不显示提交按钮（子代理不提交）。
+      var existing = document.getElementById(CHIP_ID);
+      if (isSubagentPage()) {
+        if (existing !== null) existing.remove();
+        return;
+      }
+      if (existing === null) {
         document.body.appendChild(buildChip());
       }
     }
