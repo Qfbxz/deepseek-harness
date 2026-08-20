@@ -60,7 +60,7 @@ window.__ModuleLoader__.load({
         var leftPx = Math.round(qML + (cr.left - qcur.left)) + "px";
         if (qdock.style.width !== w) qdock.style.width = w;
         if (qdock.style.maxWidth !== "none") qdock.style.maxWidth = "none";
-        if (qdock.style.margin !== "0 0 8px") qdock.style.margin = "0 0 8px";
+        if (qdock.style.margin !== "0 0 0px") qdock.style.margin = "0 0 0px";
         if (qdock.style.marginLeft !== leftPx) qdock.style.marginLeft = leftPx;
         if (qdock.style.flex !== "0 0 auto") qdock.style.flex = "0 0 auto";
       }

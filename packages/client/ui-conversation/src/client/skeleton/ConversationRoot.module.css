@@ -22,7 +22,10 @@
   --dsh-chat-content-width: 748px;
   --dsh-composer-card-max-width: calc(var(--dsh-chat-content-width) + 32px);
   --dsh-composer-side-clearance: 16px;
-  --dsh-composer-dock-inset: 8px;
+  /* 2026-08-20: dock bars align flush with the input card edges (user
+     decision); the 8px per-side inset is removed. All dock consumers
+     (goal/queue/todo/history) share this variable and realign together. */
+  --dsh-composer-dock-inset: 0px;
 }
 
 .header {
