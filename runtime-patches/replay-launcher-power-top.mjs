@@ -14,11 +14,13 @@ const CANDIDATES = [
 const target = process.argv[2] ?? CANDIDATES.find(p => { try { readFileSync(p); return true } catch { return false } })
 if (!target) { console.error('usage: replay-launcher-power-top.mjs <client.js>'); process.exit(1) }
 let s = readFileSync(target, 'utf8')
-if (s.includes('patch(power-top)')) { console.log('[skip] already patched:', target); process.exit(0) }
-const OLD = 'position:fixed;bottom:24px;right:24px}'
-const NEW = 'position:fixed;/*patch(power-top)*/top:24px;right:24px}'
-if (!s.includes(OLD)) throw new Error('power button position anchor missing — plugin restructured, review manually')
-s = s.replace(OLD, NEW)
+const OLD_ORIG = 'position:fixed;bottom:24px;right:24px}'
+const OLD_V1 = 'position:fixed;/*patch(power-top)*/top:24px;right:24px}'
+const NEW = 'position:fixed;/*patch(power-top)*/top:24px;right:76px}'
+if (s.includes(NEW)) { console.log('[skip] already patched:', target); process.exit(0) }
+if (s.includes(OLD_V1)) s = s.replace(OLD_V1, NEW)
+else if (s.includes(OLD_ORIG)) s = s.replace(OLD_ORIG, NEW)
+else throw new Error('power button position anchor missing — plugin restructured, review manually')
 writeFileSync(target, s)
 execFileSync(process.execPath, ['--check', target], { stdio: 'pipe' })
 console.log('[patched]', target)
