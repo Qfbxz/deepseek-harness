@@ -16,7 +16,7 @@ const target = process.argv[2] ?? CANDIDATES.find(p => { try { readFileSync(p); 
 if (!target) { console.error('usage: replay-worker-abort-object-message.mjs <worker.cjs>'); process.exit(1) }
 let s = readFileSync(target, 'utf8')
 if (s.includes('abort-[object Object] fix')) { console.log('[skip] already patched:', target); process.exit(0) }
-const OLD = '\t\t} else {\n\t\t\tentry.reject(new CapturedError(message.message));\n\t\t}'
+const OLD = '\t\t} else entry.reject(new CapturedError(message.message));'
 const NEW = [
   '\t\t} else {',
   '\t\t\t/* PATCH 2026-08-20 abort-[object Object] fix: host error replies may carry a',
