@@ -416,10 +416,13 @@
 }
 
 /* Rail: icons only, strictly centered — labels and the wide-mode group
-   margins (auto/offsets) must not leak into the column. */
+   margins (auto/offsets) must not leak into the column. The desktop-chrome
+   align pass writes inline marginLeft that overrides CSS !important;
+   contain neutralizes it with a matching inline reset via :where(). */
 .collapsed .footerActions {
   flex-direction: column;
   align-items: center;
+  margin-right: 0 !important;
 }
 
 .collapsed .footerActions button span {
@@ -431,6 +434,8 @@
   margin-left: 0 !important;
   margin-right: 0 !important;
   order: 0 !important;
+  translate: 0 0 !important;
+  inset: auto !important;
 }
 
 .collapsed .footerActions div {
