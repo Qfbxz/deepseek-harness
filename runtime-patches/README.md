@@ -283,6 +283,16 @@ node runtime-patches/replay-agency-list-experts-shape.mjs
 
 watchdog 条目 `p22-list-experts-shape`（marker=`patch(list-experts-shape)`，bad=原描述结尾句）。
 
+## 补丁 24：auto-continue 在飞工具守卫（dsh-client-auto-continue）
+
+第三方包：`fire()` 只查会话列表 `running` 标志——该标志在步骤边界滞后/闪烁时误判空闲，"继续"以 queue 模式入队后，宿主为接纳消息中止在飞工具调用，冒出 `aborted: {"kind":"user"}`（长工具调用频繁被打断的根因）。插件自身已在 mux 帧跟踪 `lastToolResult === "pending"`，发前补一道守卫。
+
+```sh
+node runtime-patches/replay-auto-continue-inflight-guard.mjs
+```
+
+watchdog 条目 `p24-auto-continue-inflight`（marker=`patch(inflight-guard)`，bad=原排队检查块）。
+
 ## 快照清单（backups/）
 
 | 文件 | 来源 | 时间 |
