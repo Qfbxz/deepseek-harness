@@ -79,6 +79,12 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 
 /* user prefs: bigger health dot, tightened composer spacing */
 #dshc-health-dot { width: 10px !important; height: 10px !important; }
+
+/* upgrade-proof dock alignment (2026-08-20): the shipped 8px inset is a
+ * design default the user overrode to 0 (dock bars flush with the input
+ * card). Pin the CSS variable at runtime so a dsh upgrade reinstalling the
+ * official dist cannot silently revert it. */
+[class*="_root"] { --dsh-composer-dock-inset: 0px !important; }
 `;
 
 		const WIDGET_ID = "dshc-usage";
@@ -504,6 +510,8 @@ async function buildRows() {
 			// 自身；queue-dock 插件对排队条做同样的钉死，写入值一致互不冲突。
 			{
 				const stackEl = document.querySelector('[class*="composerStack"]');
+				// unified 2px rhythm (2026-08-20): stack gap pinned
+				if (stackEl !== null && stackEl.style.gap !== "2px") stackEl.style.gap = "2px";
 				if (stackEl !== null) {
 					// 对齐参照 = 输入卡（2026-08-20 用户定稿：条与输入框左右边界对齐）
 					const cr0 = card.getBoundingClientRect();
@@ -518,7 +526,13 @@ async function buildRows() {
 					}
 					for (const it of items) {
 						if (it === host || it === row) continue;
-						if (it.getBoundingClientRect().height <= 0) continue;
+						// zero-height entries still consume a composerStack gap slot before
+						// the card; negative margins cancel both surrounding gaps extra
+						if (it.getBoundingClientRect().height <= 0) {
+							if (it.style.marginTop !== "-2px") it.style.marginTop = "-2px";
+							if (it.style.marginBottom !== "-2px") it.style.marginBottom = "-2px";
+							continue;
+						}
 						const isGoal = it.hasAttribute("data-goal-bar") || it.querySelector("[data-goal-bar]") !== null;
 						// 条目可能再包一层非 contents 的 DIV（如 agent-teams 的
 						// OB_P1q_root），宽度限制在内层——宽度下探一层；左缘只钉
@@ -538,8 +552,12 @@ async function buildRows() {
 								const ml = Math.round(curML + (cr0.left - cur.left)) + "px";
 								if (t.style.marginLeft !== ml) t.style.marginLeft = ml;
 								if (t.style.marginRight !== "0px") t.style.marginRight = "0px";
+							// 条目下间距统一 4px（排序间距目标，2026-08-20）
+							if (t.style.marginBottom !== "0px") t.style.marginBottom = "0px";
 							} else {
 								if (t.style.marginLeft !== "0px") t.style.marginLeft = "0px";
+								// pin inner to card width so the colored bg edges match the card
+								if (t.style.width !== cardW) t.style.width = cardW;
 								if (t.style.marginRight !== "0px") t.style.marginRight = "0px";
 							}
 						}
@@ -559,12 +577,12 @@ async function buildRows() {
 				const rowCur = row.getBoundingClientRect();
 				const rowML = parseFloat(getComputedStyle(row).marginLeft) || 0;
 				const ml = Math.round(rowML + (cr.left - rowCur.left)) + "px";
-				if (row.style.marginBottom !== "4px") row.style.marginBottom = "4px";
+				if (row.style.marginBottom !== "0px") row.style.marginBottom = "0px";
 				if (row.style.marginLeft !== ml) row.style.marginLeft = ml;
 				// breathing room under the queue dock when one is open above
 				// (no gap when the row is the composer's first element)
 				const prev = row.previousElementSibling;
-				const top = prev !== null ? "14px" : "0px";
+				const top = prev !== null ? "4px" : "0px";
 				if (row.style.marginTop !== top) row.style.marginTop = top;
 				// 排队条几何由 dsh-queue-dock 插件独占钉死（左缘差值+宽度
 				// 双钉死，margin 0 0 8px）；此处不再写入，避免第三个写入者
