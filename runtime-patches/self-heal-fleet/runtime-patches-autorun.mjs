@@ -43,6 +43,7 @@ export function apply(ctx) {
       ['replay-agency-own-roster.mjs', []],
       ['replay-worker-abort-object-message.mjs', []],
       ['replay-agency-list-experts-shape.mjs', []],
+      ['replay-git-commit-subagent-guard.mjs', ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-git-commit/client.mjs']],
     ]
     let patched = 0, clean = 0; const failed = []
     for (const [script, args] of jobs) {

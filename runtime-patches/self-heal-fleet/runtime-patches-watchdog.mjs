@@ -94,6 +94,8 @@ export function apply(ctx, config) {
       // division keys, so models stop guessing r.experts (TypeError) and the
       // builtin engineering division (all disabled).
       { id: 'p22-list-experts-shape', file: join(homedir(), '.dsh/profiles/web/node_modules/@michengai/dsh-agency-agents/lib/index.js'), marker: 'patch(list-experts-shape)', bad: 'Call this before summon_expert when you need an exact expert slug."', script: 'replay-agency-list-experts-shape.mjs', extra: [] },
+      // p24: dsh-git-commit 提交 chip 不应显示在子代理页面（子代理不提交）。
+      { id: 'p24-git-commit-subagent-guard', file: '/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-git-commit/client.mjs', marker: 'patch(subagent-guard)', bad: '      if (document.getElementById(CHIP_ID) === null) {\n        document.body.appendChild(buildChip());\n      }', script: 'replay-git-commit-subagent-guard.mjs', extra: [] },
     ];
     // State-aware logging: an anchor-mismatch failure after an upstream
     // restructure repeats every patrol; log the first failure in detail and
