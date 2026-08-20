@@ -17,9 +17,11 @@ let s = readFileSync(target, 'utf8')
 const OLD_ORIG = 'position:fixed;bottom:24px;right:24px}'
 const OLD_V1 = 'position:fixed;/*patch(power-top)*/top:24px;right:24px}'
 const OLD_V2 = 'position:fixed;/*patch(power-top)*/top:24px;right:76px}'
+const OLD_V3 = 'position:fixed;/*patch(power-top)*/top:34px;right:76px}'
 const NEW = 'position:fixed;/*patch(power-top)*/display:none;top:34px;right:76px}'
 if (s.includes(NEW)) { console.log('[skip] already patched:', target); process.exit(0) }
-if (s.includes(OLD_V2)) s = s.replace(OLD_V2, NEW)
+if (s.includes(OLD_V3)) s = s.replace(OLD_V3, NEW)
+else if (s.includes(OLD_V2)) s = s.replace(OLD_V2, NEW)
 else if (s.includes(OLD_V1)) s = s.replace(OLD_V1, NEW)
 else if (s.includes(OLD_ORIG)) s = s.replace(OLD_ORIG, NEW)
 else throw new Error('power button position anchor missing — plugin restructured, review manually')
