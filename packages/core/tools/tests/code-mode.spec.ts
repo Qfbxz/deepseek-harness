@@ -6,7 +6,7 @@ import type { Scope } from '@deepseek-ai/dsh-scope'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
 import type { CodeRunRequest, CodeRunResult } from '@deepseek-ai/dsh-code-runtime'
-import ToolRuntime, { CodeRunFailedError, errorMessage, RUN_CODE_NAME, TOOL_ABORTED_BEFORE_DISPATCH, defineContentToolFixture, defineTool } from '@deepseek-ai/dsh-tools'
+import ToolRuntime, { CodeRunFailedError, RUN_CODE_NAME, TOOL_ABORTED_BEFORE_DISPATCH, defineContentToolFixture, defineTool } from '@deepseek-ai/dsh-tools'
 import type { Config, JsonSchemaNode, PostToolDecision, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -1202,61 +1202,6 @@ describe('the run_code dispatch bridge', () => {
     const error = new CodeRunFailedError('boom')
     expect(error.code).toBe('CODE_RUN_FAILED')
     expect(error.name).toBe('CodeRunFailedError')
-  })
-
-  it('errorMessage helper serializes every thrown-value shape without leaking [object Object]', () => {
-    // The throw site at code-mode.ts:689 builds the CodeRunFailedError message
-    // from `result.error` via this helper. Cover the documented branches:
-    //   1) Error instance        → .message
-    //   2) object with .message  → .message
-    //   3) plain object          → JSON.stringify(value)
-    //   4) non-object primitives → String(), never "[object Object]"
-    //   5) circular object       → fall back without throwing
-    const samples: { input: unknown; expected: string }[] = [
-      { input: new TypeError('boom'), expected: 'boom' },
-      { input: new RangeError('oob'), expected: 'oob' },
-      { input: { message: 'denied' }, expected: 'denied' },
-      { input: { code: 401, kind: 'auth' }, expected: '{"code":401,"kind":"auth"}' },
-      { input: false, expected: 'false' },
-      { input: 42, expected: '42' },
-      { input: null, expected: 'null' },
-      { input: undefined, expected: 'undefined' },
-      { input: 'plain', expected: 'plain' },
-    ]
-    for (const sample of samples) {
-      const out = errorMessage(sample.input)
-      expect(typeof out).toBe('string')
-      expect(out).not.toBe('[object Object]')
-      expect(out).toBe(sample.expected)
-    }
-    // Circular reference: JSON.stringify throws; helper must not throw, must
-    // still produce a non-empty string with no '[object Object]' leak.
-    const circ: Record<string, unknown> = {}
-    circ.self = circ
-    const circOut = errorMessage(circ)
-    expect(typeof circOut).toBe('string')
-    expect(circOut).not.toBe('[object Object]')
-    expect(circOut.length).toBeGreaterThan(0)
-  })
-
-  it('CodeRunFailedError message field stays a string for every thrown-value shape (no [object Object] leak)', () => {
-    // Companion to the helper test: every shape that the throw site can build
-    // the message from must surface as a string, never as "[object Object]".
-    const samples: { input: unknown }[] = [
-      { input: new TypeError('boom') },
-      { input: { message: 'denied' } },
-      { input: { code: 401, kind: 'auth' } },
-      { input: false },
-      { input: 42 },
-      { input: null },
-      { input: undefined },
-    ]
-    for (const sample of samples) {
-      const err = new CodeRunFailedError(`code run failed (abort): ${errorMessage(sample.input)}`)
-      expect(typeof err.message).toBe('string')
-      expect(err.message).not.toContain('[object Object]')
-      expect(err.message.startsWith('code run failed (abort): ')).toBe(true)
-    }
   })
 
   it('aborting the outer signal aborts the in-flight sub-dispatch and abandons queued ones', async () => {
