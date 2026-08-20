@@ -316,10 +316,11 @@
    .usg_layer defaults to full width, wrapping everything else below. */
 .settingsArea :global(.usg_layer) {
   flex: 0 1 auto;
-  max-width: 180px;
+  max-width: 200px;
   min-width: 0;
   overflow: hidden;
-  background: var(--dsw-alias-fill-l2, rgba(0,0,0,0.12));
+  background: var(--dsw-alias-bg-layer-2, rgba(20,20,25,0.85));
+  border: 1px solid var(--dsw-alias-border-l2, rgba(255,255,255,0.1));
   border-radius: 8px;
   padding: 4px 8px;
 }
