@@ -52,10 +52,8 @@ window.__ModuleLoader__.load({
         // patch(hard-align): 独立行与会话数据框逐像素对齐——收敛式：按当前实测
         // 误差自校正（相对公式在条已有 margin 残留/自身定位时双重偏移出屏）
         if (qdock.parentElement !== host || qdock.nextElementSibling !== row) host.insertBefore(qdock, row);
-        // 对齐参照 = 会话数据框（scrollBody 内的消息列），非输入卡
-        // （2026-08-19 用户指定：条与消息内容左右边界对齐）
-        var col = document.querySelector('[class*="scrollBody"] [class*="_column"]');
-        var cr = (col !== null ? col : card).getBoundingClientRect();
+        // 对齐参照 = 输入卡（2026-08-20 用户定稿：条与输入框左右边界对齐）
+        var cr = card.getBoundingClientRect();
         var w = Math.round(cr.width) + "px";
         var qcur = qdock.getBoundingClientRect();
         var qML = parseFloat(getComputedStyle(qdock).marginLeft) || 0;
