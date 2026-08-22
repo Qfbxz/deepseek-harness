@@ -370,27 +370,38 @@ window.__ModuleLoader__.load({
         if (dir === null) { setResult("未找到当前会话的仓库目录", false); return; }
         setBusy(true);
         setResult("执行中…");
-        var steps = [];
+        // PATCH 2026-08-22(d): commit→push 串行。原实现两 fetch 并发(Promise.all),
+        // 「提交并推送」时 push 可能抢在 commit 落盘前到达 host,git push 推的
+        // 还是旧 HEAD(Everything up-to-date, exit 0)→ {ok:true} → 面板显示
+        // 「已推送」但远端零推进(2026-08-22 98c32ee0dc 事故:三 remote 停留旧
+        // HEAD,reflog 无 push 记录)。串行后 push 必然看到新 commit;commit
+        // 失败则 push 不发出。
+        var msgEl = document.getElementById(PANEL_ID + "-msg");
+        var msgs = [];
+        var chain = Promise.resolve();
         if (action === "commit" || action === "commit-push") {
-          var msgEl = document.getElementById(PANEL_ID + "-msg");
-          steps.push(fetch("/api/dsh-git-commit/commit", {
-            method: "POST", headers: { "content-type": "application/json" },
-            body: JSON.stringify({ cwd: dir, message: msgEl ? msgEl.value : "", includeUnstaged: includeUnstaged, targetBranch: (document.getElementById(PANEL_ID + "-branch") || {}).value || "" })
-          }).then(function (r) { return r.json(); }).then(function (b) {
-            if (!b.ok) throw new Error(b.error || "commit failed");
-            return (b.switched || "") + "已提交 " + b.commit + "（" + b.message.slice(0, 40) + "）";
-          }));
+          chain = chain.then(function () {
+            return fetch("/api/dsh-git-commit/commit", {
+              method: "POST", headers: { "content-type": "application/json" },
+              body: JSON.stringify({ cwd: dir, message: msgEl ? msgEl.value : "", includeUnstaged: includeUnstaged, targetBranch: (document.getElementById(PANEL_ID + "-branch") || {}).value || "" })
+            }).then(function (r) { return r.json(); }).then(function (b) {
+              if (!b.ok) throw new Error(b.error || "commit failed");
+              msgs.push((b.switched || "") + "已提交 " + b.commit + "（" + b.message.slice(0, 40) + "）");
+            });
+          });
         }
         if (action === "push" || action === "commit-push") {
-          steps.push(fetch("/api/dsh-git-commit/push", {
-            method: "POST", headers: { "content-type": "application/json" },
-            body: JSON.stringify({ cwd: dir })
-          }).then(function (r) { return r.json(); }).then(function (b) {
-            if (!b.ok) throw new Error(b.error || "push failed");
-            return "已推送";
-          }));
+          chain = chain.then(function () {
+            return fetch("/api/dsh-git-commit/push", {
+              method: "POST", headers: { "content-type": "application/json" },
+              body: JSON.stringify({ cwd: dir })
+            }).then(function (r) { return r.json(); }).then(function (b) {
+              if (!b.ok) throw new Error(b.error || "push failed");
+              msgs.push("已推送");
+            });
+          });
         }
-        return Promise.all(steps).then(function (msgs) {
+        return chain.then(function () {
           setResult(msgs.join(" · "), true);
           if (msgEl) msgEl.value = "";
           return fetchStatus();
