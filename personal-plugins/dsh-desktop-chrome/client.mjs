@@ -1079,6 +1079,35 @@ async function buildRows() {
 			} catch {}
 
 			hookRespondFetch();
+		// PATCH 2026-08-22: sidebar 用量 widget 必须跟随当前会话/provider 及时刷新。
+		// 原实现只通过 DOM MutationObserver 间接感知 model 切换——切到
+		// 不同 provider 但同 model 时,model button 的 aria-label 不变,
+		// 仪表盘就一直显示上一个 provider 的旧数据。订阅 sessions store
+		// 让 current 会话一改就强制重算,并清空 lastModel 让 ring 渲染兜底。
+		let lastSessionId = null;
+		try {
+			var sessionsList = ctx.sessions && ctx.sessions.list;
+			if (sessionsList && typeof sessionsList.subscribe === "function") {
+				var syncSession = function () {
+					try {
+						var st = sessionsList.getSnapshot();
+						var id = st && st.current;
+						if (id !== lastSessionId) {
+							lastSessionId = id;
+							// 强制下一轮 runHeavyPatches 把 model 名字重新解析;
+							// current model 也可能跟着换(切换 provider 重建新会话)
+							lastModel = null;
+							modelRingsAt = 0;
+							void refreshWidget();
+							void refreshModelRings();
+						}
+					} catch { /* sessions store 不可用时退化到 DOM 观察 */ }
+				};
+				sessionsList.subscribe(syncSession);
+				syncSession();
+			}
+		} catch { /* ctx.sessions 未注入,忽略(向后兼容旧装机) */ }
+
 			const style = document.createElement("style");
 			style.textContent = STYLE_TEXT;
 			document.head.appendChild(style);
