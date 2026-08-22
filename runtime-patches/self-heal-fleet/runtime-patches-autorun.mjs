@@ -47,6 +47,7 @@ export function apply(ctx) {
       ['replay-desktop-chrome-fixed-v.mjs', ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-desktop-chrome/client.mjs']],
       ['replay-git-graph-body-portal.mjs', [join(homedir(), '.dsh/profiles/web/node_modules/@linxin666/dsh-client-ui-git-graph/lib/client.js')]],
       ['replay-model-select-mode-filter.mjs', [join(homedir(), '.dsh', 'profiles/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/client.js')]],
+      ['replay-subagent-driver-agents-access.mjs', [join(execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim(), '@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-subagent-in-process-driver/lib/index.js'), join(homedir(), '.dsh/profiles/node_modules/@deepseek-ai/dsh-subagent-in-process-driver/lib/index.js')]],
     ]
     let patched = 0, clean = 0; const failed = []
     for (const [script, args] of jobs) {
