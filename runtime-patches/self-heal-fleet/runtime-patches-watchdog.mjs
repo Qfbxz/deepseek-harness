@@ -104,6 +104,7 @@ export function apply(ctx, config) {
       // p36: git-graph 分支 chip 经 createPortal 挂 body——composer seat 的
       // backdrop-filter 曾把 fixed 钉位困成 composer 相对坐标（弹层落屏幕中部）。
       { id: 'p36-gitgraph-body-portal', file: join(homedir(), '.dsh/profiles/web/node_modules/@linxin666/dsh-client-ui-git-graph/lib/client.js'), marker: 'patch(body-portal)', bad: 'react_jsx_runtime.jsxs)("div", {\n\t\t\t\tref: anchorRef,', script: 'replay-git-graph-body-portal.mjs', extra: [] },
+      { id: 'p-mode-filter', file: join(homedir(), '.dsh/profiles/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/client.js'), marker: '/*patch(mode-filter)*/', bad: 's.groups = groups;', script: 'replay-model-select-mode-filter.mjs', extra: [] },
     ];
     // State-aware logging: an anchor-mismatch failure after an upstream
     // restructure repeats every patrol; log the first failure in detail and

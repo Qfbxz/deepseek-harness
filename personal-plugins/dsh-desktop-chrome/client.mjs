@@ -212,6 +212,19 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 		}
 
 
+		// PATCH 2026-08-22(e)-ref: apply() 的 sessions 订阅写这个模块级引用,供 fetchFrostfinStatus 读。
+		var dshcSessionId = null;
+
+		// PATCH 2026-08-22(e): frostfin(kimi)会话的用量 = Kimi Coding 订阅配额(5h/周/月),
+		// 复用 frostfin /status 的 balance 字段(60s 缓存,官方 /coding/v1/usages 源)。
+		// ACP 不提供 per-request token 拆分,配额制是 kimi 通道唯一准确的计量形态。
+		async function fetchFrostfinStatus() {
+			try {
+				const st = await fetchJson('/plugins/frostfin/status?sessionId=' + encodeURIComponent(dshcSessionId ?? ''));
+				return st && st.driven === true ? st : null;
+			} catch { return null; }
+		}
+
 // PATCH: today tokens from usage-pro (event-captured, accurate); legacy fallback.
 async function fetchProTodayTokens() {
   try {
@@ -225,6 +238,22 @@ async function fetchProTodayTokens() {
 }
 
 async function buildRows() {
+			// PATCH 2026-08-22(e): frostfin 会话 —— 徽章直接显示 kimi 配额窗口,不走 token 账本。
+			// 字段对齐 frostfin parseKimiUsage: {id:'fiveHour'|'week'|'month', percent, limit, remaining?, resetsAt?}。
+			const frostfin = await fetchFrostfinStatus();
+			if (frostfin !== null && Array.isArray(frostfin.balance) && frostfin.balance.length > 0) {
+				const row1q = [];
+				const labelOf = (id) => id === 'fiveHour' ? '5h 窗口' : id === 'week' ? '周配额' : id === 'month' ? '月配额' : String(id);
+				for (const w of frostfin.balance) {
+					if (!Number.isFinite(w.percent)) continue;
+					const uc = w.percent >= 95 ? '#e85443' : w.percent >= 80 ? '#e8a543' : '#7fb2e5';
+					const tip = 'Kimi ' + labelOf(w.id) + (w.resetsAt ? '，重置于 ' + fmtReset(w.resetsAt) : '');
+					row1q.push('<span class="dshc-cell" title="' + tip + '">' + ringSvg(w.percent, uc) + w.percent.toFixed(0) + '%</span>');
+				}
+				const model = frostfin.model !== undefined && frostfin.model !== '' ? String(frostfin.model) : 'kimi';
+				return { row1: row1q.join(''), row2: 'Kimi · ' + model };
+			}
+
 			const modelName = currentModelName();
 			const [usageRes, providersRes, todayRollup] = await Promise.all([
 				fetchJson("/api/usage-stats/usage"),
@@ -939,6 +968,17 @@ async function buildRows() {
 			modelRingsAt = now;
 			if (modelRingsEl === null || !modelRingsEl.isConnected) return;
 			try {
+				// PATCH 2026-08-22(e): frostfin 会话 —— 三环显示 kimi 5h 窗口用量 + 距重置倒计时。
+				const ff = await fetchFrostfinStatus();
+				if (ff !== null && Array.isArray(ff.balance) && ff.balance.length > 0) {
+					const w5 = ff.balance.find((w) => w.id === 'fiveHour') ?? ff.balance[0];
+					modelRingMode = 'subscription';
+					modelRingUsed = Number.isFinite(w5.percent) ? w5.percent : 0;
+					modelRingResetAt = w5.resetsAt ?? null;
+					modelRingHit = null;
+					renderModelRings();
+					return;
+				}
 				const modelName = currentModelName();
 				const [usageRes, providersRes] = await Promise.all([
 					fetchJson("/api/usage-stats/usage"),
@@ -1156,6 +1196,7 @@ async function buildRows() {
 						var id = st && st.current;
 						if (id !== lastSessionId) {
 							lastSessionId = id;
+							dshcSessionId = id;
 							// 强制下一轮 runHeavyPatches 把 model 名字重新解析;
 							// current model 也可能跟着换(切换 provider 重建新会话)
 							lastModel = null;

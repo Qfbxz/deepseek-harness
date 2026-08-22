@@ -46,6 +46,7 @@ export function apply(ctx) {
       ['replay-frostfin-terminal.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/dsh-frostfin/lib/acp-process.js')]],
       ['replay-desktop-chrome-fixed-v.mjs', ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-desktop-chrome/client.mjs']],
       ['replay-git-graph-body-portal.mjs', [join(homedir(), '.dsh/profiles/web/node_modules/@linxin666/dsh-client-ui-git-graph/lib/client.js')]],
+      ['replay-model-select-mode-filter.mjs', [join(homedir(), '.dsh', 'profiles/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/client.js')]],
     ]
     let patched = 0, clean = 0; const failed = []
     for (const [script, args] of jobs) {
