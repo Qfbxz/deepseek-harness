@@ -223,18 +223,15 @@ async function buildRows() {
 			// Usage records the routed provider id ("modlens-zai-coding-cn") while
 			// the providers list carries the profile id ("zai-coding-cn") — match
 			// by suffix when the exact id is absent.
-			let account = null;
-			let target = null;
-			if (providersRes.ok === true) {
+			// PATCH 2026-08-22(c): 找不到 usage entry 时不再回退到「第一个 ok provider」——
+			// 会把上一个活跃 provider 的余额/5h 窗口当当前数据画上去,造成「用量按钮没
+			// 更新但三圆环(bail 到占位)正确」的假同步。target = null → row1 走空账户
+			// 分支(与三圆环占位行为一致),row2 用当日总和。
+			if (providerId !== null && providersRes.ok === true) {
 				const providers = providersRes.providers ?? [];
-				const matched = providerId !== null
-					? providers.find((p) => p.id === providerId) ?? providers.find((p) => providerId.endsWith(p.id))
-					: undefined;
+				const matched = providers.find((p) => p.id === providerId)
+					?? providers.find((p) => providerId.endsWith(p.id) || providerId.startsWith(p.id));
 				if (matched !== undefined) target = matched.id;
-				else {
-					const okProvider = providers.find((p) => p.status === "ok");
-					target = okProvider !== undefined ? okProvider.id : null;
-				}
 			}
 			if (target !== null) {
 				const res = await fetchJson("/api/usage-stats/account?provider=" + encodeURIComponent(target));
@@ -448,8 +445,7 @@ async function buildRows() {
 				const day = (res.days ?? []).find((d) => d.date === todayKey) ?? null;
 				const modelName = currentModelName();
 				const entry = day !== null && modelName !== null
-					? (day.models ?? []).find((m) => { const n = m.model.toLowerCase(); return n.endsWith("/" + modelName) || n === modelName; }) ?? (day.models ?? []).find((m) => m.model.toLowerCase().includes(modelName))
-					: undefined;
+					? (day.models ?? []).find((m) => { const n = m.model.toLowerCase(); return n.endsWith("/" + modelName) || n === modelName; }) ?? (day.models ?? []).find((m) => m.model.toLowerCase().includes(modelName)) : undefined;
 				const parts = [];
 				if (entry !== undefined) parts.push("今日·当前 " + fmtCompact(entry.tokens));
 				if (day !== null) parts.push("今日·全部 " + fmtCompact(day.tokens));
