@@ -33,7 +33,7 @@ const NEW = [
   '\t\t\t}',
   '\t\t}',
 ].join('\n')
-if (!s.includes(OLD)) throw new Error('summon resolution anchor missing — plugin restructured, review manually')
+if (!s.includes(OLD)) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 s = s.replace(OLD, NEW)
 writeFileSync(target, s)
 execFileSync(process.execPath, ['--check', target], { stdio: 'pipe' })

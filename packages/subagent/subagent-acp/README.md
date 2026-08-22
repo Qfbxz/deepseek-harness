@@ -29,6 +29,8 @@ ACP advertises no start-time capabilities because this process cannot enforce th
 | `args` | `[]` | Command arguments. |
 | `cwd` | parent session cwd | Working-directory override for the child process and its ACP session; must be non-empty, a relative value resolves against the harness launch directory at load, and the result must name a directory the harness can enter. |
 | `permission` | `reject` | Auto-answer permission requests by rejecting or choosing the first `allow_once` or `allow_always` option. |
+| `terminal` | `false` | Advertise `clientCapabilities.terminal` and serve the child's `terminal/*` reverse-RPC family over the subprocess seam. Required for children that route shell tools through the client (e.g. `kimi acp`); self-serving children ignore it. |
+| `terminalOutputByteLimit` | `1000000` | Retained-output byte cap per child terminal (a create request's `outputByteLimit` overrides it); the emitted snapshot is clamped to this tail bound. Must be a positive integer. |
 | `env` | `{}` | Explicit child environment layered over a credential-scrubbed parent environment. |
 | `disposeEofGraceMs` | `6000` | Positive grace after stdin EOF before platform termination; it cannot exceed [`MAX_TIMER_DELAY_MS`](../../util/timeout/README.md). |
 | `disposeGraceMs` | `3000` | Positive POSIX grace after SIGTERM before SIGKILL (Windows force-terminates directly); it cannot exceed [`MAX_TIMER_DELAY_MS`](../../util/timeout/README.md). |
@@ -60,6 +62,14 @@ ACP advertises no start-time capabilities because this process cannot enforce th
 The child spawns through the [`dsh-subprocess`](../../subprocess/subprocess/README.md) seam: credential-shaped ambient variables and ambient `DSH_*` names are removed by the shared scrub, then explicit `config.env` values merge after it (an intended `DEEPSEEK_API_KEY` survives, and a `DSH_*` deployment fact such as `DSH_PERMISSION_MODE` reaches the child the same way — the scrub drops only its stale ambient namesake), stderr is inherited to the parent's own stream, and disposal applies this plugin's EOF window before the subprocess-owned SIGTERM→SIGKILL escalation and whole-tree join. The ACP wire is the real serialization boundary; same-process subagent values are not defensively cloned.
 
 The package has no default export. Cordis loader unwrapping would otherwise hide the named `inject` metadata; see [postmortem 0001](../../../docs/postmortem/0001-acp-default-export-drops-inject.md).
+
+## Terminal execution (opt-in)
+
+`terminal: true` advertises `clientCapabilities.terminal` and serves the child's ACP `terminal/*` reverse-RPC family — `create`, `output`, `wait_for_exit`, `kill`, `release`. Children that route shell tools through the client instead of self-serving (e.g. `kimi acp`) require this; without the capability every such child shell tool fails with "ACP terminal capability is unavailable". Self-serving children never call the family and ignore the flag.
+
+Each `terminal/create` spawns through the same [`dsh-subprocess`](../../subprocess/subprocess/README.md) seam as the child itself: scrubbed parent environment plus the request's explicit `env`, stdin ignored (ACP create has no input channel), stdout and stderr each collected with a bounded in-memory tail. `terminal/output` returns the merged snapshot — the stdout tail followed by the stderr tail, snapshot order rather than byte interleaving — clamped to the terminal's byte limit at UTF-8 character boundaries, with `truncated` set when any head was dropped and the settled `{exitCode, signal}` once the command exits. A spawn-level failure keeps the terminal valid: the failure text is its output and the exit code is 127. `kill` rides the seam's tree-scoped SIGTERM→grace→SIGKILL escalation and keeps the id valid; `release` additionally invalidates the id (unknown ids answer `resource not found`). Run disposal terminates every live terminal tree and awaits the seam's exit proof before the child ladder runs.
+
+The file-access reverse-RPC family (`fs/read_text_file`, `fs/write_text_file`) stays unadvertised: children self-serve file access in their own process, so the SDK answers those methods with `methodNotFound`.
 
 ## Model Experience
 
@@ -98,3 +108,4 @@ Append-only; newly visible content follows the reusable request prefix and does 
 - **No optional start-time capabilities** — this provider cannot apply the local harness's `outputSchema`, depth cap, tool filter, or persona inside the remote process, so it advertises none and the service rejects requests that require them.
 - **Only committed `agent_message_chunk` text is collected** — the automation server keeps reasoning, tool activity, plans, and other trace data in the child session log rather than emitting them on ACP.
 - **Permission prompts are auto-answered** (`permission: allow | reject`) — no human is surfaced a child's `session/request_permission`.
+- **Merged terminal output is snapshot-ordered** — `terminal/output` concatenates each snapshot's stdout tail then its stderr tail, not a byte-interleaved merge; commands whose interleaved ordering matters see it approximated.

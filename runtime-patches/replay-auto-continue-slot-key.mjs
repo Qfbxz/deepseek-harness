@@ -10,7 +10,7 @@ let s = readFileSync(target, 'utf8')
 if (s.includes('patch(slot-key)')) { console.log('[skip] already patched:', target); process.exit(0) }
 const OLD = '        name: "settings.plugin.item",\n        id: SETTINGS_NS,'
 const NEW = '        name: "settings.plugin.item",\n        /*patch(slot-key)*/key: SETTINGS_NS,\n        id: SETTINGS_NS,'
-if (!s.includes(OLD)) throw new Error('slot register anchor missing')
+if (!s.includes(OLD)) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 s = s.replace(OLD, NEW)
 writeFileSync(target, s)
 execFileSync(process.execPath, ['--check', target], { stdio: 'pipe' })

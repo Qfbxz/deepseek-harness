@@ -27,6 +27,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import { AssistantOutputFold } from '@deepseek-ai/dsh-subagent'
 import type { SubagentResult, SubagentRun, SubagentStartRequest, SubagentStopReason } from '@deepseek-ai/dsh-subagent'
 import type { SubprocessHandle, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
+import { AcpTerminalPool, type TerminalClientMethods } from './terminal.ts'
 
 /** Fixed response to child permission requests: reject by default, or select the first allow option. */
 export type PermissionPolicy = 'allow' | 'reject'
@@ -45,6 +46,20 @@ export interface AcpRunSpec {
   cwd: string
   /** How to auto-answer the child's permission prompts. */
   permission: PermissionPolicy
+  /**
+   * Advertise `clientCapabilities.terminal` and serve the child's
+   * `terminal/*` reverse-RPC family through the subprocess seam. Required for
+   * children that route shell tools through the client (e.g. `kimi acp` —
+   * without it every child shell tool fails "ACP terminal capability is
+   * unavailable"); self-serving children ignore it.
+   */
+  terminal: boolean
+  /**
+   * Retained-output byte cap per child terminal (the create request's
+   * `outputByteLimit` when it sends one); the emitted snapshot is clamped to
+   * this bound.
+   */
+  terminalOutputByteLimit: number
   /**
    * Extra environment variables to ADD for the child (e.g. the child harness's
    * `DEEPSEEK_API_KEY`). Merged on top of the subprocess seam's scrubbed
@@ -239,6 +254,19 @@ export async function startAcpRun(request: SubagentStartRequest, spec: AcpRunSpe
   // Shared mutable state keeps cancellation visible across async closures.
   const flags = { cancelled: false }
 
+  // The terminal family exists only when advertised: an absent pool leaves the
+  // optional Client methods unset, so the SDK answers those methods with
+  // methodNotFound.
+  const terminalPool = spec.terminal
+    ? new AcpTerminalPool({
+      spawn: spec.spawn,
+      defaultCwd: spec.cwd,
+      graceMs: spec.disposeGraceMs,
+      outputByteLimit: spec.terminalOutputByteLimit,
+    })
+    : undefined
+  const terminalMethods: TerminalClientMethods | undefined = terminalPool?.clientMethods()
+
   const makeClient = (_agent: AcpAgent): Client => ({
     sessionUpdate(params: SessionNotification): Promise<void> {
       const update = params.update
@@ -261,6 +289,7 @@ export async function startAcpRun(request: SubagentStartRequest, spec: AcpRunSpe
       }
       return Promise.resolve({ outcome: { outcome: 'cancelled' } })
     },
+    ...(terminalMethods ?? {}),
   })
 
   const conn = new ClientSideConnection(
@@ -296,9 +325,11 @@ export async function startAcpRun(request: SubagentStartRequest, spec: AcpRunSpe
       (async (): Promise<void> => {
         await conn.initialize({
           protocolVersion: PROTOCOL_VERSION,
-          // Advertise NO optional client capabilities (no fs, no terminal): the
-          // child self-serves in its own process.
-          clientCapabilities: {},
+          // Terminal is advertised only when the deployment serves the child's
+          // terminal reverse-RPC family (see AcpRunSpec.terminal); every other
+          // optional capability (fs, elicitation) stays off — the child
+          // self-serves file access in its own process.
+          clientCapabilities: spec.terminal ? { terminal: true } : {},
         })
         const session = await conn.newSession({ cwd: spec.cwd, mcpServers: [] })
         const returnedSessionId: unknown = Reflect.get(session, 'sessionId')
@@ -358,10 +389,13 @@ export async function startAcpRun(request: SubagentStartRequest, spec: AcpRunSpe
       if (disposal !== undefined) return disposal
       request.signal.removeEventListener('abort', onAbort)
       requestCancel()
-      // The shared platform-aware ladder awaits exit. ACP normally quiesces from
-      // stdin EOF, including the final flush, so this backend uses a wider EOF
-      // grace before process termination escalates.
-      disposal = disposeProcess()
+      // Terminal trees are independent of the child process tree: issue their
+      // bounded teardown escalation (and await its exit proof) before the
+      // child ladder runs.
+      disposal = (async (): Promise<void> => {
+        await terminalPool?.releaseAll()
+        await disposeProcess()
+      })()
       return disposal
     },
   }

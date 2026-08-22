@@ -9,8 +9,11 @@
  *  - style chrome: drop the painted footer用量 button chrome (background /
  *    border / radius) so it reads as plain text in the sidebar.
  *  - layout: relocate the用量 button into the settingsArea row (the line
- *    that holds 记忆 / 设置) so the sidebar footer reads as one band,
- *    left-aligned with the upper row icons.
+ *    that holds 记忆 / 设置), icon-only (用量/余额 text hidden), immediately
+ *    left of 记忆 with a 2px gap, height pinned to the 记忆 icon each pass.
+ *    FORBIDDEN: relocating host React nodes (e.g. 导入会话) across slots —
+ *    it corrupts React child indices and misplaced the queue dock / stats
+ *    line (2026-08-21 incident; plugin-owned nodes only).
  *  - popover opacity: remove the 0.55 dim on the用量/余额 popover body;
  *    user wants the page fully opaque (the 5h quota + reset time must be
  *    readable at a glance).
@@ -54,11 +57,12 @@ window.__ModuleLoader__.load({
  * its content so it stops evicting every other footer entry */
 button[aria-label="导入会话"] { width: auto !important; flex: 0 0 auto !important; }
 .usg_layer:not(.usg_rail) .usg_badge { height: 36px; width: 100%; gap: 6px; }
-.usg_layer:not(.usg_rail) .usg_badgeLabel,
+/* PATCH 2026-08-21: badge icon restored (user request); count stays hidden */
 .usg_layer:not(.usg_rail) .usg_badgeCount { display: none; }
 .hHd-Xa_collapsed .hHd-Xa_footerActions { flex-direction: column; align-items: center; }
 html { font-size: 93.75%; }
-.usg_panel { width: var(--dshc-sidebar-w, 280px) !important; max-height: 62vh !important; font-size: 12px !important; }
+.usg_panel { width: var(--dshc-sidebar-w, 280px) !important; max-height: 62vh !important; font-size: 12px !important; background: var(--dsw-alias-bg-base) !important; backdrop-filter: none !important; opacity: 1 !important; }
+.usg_panel * { opacity: 1 !important; backdrop-filter: none !important; }
 .usg_statsRow { flex-wrap: wrap !important; }
 .usg_statsRow .usg_stat { flex: 1 1 40% !important; min-width: 0; }
 .usg_statsRow .usg_stat:last-child { flex-basis: 100% !important; }
@@ -67,10 +71,13 @@ html { font-size: 93.75%; }
 .usg_dayTokens { flex: none !important; margin-left: auto !important; }
 .usg_dayHit { flex: none !important; width: auto !important; }
 .usg_panel .usg_header, .usg_panel section { padding: 8px 10px; }
-#dshc-usage { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; flex: 1; text-align: left; line-height: 1; user-select: none; padding-right: 12px; }
-#dshc-usage .dshc-row { display: flex; align-items: center; gap: 7px; font-size: 10px; color: var(--dsw-alias-label-primary); white-space: nowrap; }
+#dshc-usage { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; flex: 1; text-align: left; line-height: 1; user-select: none; padding-right: 4px; }
+#dshc-usage .dshc-row { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--dsw-alias-label-primary); white-space: nowrap; }
 #dshc-usage .dshc-row2 { font-size: 10px; color: var(--dsw-alias-label-primary); font-variant-numeric: tabular-nums; padding-left: 1px; }
-#dshc-usage .dshc-cell { display: inline-flex; align-items: center; gap: 2px; }
+#dshc-usage .dshc-cell { display: inline-flex; align-items: center; gap: 1px; }
+/* 2026-08-22 预设卡描述兜底：属性选择器匹配任意哈希前缀的 cardDesc/cardDescription，
+ * 防官方模块样式标签被其他插件 DOM 清理移除后描述退化为单行 */
+[class*="_cardDesc"], [class*="_cardDescription"] { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow-wrap: anywhere; overflow: hidden; }
 /* pin the green remaining-% at the row's right end: preceding cells may change
  * width (clock ticks, token counters), the % must not move */
 #dshc-usage .dshc-row .dshc-cell:last-child { margin-left: auto; min-width: 34px; justify-content: flex-end; font-variant-numeric: tabular-nums; }
@@ -181,9 +188,11 @@ async function fetchProTodayTokens() {
 
 async function buildRows() {
 			const modelName = currentModelName();
-			const [usageRes, providersRes] = await Promise.all([
+			const [usageRes, providersRes, todayRollup] = await Promise.all([
 				fetchJson("/api/usage-stats/usage"),
 				fetchJson("/api/usage-stats/providers"),
+				// 2026-08-22 命中率统一源：与看板曲线/三环同走 rollup 账本（今日桶聚合，同公式同阈值）
+				fetchJson("/dash-api/usage?range=today").catch(() => null),
 			]);
 			if (usageRes.ok !== true) throw new Error("usage route");
 			const now = new Date(); const todayKey = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0"); // PATCH: local-day key (UTC key showed YESTERDAY 00:00-08:00 CST)
@@ -249,9 +258,27 @@ async function buildRows() {
 					if (!Number.isFinite(last)) try { localStorage.setItem("dshc.minimax.lastReset", String(anchor)); } catch {}
 				}
 				if (sessionWindow !== null) {
-					// PATCH: 5h session-window usage ring removed per user request
-					row1.push('<span class="dshc-cell dshc-dim" title="窗口重置">' + fmtReset(sessionWindow.resetsAt) + "</span>");
+					// 2026-08-21 定稿 row1：用量%环 + 重置倒计时（订阅 plan）。
+					const usedPct = Number.isFinite(sessionWindow.usedPercent) ? sessionWindow.usedPercent : null;
+					if (usedPct !== null) {
+						const uc = usedPct >= 95 ? "#e85443" : usedPct >= 80 ? "#e8a543" : "#7fb2e5";
+						row1.push('<span class="dshc-cell" title="5h 窗口用量">' + ringSvg(usedPct, uc) + usedPct.toFixed(0) + "%" + '</span>');
+					}
+					// 2026-08-22 定稿：徽章重置显示具体时刻（HH:mm），倒计时只保留在模型行三环的第二环
+					const resetDate = sessionWindow.resetsAt ? new Date(sessionWindow.resetsAt) : null;
+					const rt = resetDate !== null && !Number.isNaN(resetDate.getTime()) ? String(resetDate.getHours()).padStart(2, "0") + ":" + String(resetDate.getMinutes()).padStart(2, "0") : "—";
+					row1.push('<span class="dshc-cell dshc-dim" title="窗口重置于 ' + rt + '">' + rt + '</span>');
 				}
+			// 命中率统一源：今日 rollup 桶聚合（与看板曲线/三环同公式同阈值）；样本不足同样隐藏，不回退旧端点
+			// 注意：/dash-api/usage 响应无 ok 字段，直接以 buckets 数组为准
+			let hitRate = null;
+			if (todayRollup && Array.isArray(todayRollup.buckets)) {
+				let tIn = 0, tCr = 0, tCw = 0;
+				for (const bk of todayRollup.buckets) { tIn += bk.input || 0; tCr += bk.cacheRead || 0; tCw += bk.cacheWrite || 0; }
+				if (tIn + tCr + tCw >= 1000000) hitRate = (tCr / (tIn + tCr + tCw)) * 100;
+			}
+   if (hitRate !== null) {
+    row1.push('<span class="dshc-cell" title="缓存命中率">' + ringSvg(hitRate, "#7fb2e5") + Math.round(hitRate) + "%</span>");
 				if (account.mode === "balance") {
 					const value = account.alert?.value;
 					if (Number.isFinite(value)) row1.push('<span class="dshc-cell" title="余额">¥' + value + "</span>");
@@ -262,13 +289,20 @@ async function buildRows() {
 					}
 				}
 			}
-			const todayEntry = findEntry(day, false);
-			const hitRate = (todayEntry ?? entry) !== null && Number.isFinite((todayEntry ?? entry).cacheHitRate) ? (todayEntry ?? entry).cacheHitRate : null;
-   if (hitRate !== null) {
-    row1.push('<span class="dshc-cell" title="缓存命中率">' + ringSvg(hitRate, "#7fb2e5") + Math.round(hitRate) + "%</span>");
    }
 			const todayTokens = await fetchProTodayTokens() ?? (todayEntry !== null ? todayEntry.tokens : null);
-			const row2 = "今日 " + (todayTokens !== null ? fmtCompact(todayTokens) : "—"); // PATCH: model name removed
+			// 2026-08-21 定稿 row2：当前供应商今日 tokens（该 provider 全部模型之和）。
+			let providerToday = todayTokens;
+			if (day !== null && providerId !== null) {
+				providerToday = (day.models ?? []).filter((m) => String(m.model).toLowerCase().split("/")[0] === providerId.toLowerCase() || String(m.model).toLowerCase() === modelName).reduce((sum, m) => sum + (m.tokens ?? 0), 0);
+			}
+			// 2026-08-21 row2: today tokens + cost (CNY via pricing table). 2026-08-22: 金额取整。
+			let todayCost = null;
+			try {
+				const cr = await fetchJson("/dash-api/today-cost");
+				if (cr?.ok === true && Number.isFinite(cr.cost) && cr.cost > 0) todayCost = "¥" + Math.round(cr.cost);
+			} catch { }
+			const row2 = '今日 ' + (providerToday > 0 ? fmtCompact(providerToday) : (todayTokens !== null ? fmtCompact(todayTokens) : "—")) + (todayCost !== null ? " · " + todayCost : "");
 			return { row1: row1.join(""), row2 };
 		}
 
@@ -414,7 +448,7 @@ async function buildRows() {
 				const day = (res.days ?? []).find((d) => d.date === todayKey) ?? null;
 				const modelName = currentModelName();
 				const entry = day !== null && modelName !== null
-					? (day.models ?? []).find((m) => m.model.toLowerCase().endsWith("/" + modelName)) ?? (day.models ?? []).find((m) => m.model.toLowerCase().includes(modelName))
+					? (day.models ?? []).find((m) => { const n = m.model.toLowerCase(); return n.endsWith("/" + modelName) || n === modelName; }) ?? (day.models ?? []).find((m) => m.model.toLowerCase().includes(modelName))
 					: undefined;
 				const parts = [];
 				if (entry !== undefined) parts.push("今日·当前 " + fmtCompact(entry.tokens));
@@ -461,7 +495,12 @@ async function buildRows() {
 					let anchorRow = titleRow !== null ? titleRow.getBoundingClientRect() : (tabs !== null ? tabs.getBoundingClientRect() : clusterRect);
 					if (anchorRow.height < 14) anchorRow = tabs !== null ? tabs.getBoundingClientRect() : clusterRect;
 					if (anchorRow.height < 14) anchorRow = clusterRect;
-					const top = Math.max(2, Math.round(anchorRow.top + (anchorRow.height - 24) / 2));
+					// patch(scroll-stick): 长对话滚动时标题行（PTC/子代理所在）
+					// 会滚出视口——chips 钉在 anchorRow.top 为负的地方=悬空错位。
+					// 目标行可见时逐像素跟随；滚出时钳回视口顶部安全带（不悬空、
+					// 不与顶部 dock 重叠，回滚时自然回到同行位置）。
+					const rawTop = Math.round(anchorRow.top + (anchorRow.height - 24) / 2);
+					const top = Math.max(6, Math.min(rawTop, 46));
 					// 水平：钉在标题行最右侧可见元素（"PTC 模式"或其他模式 chip）后面，
 					// 按实测右缘排布，任何模式下都不与已有 chip 重叠。顺序 [分支][提交]。
 					const commitChip = document.getElementById("dsh-git-commit-chip");
@@ -491,6 +530,23 @@ async function buildRows() {
 					// patch(viewport-clamp): Safari/窄窗口下标题行元素的实测右缘可能
 					// 越过视口，把分支 chip 钉到窗外不可见——钳回视口内（两侧各留 8px）。
 					branchLeft = Math.max(8, Math.min(branchLeft, Math.round(window.innerWidth - chip.getBoundingClientRect().width - 8)));
+					// patch(fixed-escape): git-graph 的 composer anchor 带 backdrop-filter，
+					// 成为 position:fixed 的 containing block——芯片钉的是视口坐标却渲染成
+					// anchor 相对位置（底部，2026-08-22 挂载点从侧栏 logoRow 挪进 composer
+					// anchor 后回归）。挂载链上创建 containing block 的祖先（backdropFilter/
+					// perspective/transform/filter/contain/containerType）逐个中和；实测仅
+					// 两个 0 高度包装层带 backdropFilter，清除无视觉影响。
+					let anc = chip.parentElement;
+					while (anc !== null && anc !== document.body) {
+						const acs = getComputedStyle(anc);
+						if (acs.backdropFilter !== "none") anc.style.backdropFilter = "none";
+						if (acs.perspective !== "none") anc.style.perspective = "none";
+						if (acs.transform !== "none") anc.style.transform = "none";
+						if (acs.filter !== "none") anc.style.filter = "none";
+						if (acs.contain !== "none") anc.style.contain = "none";
+						if (acs.containerType !== undefined && acs.containerType !== "normal" && acs.containerType !== "") anc.style.containerType = "normal";
+						anc = anc.parentElement;
+					}
 					chip.style.position = "fixed";
 					// patch(inline-chip-color): 某些 Safari 版本解析不了主题的渐变/
 					// oklch 色函数，文字填充保持透明——内联颜色绕过整条 CSS 链，保底可见。
@@ -637,27 +693,61 @@ async function buildRows() {
 	 * line that holds 记忆/设置). The shipped footer slot stacks it above
 	 * the row; the user wants it inline with 记忆. Idempotent: leaves the
 	 * node alone when it is already parented. */
-		function moveUsageToMemoryRow() {
+
+		/*patch(usage-row)*/function moveUsageToMemoryRow() {
 			const usg = document.querySelector('.usg_layer');
 			const settingsArea = document.querySelector('[class*="_settingsArea"]');
 			if (usg === null || settingsArea === null) return;
-			if (usg.parentElement !== settingsArea) settingsArea.insertBefore(usg, settingsArea.firstChild);
-			// flex-shrink keeps the icon/label from collapsing under 记忆's
-		// weight; marginRight:auto lets 记忆/设置 sit flush right while the
-		// button stays left-aligned in the row.
-			usg.style.flex = '0 0 auto';
-			usg.style.marginRight = 'auto';
-			usg.style.marginLeft = '0';
-			usg.style.width = '64px';
-			usg.style.flex = '0 0 auto';
+			// PATCH 2026-08-21: row layout = [导入 left] …spacer… [用量] 记忆 设置.
+			// 导入 pinned to the row's left edge; 用量 sits immediately left of
+			// the 记忆 icon with a 2px gap, height matched to that icon.
+			const labelOf = (el) => (el.getAttribute('aria-label') ?? '') + (el.getAttribute('title') ?? '');
+			const mem = [...settingsArea.querySelectorAll('button, [role="button"]')].find((b) => labelOf(b).includes('记忆')) ?? null;
+			// PATCH 2026-08-21 (revert): 导入会话按钮不再迁入 settingsArea——
+			// 跨 React 插槽搬运宿主节点会打乱 React 子节点索引，重渲染时
+			// 排队条/状态栏被插到错误位置（2026-08-21 页面错位根因）。
+			// 它留在原生 footerActions，仅由 CSS 保证宽度自适应。
+			const imp = null;
+			// 记忆按钮可能嵌套在子容器里，不是 settingsArea 直接子级——
+			// 直接 insertBefore(anchor) 会抛错中断整个 pass（2026-08-21
+			// 根因）。先爬到 settingsArea 的直接子级祖先再插。
+			let anchor = settingsArea.lastElementChild;
+			if (mem !== null) {
+				let n = mem;
+				while (n !== null && n.parentElement !== settingsArea) n = n.parentElement;
+				if (n !== null && n !== usg) anchor = n;
+			}
+			if (anchor !== null && anchor !== usg) {
+				if (usg.parentElement !== settingsArea || usg.nextElementSibling !== anchor) settingsArea.insertBefore(usg, anchor);
+			} else if (usg.parentElement !== settingsArea) {
+				settingsArea.appendChild(usg);
+			}
+			// 定稿形态（2026-08-21 用户截图）：块占满记忆/设置行左半——
+			// 左缘对齐上行导入按钮，右缘距记忆图标 2px；内容左对齐自然高度。
+			// 收敛式 2px 间距：实测 gap = marginRight + 记忆容器自身内嵌，
+			// 按当前误差自校正（2026-08-21 实测内嵌 4px → mr=-2 抵消后净 2px），
+			// 并整体左移 4px、等量加宽 4px 补左缘（用户 2026-08-21 定稿微调）。
+			usg.style.flex = '1 1 auto';
+			usg.style.margin = '0';
+			usg.style.marginRight = '-2px';
+			usg.style.marginLeft = '-4px';
+			usg.style.paddingLeft = '4px';
+			usg.style.height = '';
+			usg.style.lineHeight = '';
+			usg.style.minWidth = '0';
 			const btn = usg.querySelector('.usg_badge');
 			if (btn !== null) {
 				btn.style.justifyContent = 'flex-start';
 				btn.style.padding = '0';
+				btn.style.height = 'auto';
+				btn.style.width = '100%';
+				const cnt = btn.querySelector('.usg_badgeCount');
+				if (cnt !== null) cnt.style.display = 'none';
+				// PATCH 2026-08-21: icon only — the 用量/余额 text label stays
+				// hidden; the widget rows next to the icon carry the numbers.
 				const lbl = btn.querySelector('.usg_badgeLabel');
 				if (lbl !== null) lbl.style.display = 'none';
 			}
-			settingsArea.insertBefore(usg, settingsArea.firstChild);
 		}
 
 		/** Real link health for the model trigger's dot, driven by the actual
@@ -737,6 +827,14 @@ async function buildRows() {
 		let modelRingHit = null;
 
 		function mountModelRings() {
+			// 2026-08-21: 圆环已移植为 dsh-usage-all 的组成部分（client-rings）。
+			// 该插件在场时这里直接让位，避免 #dshc-model-rings 双实例互踩。
+			if (window.__DSH_MODULES__ !== undefined) {
+				try {
+					const ids = window.__DSH_MODULES__?.registry ? Object.keys(window.__DSH_MODULES__.registry) : [];
+					if (ids.includes("dsh-usage-all-rings")) return;
+				} catch { /* registry 形态变化时按原逻辑挂载 */ }
+			}
 			const button = document.querySelector('button[aria-haspopup="menu"][aria-label^="选择模型，当前"]');
 			if (button === null) { modelRingsEl = null; return; }
 			const host = button.parentElement;
@@ -829,8 +927,15 @@ async function buildRows() {
 				if (res.ok !== true) return;
 				const account = res.account;
 				// real reachability check (host→provider, token-free): floors or
-				// confirms the dot — this is the "check on model switch" path
-				if (account.status !== undefined && account.status !== "ok") setHealth("orange", "供应商状态：" + account.status);
+				// confirms the dot — this is the "check on model switch" path.
+				// patch(health-truth): only DEFINITIVE provider rejections floor
+				// orange (unauthorized / invalid-response). "unavailable" is the
+				// dashboard endpoint's own network flake — painting the link dot
+				// orange for it lies about the live /api/respond link. And never
+				// downgrade a red (auth failure proven by a real request).
+				if (account.status === "unauthorized" || account.status === "invalid-response") {
+					if (health.state !== "red") setHealth("orange", "供应商状态：" + account.status);
+				}
 				else if (health.state === "green") setHealth("green", "供应商可达");
 				if (account.mode === "balance") {
 					modelRingMode = "balance";
@@ -911,7 +1016,9 @@ async function buildRows() {
 			if (label === null || label.parentElement !== trigger) {
 				label = document.createElement("span");
 				label.id = "dshc-ctx-pct";
-				label.style.cssText = "font-size:10px;line-height:1;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;margin-left:3px;";
+				// patch(level): 环 svg 与百分比水平同行，绝不堆叠。
+			label.style.cssText = "display:inline-block;vertical-align:middle;font-size:10px;line-height:1;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;margin-left:3px;white-space:nowrap;";
+			trigger.style.whiteSpace = "nowrap";
 				trigger.appendChild(label);
 			}
 			const text = match[1] + "%";

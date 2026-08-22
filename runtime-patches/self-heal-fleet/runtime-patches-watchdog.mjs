@@ -79,7 +79,6 @@ export function apply(ctx, config) {
       { id: 'p17-desktop-session-log', file: join(homedir(), '.dsh/profiles/web/node_modules/@dsh-external/dsh-mobile-nav/lib/client.js'), marker: 'patch(desktop-session-log)', bad: '  [data-mobile-nav="session-log"],', script: 'replay-mobile-nav-desktop-session-log.mjs', extra: [] },
       // p18: usage badge rides the settings row (order 1, before auto-memory)
       // and its column-forcing side effect is disabled.
-      { id: 'p18-usage-settings-row', file: join(homedir(), '.dsh/profiles/web/node_modules/dsh-usage-stats/lib/client.js'), marker: 'patch(settings-seat)', bad: 'ctx.slots.inject("sidebar.footer.action"', script: 'replay-usage-stats-settings-row.mjs', extra: [] },
       // p19: chat-import's trigger shortens to 导入 (tooltip keeps the long form).
       { id: 'p19-chat-import-short-label', file: join(homedir(), '.dsh/profiles/web/node_modules/dsh-chat-import/lib/client.js'), marker: '"trigger.label": "导入",', bad: '"trigger.label": "导入会话",', script: 'replay-chat-import-short-label.mjs', extra: [] },
       // p20: the agency-agents client hardcodes its 271-expert ROSTER (the picker
@@ -96,6 +95,12 @@ export function apply(ctx, config) {
       { id: 'p22-list-experts-shape', file: join(homedir(), '.dsh/profiles/web/node_modules/@michengai/dsh-agency-agents/lib/index.js'), marker: 'patch(list-experts-shape)', bad: 'Call this before summon_expert when you need an exact expert slug."', script: 'replay-agency-list-experts-shape.mjs', extra: [] },
       // p24: dsh-git-commit 提交 chip 不应显示在子代理页面（子代理不提交）。
       { id: 'p24-git-commit-subagent-guard', file: '/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-git-commit/client.mjs', marker: 'patch(subagent-guard)', bad: '      if (document.getElementById(CHIP_ID) === null) {\n        document.body.appendChild(buildChip());\n      }', script: 'replay-git-commit-subagent-guard.mjs', extra: [] },
+      // p34: frostfin initialize 发空 clientCapabilities，kimi acp 的 Bash 需要
+      // terminal/* 反向 RPC（"ACP terminal capability is unavailable"）。
+      { id: 'p34-frostfin-terminal', file: join(homedir(), '.dsh/profiles/web/node_modules/dsh-frostfin/lib/acp-process.js'), marker: 'patch(terminal-rpc)', bad: '不声明任何可选客户端能力', script: 'replay-frostfin-terminal.mjs', extra: [] },
+      // p35: git-graph composer anchor 的 backdrop-filter 成为 fixed 的 containing
+      // block，分支芯片渲染在底部、与顶部 commit 按钮分离。
+      { id: 'p35-desktop-chrome-fixed-escape', file: '/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-desktop-chrome/client.mjs', marker: 'patch(fixed-escape)', bad: 'width - 8)));\n\t\t\t\t\tchip.style.position = "fixed";', script: 'replay-desktop-chrome-fixed-escape.mjs', extra: [] },
     ];
     // State-aware logging: an anchor-mismatch failure after an upstream
     // restructure repeats every patrol; log the first failure in detail and

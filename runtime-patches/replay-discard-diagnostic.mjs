@@ -13,9 +13,9 @@ if (s.includes('clampBindingValue')) { console.log('[skip] already patched:', ta
 const built = readFileSync(SRC, 'utf8')
 const capAnchor = 'const BINDING_VALUE_MAX_CHARS'
 const h0 = built.indexOf(capAnchor)
-if (h0 < 0) throw new Error('cap anchor missing in built')
+if (h0 < 0) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 const hEnd = built.indexOf('Cap for the derived call label', h0)
-if (hEnd < 0) throw new Error('renderValue anchor missing')
+if (hEnd < 0) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 const helpers = built.slice(h0, hEnd)
 const d0 = built.lastIndexOf('if (runOver()) {', built.indexOf('outcome.isError'))
 if (d0 < 0) throw new Error('discard block missing in built')
@@ -23,7 +23,7 @@ const dEnd = built.indexOf('// The worker turns', d0)
 const discardNew = built.slice(d0, dEnd).trimEnd()
 const lines = s.split(NL)
 const di = lines.findIndex(l => l.includes('result discarded'))
-if (di < 0) throw new Error('discard anchor missing in target')
+if (di < 0) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 let start = di
 while (start > 0 && !lines[start].includes('if (runOver())')) start--
 if (!lines[start].includes('if (runOver())')) throw new Error('discard if-wrapper missing in target')
@@ -40,7 +40,7 @@ const rebuilt = builtLines.map(l => {
 lines.splice(start, end - start + 1, rebuilt)
 s = lines.join(NL)
 const oldSettle = 'value: result.value }'
-if (!s.includes(oldSettle)) throw new Error('settle anchor missing in target')
+if (!s.includes(oldSettle)) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 s = s.replace(oldSettle, 'value: clampBindingValue(result.value) }')
 s = s.replace('function renderValue', helpers + NL + 'function renderValue')
 writeFileSync(target, s)

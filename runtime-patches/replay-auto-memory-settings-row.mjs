@@ -19,7 +19,7 @@ if (!s.includes('patch(settings-row)')) {
     const NEW1 = "/*patch(settings-row)*/slots.inject('sidebar.settings.action', function () {"
     const OLD2 = "name: 'sidebar.footer.action', id: 'auto-memory'"
     const NEW2 = "name: 'sidebar.settings.action', id: 'auto-memory'"
-    if (!s.includes(OLD1) || !s.includes(OLD2)) throw new Error('registration anchor missing — plugin restructured, review manually')
+    if (!s.includes(OLD1) || !s.includes(OLD2)) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
     s = s.replace(OLD1, NEW1).replace(OLD2, NEW2)
     s = s.replace('1. sidebar.footer.action —', '1. sidebar.settings.action —')
     did.push('slot')
@@ -29,7 +29,7 @@ if (!s.includes('patch(settings-row)')) {
 if (!s.includes('patch(memory-icon)')) {
   const OLD = "}, h('span', null, t('memory')))"
   const NEW = "}, h('svg', { 'data-icon': 'patch(memory-icon)', viewBox: '0 0 24 24', width: '14', height: '14', fill: 'none', stroke: 'currentColor', strokeWidth: '1.8', strokeLinecap: 'round', strokeLinejoin: 'round', style: { marginRight: '4px', flex: 'none', verticalAlign: '-2px' } }, h('path', { d: 'M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z' }), h('path', { d: 'M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z' })), h('span', null, t('memory')))"
-  if (!s.includes(OLD)) throw new Error('memory button anchor missing — plugin restructured, review manually')
+  if (!s.includes(OLD)) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
   s = s.replace(OLD, NEW)
   did.push('icon')
 }

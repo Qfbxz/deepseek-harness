@@ -1,0 +1,9 @@
+# dsh-market bundle patch layer: pulled into profiles that depend on this package.
+# The host half mounts /dsh-market/{registry,installed,install,uninstall,update,
+# setup-pnpm,logs,status} via lib/index.js ctx.inject(['webServer']) and the
+# browser half sits in lib/client.js (loaded by the modules node half from the
+# package.json 'dsh.client' declaration).
+
+- insert:
+    - id: dsh-market
+      name: '@deepseek-ai/dsh-market'

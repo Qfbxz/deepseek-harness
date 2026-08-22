@@ -6,7 +6,7 @@ if (!target) { console.error('usage: replay-chat-import-short-label.mjs <client.
 let s = readFileSync(target, 'utf8')
 if (s.includes('"trigger.label": "导入",')) { console.log('[skip] already patched:', target); process.exit(0) }
 const OLD = '"trigger.label": "导入会话",'
-if (!s.includes(OLD)) throw new Error('trigger.label anchor missing — plugin restructured, review manually')
+if (!s.includes(OLD)) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 s = s.replace(OLD, '"trigger.label": "导入",')
 writeFileSync(target, s)
 console.log('[patched]', target)

@@ -1,5 +1,18 @@
 /**
- * Host side of dsh-desktop-chrome: window chrome is all client-side; this
+ * Host side of dsh-deskt
+
+    host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-local/restart',
+      handler: async (req, res) => {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, restarting: true }))
+        const { spawn } = await import('node:child_process')
+        const sh = 'for i in $(seq 1 120); do curl -s -o /dev/null --max-time 1 http://127.0.0.1:3080/ ' + AMP + AMP + ' sleep 1 || break; done; cd ' + process.cwd() + '; exec ' + process.argv[0] + ' ' + process.argv.slice(1).join(' ')
+        spawn('/bin/bash', ['-c', 'nohup /bin/bash -c ' + JSON.stringify(sh) + ' >' + SL + 'dev' + SL + 'null 2>' + GT + '1 ' + AMP + ' disown'], { detached: true, stdio: 'ignore' }).unref()
+        setTimeout(() => process.exit(0), 800)
+      },
+    })op-chrome: window chrome is all client-side; this
  * half serves ONE route — POST /dsh-local/import-session — which converts an
  * uploaded Claude Code / Codex / native-dsh session log into a dsh session
  * under $DSH_HOME/sessions and returns the new session id, so the web UI can
@@ -351,16 +364,7 @@ function injectProjection(sessionId, cwd, title, turns, steps, lastTime) {
 /** Register the import route once the web server appears. */
 function registerImportRoute(ctx) {
   ctx.effect(() => ctx.inject(['webServer', 'workspaceRegistry'], (host) => {
-    /** Resolve a workspace title (from the composer pill) to its path. */
-    const workspacePath = (title) => {
-      try {
-        const record = host.workspaceRegistry.list().find((r) => r.title === title)
-        return record?.path
-      } catch {
-        return undefined
-      }
-    }
-    host.webServer.register({
+host.webServer.register({
       kind: 'exact',
       path: '/dsh-local/import-session',
       handler: async (req, res) => {

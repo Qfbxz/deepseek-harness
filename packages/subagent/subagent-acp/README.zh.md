@@ -29,6 +29,8 @@ ACP 不声明任何启动时能力，因为当前进程无法强制执行远程�
 | `args` | `[]` | 命令参数。 |
 | `cwd` | 父会话 cwd | 子进程及其 ACP 会话的工作目录覆盖值；不得为空。相对值会在加载时以 harness 启动目录为基准解析，结果必须指向 harness 可以进入的目录。 |
 | `permission` | `reject` | 自动回答权限请求：拒绝，或选择第一个 `allow_once` 或 `allow_always` 选项。 |
+| `terminal` | `false` | 声明 `clientCapabilities.terminal` 并经 subprocess seam 服务子 agent 的 `terminal/*` 反向 RPC 族。把 shell 工具路由到客户端执行的子 agent（如 `kimi acp`）必须开启；自给自足的子 agent 会忽略该标志。 |
+| `terminalOutputByteLimit` | `1000000` | 每个子终端的保留输出字节上限（create 请求的 `outputByteLimit` 可覆盖）；发出的快照按此尾部上限截断。必须为正整数。 |
 | `env` | `{}` | 显式子进程环境，叠加到已清理凭据的父进程环境之上。 |
 | `disposeEofGraceMs` | `6000` | stdin EOF 之后、平台终止之前的宽限时间须为正值，且不得大于 [`MAX_TIMER_DELAY_MS`](../../util/timeout/README.md)。 |
 | `disposeGraceMs` | `3000` | POSIX 在 SIGTERM 后、SIGKILL 前的宽限时间（Windows 直接强制终止），须为正值且不得大于 [`MAX_TIMER_DELAY_MS`](../../util/timeout/README.md)。 |
@@ -60,6 +62,14 @@ ACP 不声明任何启动时能力，因为当前进程无法强制执行远程�
 子进程经由 [`dsh-subprocess`](../../subprocess/subprocess/README.md) seam spawn：共享的凭据清除先移除疑似凭据的环境变量和环境中已有的 `DSH_*` 名称，显式 `config.env` 值在清除之后合并（有意转发的 `DEEPSEEK_API_KEY` 会保留下来，`DSH_PERMISSION_MODE` 这类 `DSH_*` 部署事实也以同样的方式到达子进程——清除只丢弃其陈旧的同名环境值），stderr 会继承到父进程自身的流，dispose 则先应用本插件的 EOF 时间窗，再由子进程责任方执行 SIGTERM→SIGKILL 升级并等待整棵进程树退出。ACP 协议格式（wire format）是真正的序列化边界；同进程 subagent 值不会为防御目的而克隆。
 
 本包没有默认导出。否则 Cordis loader 的解包会隐藏具名 `inject` 元数据；见[事故复盘（postmortem）0001](../../../docs/postmortem/0001-acp-default-export-drops-inject.md)。
+
+## 终端执行（可选）
+
+`terminal: true` 声明 `clientCapabilities.terminal`，并服务子 agent 的 ACP `terminal/*` 反向 RPC 族——`create`、`output`、`wait_for_exit`、`kill`、`release`。把 shell 工具路由到客户端执行而非自行处理的子 agent（如 `kimi acp`）必须开启；缺少该能力时这类子 agent 的每个 shell 工具都会以 "ACP terminal capability is unavailable" 失败。自给自足的子 agent 不会调用该族，标志对它无效。
+
+每个 `terminal/create` 与子 agent 本体一样经由 [`dsh-subprocess`](../../subprocess/subprocess/README.md) seam spawn：清理后的父环境加上请求的显式 `env`，stdin 忽略（ACP create 没有输入通道），stdout 与 stderr 各自按有界内存尾部收集。`terminal/output` 返回合并快照——stdout 尾部在前、stderr 尾部在后，是快照顺序而非字节交错——在 UTF-8 字符边界上截断到该终端的字节上限，头部被丢弃时置 `truncated`，命令退出后附带已定的 `{exitCode, signal}`。spawn 级失败仍保持终端有效：失败文本即其输出，退出码为 127。`kill` 走 seam 的树级 SIGTERM→宽限→SIGKILL 升级且 id 保持有效；`release` 额外使 id 失效（未知 id 回 `resource not found`）。运行 dispose 时先对每个存活终端树执行终止并等待 seam 的退出证明，再运行子 agent 拆卸阶梯。
+
+文件访问反向 RPC 族（`fs/read_text_file`、`fs/write_text_file`）保持不声明：子 agent 在自身进程内自行访问文件，SDK 对这些方法回 `methodNotFound`。
 
 ## 模型体验
 
@@ -98,3 +108,4 @@ ACP 不声明任何启动时能力，因为当前进程无法强制执行远程�
 - **不支持可选启动时能力**：该提供方无法在远程进程内应用本地 harness 的 `outputSchema`、深度上限、工具过滤器或 persona，因此不会声明这些能力；服务会拒绝需要它们的请求。
 - **只收集已提交的 `agent_message_chunk` 文本**：自动化服务器把推理（reasoning）、工具活动、计划和其他 trace 数据保留在子 agent 会话日志中，不通过 ACP 发出。
 - **权限提示自动回答**（`permission: allow | reject`）：不会把子 agent 的 `session/request_permission` 呈现给人。
+- **合并终端输出为快照顺序**：`terminal/output` 把每个快照的 stdout 尾部接在 stderr 尾部之前拼接，并非字节交错合并；对交错顺序敏感的命令看到的是近似结果。

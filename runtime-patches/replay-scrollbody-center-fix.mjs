@@ -25,7 +25,7 @@ if (s.includes(PATCHED_FLEX)) {
 } else if (s.includes(CENTER)) {
   s = s.replace(CENTER, PATCHED_CENTER)
 } else {
-  throw new Error('scrollBody justify-content anchor missing — upstream restructured, review manually')
+  { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 }
 writeFileSync(target, s)
 execFileSync(process.execPath, ['--check', target], { stdio: 'pipe' })

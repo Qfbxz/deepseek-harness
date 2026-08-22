@@ -36,7 +36,6 @@ export function apply(ctx) {
       ['replay-auto-memory-settings-row.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/@a9i5k4/dsh-auto-memory/lib/client.js')]],
       ['replay-ui-sidebar-settings-action.mjs', [join(G, '@deepseek-ai/dsh-client-ui-sidebar/lib/client.js')]],
       ['replay-mobile-nav-desktop-session-log.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/@dsh-external/dsh-mobile-nav/lib/client.js')]],
-      ['replay-usage-stats-settings-row.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/dsh-usage-stats/lib/client.js')]],
       ['replay-chat-import-short-label.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/dsh-chat-import/lib/client.js')]],
       ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-experts-roster/convert-my-experts.mjs', []],
       ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-experts-roster/sync-builtin-experts.mjs', []],
@@ -44,6 +43,8 @@ export function apply(ctx) {
       ['replay-worker-abort-object-message.mjs', []],
       ['replay-agency-list-experts-shape.mjs', []],
       ['replay-git-commit-subagent-guard.mjs', ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-git-commit/client.mjs']],
+      ['replay-frostfin-terminal.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/dsh-frostfin/lib/acp-process.js')]],
+      ['replay-desktop-chrome-fixed-escape.mjs', ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-desktop-chrome/client.mjs']],
     ]
     let patched = 0, clean = 0; const failed = []
     for (const [script, args] of jobs) {

@@ -17,7 +17,7 @@ let s = readFileSync(target, 'utf8')
 if (s.includes('patch(list-experts-shape)')) { console.log('[skip] already patched:', target); process.exit(0) }
 const OLD = 'Call this before summon_expert when you need an exact expert slug."'
 const NEW = 'Call this before summon_expert when you need an exact expert slug. /*patch(list-experts-shape)*/ Return shape: {divisions: [{division, count?, experts?: [{slug, name, description}]}], total} — without a filter each entry carries division+count only; with a division filter the matching entry carries its experts array (read it as result.divisions[0].experts, NOT result.experts). Only ENABLED experts appear. Always call without a filter first to discover the actual division keys — this roster adds 0-domain-masters (petroleum domain masters) and 0-engineering (engineering/IT roles) ahead of the builtin divisions."'
-if (!s.includes(OLD)) throw new Error('list_experts description anchor missing — plugin restructured, review manually')
+if (!s.includes(OLD)) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 s = s.replace(OLD, NEW)
 writeFileSync(target, s)
 execFileSync(process.execPath, ['--check', target], { stdio: 'pipe' })

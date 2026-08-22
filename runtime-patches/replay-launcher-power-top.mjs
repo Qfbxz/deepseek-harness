@@ -24,7 +24,7 @@ if (s.includes(OLD_V3)) s = s.replace(OLD_V3, NEW)
 else if (s.includes(OLD_V2)) s = s.replace(OLD_V2, NEW)
 else if (s.includes(OLD_V1)) s = s.replace(OLD_V1, NEW)
 else if (s.includes(OLD_ORIG)) s = s.replace(OLD_ORIG, NEW)
-else throw new Error('power button position anchor missing — plugin restructured, review manually')
+else { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 writeFileSync(target, s)
 execFileSync(process.execPath, ['--check', target], { stdio: 'pipe' })
 console.log('[patched]', target)

@@ -324,3 +324,19 @@ node runtime-patches/replay-scrollbody-center-fix.mjs
 ```
 
 watchdog 条目 `p30-scrollbody-center`（marker=`patch(center-fix)`，bad=原 justify-content:center 行）。
+
+## 补丁 31：desktop-chrome 用量按钮记忆行布局护栏（personal-plugins/dsh-desktop-chrome）
+
+看护 `moveUsageToMemoryRow` 迁入 settingsArea 的完整形态。七个断言锚点全在才打 `patch(usage-row)` 幂等标记——①函数存在 ②注册进 runHeavyPatches ③锚点爬升（insertBefore 的锚必须是 settingsArea 直接子级，否则每轮 pass 抛错中断，2026-08-21「按钮从不变」根因）④禁止搬运宿主 React 节点的 revert ⑤marginRight -2px（净距记忆 2px）⑥marginLeft -4px + paddingLeft 4px（左移加宽）⑦usg_panel 全不透明。任何锚缺失即抛错提醒人工复核，绝不静默。autorun jobs 已注册。
+
+## 补丁 32：usage-stats minimax region 误判修复（@ychris12138/dsh-usage-stats）
+
+`minimax-cn` 无 baseURL/region 时 accounts.js 判为 global 区 → CN key 打 `www.minimax.io` → MiniMax 回 `base_resp 2049 invalid api key`。修复：provider id/displayName 以 `-cn` 结尾直接判 CN 区。幂等标记 `patch(minimax-region)`。autorun 已注册（accounts.js）。
+
+## 补丁 34：frostfin terminal 反向 RPC（pzc2004/dsh-frostfin）
+
+frostfin（kimi 主 loop 桥）initialize 发空 `clientCapabilities: {}`，而 kimi acp 的 Bash 把 shell 路由给客户端 `terminal/*` 反向 RPC → "ACP terminal capability is unavailable"。修复四文件：vendor 本仓库 `packages/subagent/subagent-acp/lib/types/terminal.js` 为 `lib/terminal-pool.js`（与 sdk 1.x 客户端方法名兼容）；acp-process.js 建 `AcpTerminalPool` + makeClient 展开 clientMethods + `clientCapabilities: spec.terminal ? {terminal:true} : {}` + dispose 先 `releaseAll()`；index.js Config 加 `terminal`/`terminalOutputByteLimit`；factory.js 透传。幂等标记 `patch(terminal-rpc)`。autorun + watchdog（p34）已注册（acp-process.js）。配置开关在 profile cordis.patch.yml `- id: frostfin / config: {terminal: true}`（用户补丁层，插件升级不动）。上游修复后（initialize 自带 terminal 能力）锚点消失自动 RETIRED。
+
+## 补丁 35：desktop-chrome fixed-escape（personal-plugins/dsh-desktop-chrome）
+
+git-graph 挂载点从侧栏 logoRow 挪进底部 composer anchor 后，anchor 的 `backdrop-filter` 成为 `position:fixed` 的 containing block——分支芯片钉视口坐标却渲染在 anchor 相对位置（底部），与顶部 commit 按钮分离。修复：placeGoalGitRow 钉位前把挂载链上所有创建 containing block 的祖先属性（backdropFilter/perspective/transform/filter/contain/containerType）逐个内联中和（实测仅两个 0 高度包装层带 backdropFilter，无视觉影响）。幂等标记 `patch(fixed-escape)`。autorun + watchdog（p35）已注册（client.mjs）。诊断配方：fixed 元素 rect 与 style.left/top 不符 → 查祖先 transform/filter/backdrop-filter/perspective/contain/container-type。

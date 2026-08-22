@@ -1,0 +1,4 @@
+# dsh-usage-all bundle: 徽章 + 官方额度 + 事件账本 + 看板一体（自维护 fork 合并）
+- insert:
+    - id: usage-all
+      name: dsh-usage-all

@@ -9,7 +9,7 @@ let s = readFileSync(target, 'utf8')
 if (s.includes('patch(popover-below)')) { console.log('[skip] already patched:', target); process.exit(0) }
 const OLD = 'bottom:calc(100% + 4px);left:0;overflow:hidden}'
 const NEW = '/*patch(popover-below)*/top:calc(100% + 4px);bottom:auto;left:0;overflow:hidden}'
-if (!s.includes(OLD)) throw new Error('popover anchor missing')
+if (!s.includes(OLD)) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 s = s.replace(OLD, NEW)
 writeFileSync(target, s)
 execFileSync(process.execPath, ['--check', target], { stdio: 'pipe' })

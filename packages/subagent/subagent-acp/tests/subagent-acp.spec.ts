@@ -11,6 +11,7 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { SubprocessOutcome } from '@deepseek-ai/dsh-subprocess'
 import * as acp from '../src/index.ts'
 import { acpStopReason, acpContentText, DEFAULT_DISPOSE_EOF_GRACE_MS, DEFAULT_DISPOSE_GRACE_MS, disposeAcpChild, startAcpRun, toAcpPrompt, type AcpRunSpec } from '../src/run.ts'
+import { DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT } from '../src/terminal.ts'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { spawnSubprocess } from '@deepseek-ai/dsh-subprocess-local/src/spawn.ts'
 
@@ -450,7 +451,7 @@ describe('dsh-subagent-acp', () => {
       await expect(startAcpRun(
         request('p', controller.signal),
         // `touch <sentinel>` — runs only if the process is actually spawned.
-        { command: 'touch', args: [sentinel], cwd: tmp, permission: 'reject', env: {}, disposeEofGraceMs: DEFAULT_DISPOSE_EOF_GRACE_MS, disposeGraceMs: DEFAULT_DISPOSE_GRACE_MS, spawn: spawnSubprocess },
+        { command: 'touch', args: [sentinel], cwd: tmp, permission: 'reject', env: {}, terminal: false, terminalOutputByteLimit: DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT, disposeEofGraceMs: DEFAULT_DISPOSE_EOF_GRACE_MS, disposeGraceMs: DEFAULT_DISPOSE_GRACE_MS, spawn: spawnSubprocess },
       )).rejects.toThrow('aborted before the ACP child started')
       // The binary was never launched — no sentinel.
       expect(existsSync(sentinel)).toBe(false)
@@ -473,6 +474,8 @@ describe('dsh-subagent-acp', () => {
           MOCK_FLUSH_ON_EOF: flushed,
           MOCK_FLUSH_DELAY_MS: '20',
         },
+        terminal: false,
+        terminalOutputByteLimit: DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT,
         disposeEofGraceMs: 1000,
         disposeGraceMs: 100,
         spawn: spawnSubprocess,
@@ -503,6 +506,8 @@ describe('dsh-subagent-acp', () => {
         // small so the whole ladder finishes well within the 4000ms bound.
         disposeEofGraceMs: 150,
         disposeGraceMs: 150,
+        terminal: false,
+        terminalOutputByteLimit: DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT,
         spawn: spawnSubprocess,
       }
       const run = await startAcpRun(request(), spec)
@@ -551,6 +556,8 @@ describe('dsh-subagent-acp', () => {
         },
         disposeEofGraceMs: 2000,
         disposeGraceMs: 50,
+        terminal: false,
+        terminalOutputByteLimit: DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT,
         spawn: spawnSubprocess,
       }
       const run = await startAcpRun(request(), spec)
@@ -585,6 +592,8 @@ describe('dsh-subagent-acp', () => {
         // Tiny EOF grace so the ignored-EOF window elapses quickly.
         disposeEofGraceMs: 150,
         disposeGraceMs: 2000,
+        terminal: false,
+        terminalOutputByteLimit: DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT,
         spawn: spawnSubprocess,
       }
       const run = await startAcpRun(request(), spec)
@@ -681,7 +690,7 @@ describe('dsh-subagent-acp', () => {
   it('rejects a spawn failure after provider-owned cleanup', async () => {
     await expect(startAcpRun(
       request(),
-      { command: '/nonexistent/acp-agent-binary', args: [], cwd: process.cwd(), permission: 'reject', env: {}, disposeEofGraceMs: DEFAULT_DISPOSE_EOF_GRACE_MS, disposeGraceMs: DEFAULT_DISPOSE_GRACE_MS, spawn: spawnSubprocess },
+      { command: '/nonexistent/acp-agent-binary', args: [], cwd: process.cwd(), permission: 'reject', env: {}, terminal: false, terminalOutputByteLimit: DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT, disposeEofGraceMs: DEFAULT_DISPOSE_EOF_GRACE_MS, disposeGraceMs: DEFAULT_DISPOSE_GRACE_MS, spawn: spawnSubprocess },
     )).rejects.toThrow()
   })
 
@@ -765,6 +774,8 @@ describe('dsh-subagent-acp', () => {
         env: { MOCK_CRASH_ON_PROMPT: '1' },
         disposeEofGraceMs: DEFAULT_DISPOSE_EOF_GRACE_MS,
         disposeGraceMs: DEFAULT_DISPOSE_GRACE_MS,
+        terminal: false,
+        terminalOutputByteLimit: DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT,
         spawn: spawnSubprocess,
         onError: (error, stopReason) => { errors.push({ message: error.message, stopReason }) },
       },
@@ -804,6 +815,8 @@ describe('dsh-subagent-acp', () => {
         env: { MOCK_CRASH_ON_PROMPT: '1' },
         disposeEofGraceMs: DEFAULT_DISPOSE_EOF_GRACE_MS,
         disposeGraceMs: DEFAULT_DISPOSE_GRACE_MS,
+        terminal: false,
+        terminalOutputByteLimit: DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT,
         spawn: spawnSubprocess,
         onError: () => { throw new Error('sink boom') },
       },

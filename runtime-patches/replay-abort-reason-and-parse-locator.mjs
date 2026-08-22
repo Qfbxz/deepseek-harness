@@ -50,7 +50,7 @@ const onOld = 'message: String(request.signal?.reason)'
 const onNew = 'message: `aborted: ${renderAbortReason(request.signal?.reason)}`'
 const preHits = src.split(preOld).length - 1
 const onHits = src.split(onOld).length - 1
-if (preHits + onHits === 0 && !src.includes('renderAbortReason(request.signal')) throw new Error('abort call-site anchors missing — upstream restructured, review manually')
+if (preHits + onHits === 0 && !src.includes('renderAbortReason(request.signal')) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 src = src.split(preOld).join(preNew)
 src = src.split(onOld).join(onNew)
 

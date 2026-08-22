@@ -19,6 +19,7 @@ import type {
 } from '@deepseek-ai/dsh-subagent'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { type AcpRunSpec, DEFAULT_DISPOSE_EOF_GRACE_MS, DEFAULT_DISPOSE_GRACE_MS, type PermissionPolicy, startAcpRun } from './run.ts'
+import { DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT } from './terminal.ts'
 
 export const name = 'subagent-acp'
 export const inject = ['subagents', 'subprocess']
@@ -46,6 +47,21 @@ export interface Config {
    */
   permission: PermissionPolicy
   /**
+   * Advertise `clientCapabilities.terminal` and serve the child's
+   * `terminal/create · output · wait_for_exit · kill · release` reverse-RPC
+   * family through the subprocess seam. Required for children that route
+   * shell tools through the client instead of self-serving (e.g. `kimi acp`);
+   * self-serving children (the ACP demo agent) ignore it. Defaults to `false`.
+   */
+  terminal?: boolean
+  /**
+   * Retained-output byte cap per child terminal — the create request's
+   * `outputByteLimit` when it sends one, else this default. The emitted
+   * `terminal/output` snapshot is clamped to this bound (tail kept).
+   * Defaults to 1 MB.
+   */
+  terminalOutputByteLimit?: number
+  /**
    * Extra environment variables for the child process — e.g. the child
    * harness's own `DEEPSEEK_API_KEY`. Forwarded on top of a credential-scrubbed
    * copy of the parent env, so an explicit key here reaches the child while
@@ -69,6 +85,8 @@ export const Config: z<Config> = z.object({
   args: z.array(z.string()).default([]),
   cwd: z.string(),
   permission: z.union(['allow', 'reject'] as const).default('reject'),
+  terminal: z.boolean().default(false),
+  terminalOutputByteLimit: z.number().default(DEFAULT_TERMINAL_OUTPUT_BYTE_LIMIT),
   env: z.dict(z.string()).default({}),
   disposeEofGraceMs: z.number().default(DEFAULT_DISPOSE_EOF_GRACE_MS),
   disposeGraceMs: z.number().default(DEFAULT_DISPOSE_GRACE_MS),
@@ -78,6 +96,13 @@ export const Config: z<Config> = z.object({
 function assertPositiveFinite(name: string, value: number): void {
   if (!Number.isFinite(value) || value <= 0 || value > MAX_TIMER_DELAY_MS) {
     throw new Error(`subagent-acp: ${name} must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`)
+  }
+}
+
+/** An output byte cap is not timer-bounded; it must be a positive integer. */
+function assertPositiveInteger(name: string, value: number): void {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`subagent-acp: ${name} must be a positive integer: ${value}`)
   }
 }
 
@@ -156,6 +181,8 @@ class AcpProvider implements SubagentProvider {
       args: this.config.args,
       cwd: resolveCwd(this.config.cwd, request),
       permission: this.config.permission,
+      terminal: this.config.terminal,
+      terminalOutputByteLimit: this.config.terminalOutputByteLimit,
       env: this.config.env,
       disposeEofGraceMs: this.config.disposeEofGraceMs,
       disposeGraceMs: this.config.disposeGraceMs,
@@ -175,6 +202,7 @@ export function apply(ctx: Context, config: Config): void {
   const resolved = config as ResolvedConfig
   assertPositiveFinite('disposeEofGraceMs', resolved.disposeEofGraceMs)
   assertPositiveFinite('disposeGraceMs', resolved.disposeGraceMs)
+  assertPositiveInteger('terminalOutputByteLimit', resolved.terminalOutputByteLimit)
   // `path.resolve('')` is the process cwd — an empty string would silently
   // reintroduce the launch-directory fallback this resolution removed.
   if (resolved.cwd === '') {
