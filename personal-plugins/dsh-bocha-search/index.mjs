@@ -10,12 +10,14 @@
  *   GET  /dsh-local/bocha-search/config  → { baseURL, totalCalls, hasApiKey, count, updatedAt }
  *   POST /dsh-local/bocha-search/config  → save { apiKey?, baseURL, totalCalls }
  *   POST /dsh-local/bocha-search/reset   → count := 0
+ *   GET  /dsh-local/bocha-searxng/search?q=&format=json → SearXNG 协议垫片（供 search-pool）
  */
 import { WebError } from '@deepseek-ai/dsh-web'
 import { DeepSeekSearchProvider } from '@deepseek-ai/dsh-web-search-deepseek'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { readFile, writeFile } from 'node:fs/promises'
+import { createShimHandler } from './lib/searxng-shim.mjs'
 
 export const name = 'bocha-search'
 
@@ -199,6 +201,15 @@ export function apply(ctx) {
       res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
       res.end(JSON.stringify(body))
     }
+
+    // SearXNG 协议垫片：dsh-search-failover 的 searxng 后端指向
+    // http://127.0.0.1:<port>/dsh-local/bocha-searxng 即可把博查接入
+    // failover 链（免费引擎优先、博查兜底）。成功搜索沿用 usage 计数链。
+    host.effect(() => host.webServer.register({
+      kind: 'exact',
+      path: '/dsh-local/bocha-searxng/search',
+      handler: createShimHandler({ getConfig: readConfig, recordUsage }),
+    }), 'bocha-search: searxng shim route')
 
     host.effect(() => host.webServer.register({
       kind: 'exact',

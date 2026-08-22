@@ -44,7 +44,8 @@ export function apply(ctx) {
       ['replay-agency-list-experts-shape.mjs', []],
       ['replay-git-commit-subagent-guard.mjs', ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-git-commit/client.mjs']],
       ['replay-frostfin-terminal.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/dsh-frostfin/lib/acp-process.js')]],
-      ['replay-desktop-chrome-fixed-escape.mjs', ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-desktop-chrome/client.mjs']],
+      ['replay-desktop-chrome-fixed-v.mjs', ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-desktop-chrome/client.mjs']],
+      ['replay-git-graph-body-portal.mjs', [join(homedir(), '.dsh/profiles/web/node_modules/@linxin666/dsh-client-ui-git-graph/lib/client.js')]],
     ]
     let patched = 0, clean = 0; const failed = []
     for (const [script, args] of jobs) {

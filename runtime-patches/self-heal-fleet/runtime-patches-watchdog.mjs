@@ -98,9 +98,12 @@ export function apply(ctx, config) {
       // p34: frostfin initialize 发空 clientCapabilities，kimi acp 的 Bash 需要
       // terminal/* 反向 RPC（"ACP terminal capability is unavailable"）。
       { id: 'p34-frostfin-terminal', file: join(homedir(), '.dsh/profiles/web/node_modules/dsh-frostfin/lib/acp-process.js'), marker: 'patch(terminal-rpc)', bad: '不声明任何可选客户端能力', script: 'replay-frostfin-terminal.mjs', extra: [] },
-      // p35: git-graph composer anchor 的 backdrop-filter 成为 fixed 的 containing
-      // block，分支芯片渲染在底部、与顶部 commit 按钮分离。
-      { id: 'p35-desktop-chrome-fixed-escape', file: '/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-desktop-chrome/client.mjs', marker: 'patch(fixed-escape)', bad: 'width - 8)));\n\t\t\t\t\tchip.style.position = "fixed";', script: 'replay-desktop-chrome-fixed-escape.mjs', extra: [] },
+      // p35(v2): 顶部 git chips 垂直恒定（rawTop 跟随+回退链造成 16↔46 跳变）；
+      // v1 的逐祖先中和打法已退役（根因由 p36 body-portal 解决）。
+      { id: 'p35-desktop-chrome-fixed-v', file: '/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-desktop-chrome/client.mjs', marker: 'patch(fixed-v)', bad: 'const rawTop = Math.round(anchorRow.top + (anchorRow.height - 24) / 2);', script: 'replay-desktop-chrome-fixed-v.mjs', extra: [] },
+      // p36: git-graph 分支 chip 经 createPortal 挂 body——composer seat 的
+      // backdrop-filter 曾把 fixed 钉位困成 composer 相对坐标（弹层落屏幕中部）。
+      { id: 'p36-gitgraph-body-portal', file: join(homedir(), '.dsh/profiles/web/node_modules/@linxin666/dsh-client-ui-git-graph/lib/client.js'), marker: 'patch(body-portal)', bad: 'react_jsx_runtime.jsxs)("div", {\n\t\t\t\tref: anchorRef,', script: 'replay-git-graph-body-portal.mjs', extra: [] },
     ];
     // State-aware logging: an anchor-mismatch failure after an upstream
     // restructure repeats every patrol; log the first failure in detail and

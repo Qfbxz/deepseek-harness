@@ -524,9 +524,6 @@ async function buildRows() {
 		 * lives in the sidebar header's logoRow, left of the collapse toggle —
 		 * 2026-08-19 user instruction. The composer row below only carries the
 		 * checklist dock; the goal bar stays in its official composer-stack dock. */
-		// patch(fixed-v): 顶部 chips 的恒定垂直位置缓存（标题行有效时刷新；见
-		// placeGoalGitRow 内 patch(fixed-v) 注释）。16 = 标题行 y12 + (32-24)/2 的实测值。
-		let pinnedChipTop = 16;
 		function placeGoalGitRow() {
 			// Hero (blank-session) phase: no composer row needed; the branch chip
 			// still rides the sidebar top. Just drop any stale composer row.
@@ -560,16 +557,12 @@ async function buildRows() {
 					let anchorRow = titleRow !== null ? titleRow.getBoundingClientRect() : (tabs !== null ? tabs.getBoundingClientRect() : clusterRect);
 					if (anchorRow.height < 14) anchorRow = tabs !== null ? tabs.getBoundingClientRect() : clusterRect;
 					if (anchorRow.height < 14) anchorRow = clusterRect;
-					// patch(fixed-v) 2026-08-22: 垂直位置恒定（用户要求：与子代理等
-					// 按钮平齐、不随滚动/面板瞬态跳动）。实测标题行在固定头部里本就不
-					// 随滚动移动（y=12 恒定）；旧 rawTop 逐像素跟随 + tabs(y≈48)/cluster
-					// 回退链在行瞬态塌缩（height<14）时造成 16↔46 跳变。现在只在标题行
-					// 真实有效时更新缓存值，塌缩/缺失时沿用缓存，绝不换锚。
-					if (titleRow !== null) {
-						const tr = titleRow.getBoundingClientRect();
-						if (tr.height >= 14) pinnedChipTop = Math.round(tr.top + (tr.height - 24) / 2);
-					}
-					const top = Math.max(6, Math.min(pinnedChipTop, 46));
+					// patch(scroll-stick): 长对话滚动时标题行（PTC/子代理所在）
+					// 会滚出视口——chips 钉在 anchorRow.top 为负的地方=悬空错位。
+					// 目标行可见时逐像素跟随；滚出时钳回视口顶部安全带（不悬空、
+					// 不与顶部 dock 重叠，回滚时自然回到同行位置）。
+					const rawTop = Math.round(anchorRow.top + (anchorRow.height - 24) / 2);
+					const top = Math.max(6, Math.min(rawTop, 46));
 					// 水平：钉在标题行最右侧可见元素（"PTC 模式"或其他模式 chip）后面，
 					// 按实测右缘排布，任何模式下都不与已有 chip 重叠。顺序 [分支][提交]。
 					const commitChip = document.getElementById("dsh-git-commit-chip");
@@ -599,16 +592,23 @@ async function buildRows() {
 					// patch(viewport-clamp): Safari/窄窗口下标题行元素的实测右缘可能
 					// 越过视口，把分支 chip 钉到窗外不可见——钳回视口内（两侧各留 8px）。
 					branchLeft = Math.max(8, Math.min(branchLeft, Math.round(window.innerWidth - chip.getBoundingClientRect().width - 8)));
-				// patch(fixed-escape) 已退役 2026-08-22：根因在 git-graph 侧修复——
-				// 其 anchor 现经 createPortal 挂 document.body，chip 的 position:fixed
-				// 天然以视口为包含块。旧的逐祖先中和法治标且有害：React 重建
-				// composerSeat 节点后陷阱重新武装（实测双 seat 并存，清过的带内联
-				// none、chip 真祖先仍是 blur(10px)），且清真实 seat 的 blur 会丢
-				// composer 磨砂玻璃。此处仅清理历史残留：旧 pass 写进 seat 的内联
-				// backdrop-filter:none 移除，恢复官方类样式。
-				for (const seat of document.querySelectorAll('[class*="composerSeat"]')) {
-					if (seat.style.backdropFilter === "none") seat.style.backdropFilter = "";
-				}
+					// patch(fixed-escape): git-graph 的 composer anchor 带 backdrop-filter，
+					// 成为 position:fixed 的 containing block——芯片钉的是视口坐标却渲染成
+					// anchor 相对位置（底部，2026-08-22 挂载点从侧栏 logoRow 挪进 composer
+					// anchor 后回归）。挂载链上创建 containing block 的祖先（backdropFilter/
+					// perspective/transform/filter/contain/containerType）逐个中和；实测仅
+					// 两个 0 高度包装层带 backdropFilter，清除无视觉影响。
+					let anc = chip.parentElement;
+					while (anc !== null && anc !== document.body) {
+						const acs = getComputedStyle(anc);
+						if (acs.backdropFilter !== "none") anc.style.backdropFilter = "none";
+						if (acs.perspective !== "none") anc.style.perspective = "none";
+						if (acs.transform !== "none") anc.style.transform = "none";
+						if (acs.filter !== "none") anc.style.filter = "none";
+						if (acs.contain !== "none") anc.style.contain = "none";
+						if (acs.containerType !== undefined && acs.containerType !== "normal" && acs.containerType !== "") anc.style.containerType = "normal";
+						anc = anc.parentElement;
+					}
 					chip.style.position = "fixed";
 					// patch(inline-chip-color): 某些 Safari 版本解析不了主题的渐变/
 					// oklch 色函数，文字填充保持透明——内联颜色绕过整条 CSS 链，保底可见。

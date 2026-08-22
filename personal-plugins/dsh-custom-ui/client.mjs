@@ -59,29 +59,10 @@ window.__ModuleLoader__.load({
       ".dsh-custom-export{box-sizing:border-box;display:flex;align-items:center;gap:8px;background:transparent;border:none;color:var(--dsw-alias-label-primary);border-radius:12px;padding:6px 8px;min-height:34px;font-size:14px;line-height:22px;font-weight:400;cursor:pointer;justify-content:center;}",
       ".dsh-custom-export:hover{background:var(--dsw-alias-interactive-bg-hover);}",
       ".dsh-custom-export:disabled{opacity:.4;cursor:default;}",
-      ".hHd-Xa_collapsed .dsh-custom-export{display:inline-flex !important;width:auto !important;padding:6px !important;justify-content:center !important;}",
-      ".hHd-Xa_collapsed .dsh-custom-export > span{display:none !important;}",
-      // F3 (grid): expanded — row1 import+export half/half, row2 others x3;
       // collapsed rail — everything stacks in ONE column.
-      ".hHd-Xa_footerActions{display:grid !important;grid-template-columns:repeat(6,1fr) !important;gap:2px !important;row-gap:2px !important;}",
 
 
-      'button[aria-label="移动端远程控制"]{grid-column:3/5 !important;grid-row:2 !important;justify-self:center !important;min-width:44px !important;}',
-      '.hHd-Xa_footerActions > button[aria-label="导入会话"],.hHd-Xa_footerActions > button[aria-label="Import Sessions"]{grid-row:1 !important;grid-column:span 3 !important;width:auto !important;min-width:0 !important;margin:0 !important;flex:none !important;align-self:stretch;}',
-      ".dsh-custom-export{grid-row:1 !important;grid-column:span 3 !important;align-self:stretch;}",
-      '.hHd-Xa_footerActions > *:not(.dsh-custom-export):not(button[aria-label="导入会话"]):not(button[aria-label="Import Sessions"]):not(.usg_layer){grid-row:2 !important;grid-column:2 !important;justify-self:end !important;margin:0 !important;min-width:0 !important;align-self:stretch;}',
-      '.hHd-Xa_footerActions > *:not(.dsh-custom-export):not(button[aria-label="导入会话"]):not(button[aria-label="Import Sessions"]):not(.usg_layer) > *{justify-content:center !important;padding:4px !important;min-width:28px !important;box-sizing:border-box;}',
-      '.usg_layer:not(.usg_rail){grid-row:2 !important;grid-column:4/7 !important;}',
       ".usg_layer:not(.usg_rail){height:auto !important;min-height:36px;}",
-      // collapsed rail: single column stack for ALL six buttons
-      ".hHd-Xa_collapsed .hHd-Xa_footerActions{display:flex !important;flex-direction:column !important;align-items:center !important;gap:6px !important;grid-template-columns:none !important;}",
-      ".hHd-Xa_collapsed .hHd-Xa_footerActions > *{grid-area:auto !important;width:auto !important;min-width:0 !important;margin:0 !important;}",
-      ".hHd-Xa_collapsed .usg_layer:not(.usg_rail){width:auto !important;min-height:32px;height:32px;}",
-      '[data-sidebar-collapsed] .hHd-Xa_footerActions{display:flex !important;flex-direction:column !important;align-items:center !important;gap:6px !important;grid-template-columns:none !important;}',
-      '[data-sidebar-collapsed] .hHd-Xa_footerActions > *{grid-area:auto !important;width:auto !important;min-width:0 !important;margin:0 !important;}',
-      ".hHd-Xa_footArea{padding-bottom:8px;}",
-      ".hHd-Xa_footArea{padding-bottom:8px;}",
-      ".hHd-Xa_footArea{padding-bottom:8px;}",
       // F7: hide the reasoning-effort tag on the model pill (GLM-5.2 Default → GLM-5.2)
       '[class*="_triggerEffort"]{display:none !important;}',
       // F8: 官方 rc.6 把 goal bar 注册进发送按钮后的 send-after 槽（priority 5）。
@@ -107,22 +88,9 @@ window.__ModuleLoader__.load({
       ".dsh-custom-titlebar .dsh-custom-tb-btn:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(0,0,0,.08));}",
       "body.dsh-custom-tb{padding-top:32px;}",
       // --- 底部行终版：[检查更新|移动端] 自然宽 + 用量条填满右侧（1px 间隙，两缘对齐设置按钮）---
-      '.hHd-Xa_footerActions [class*="entryRow"]{grid-row:2 !important;grid-column:1 / span 2 !important;margin:0 0 0 4px !important;justify-self:start !important;}',
-      '.hHd-Xa_footerActions .usg_layer{grid-row:2 !important;grid-column:3 / -1 !important;margin:0 -4px 0 10px !important;justify-self:stretch !important;width:auto !important;}',
       '.usg_layer .usg_footerButtons, .usg_layer .usg_badge{flex:1 1 auto !important;width:auto !important;min-width:0 !important;}',
       '.usg_layer button{width:100% !important;box-sizing:border-box !important;}',
       // --- 折叠态（窄栏）：底部按钮单列垂直居中对齐 ---
-      '.hHd-Xa_settingsArea, .hHd-Xa_settingsArea button{margin-left:4px !important;}',
-      '.hHd-Xa_footerActions{container-type:inline-size;}',
-      '@container (max-width: 120px){',
-      '  .hHd-Xa_footerActions{width:100% !important;margin:0 !important;justify-items:center !important;}',
-      '  .hHd-Xa_footerActions [class*="entryRow"]{margin:0 0 0 -26px !important;}',
-      '  .hHd-Xa_footerActions .usg_layer{margin:0 0 0 -26px !important;width:auto !important;}',
-      '  .hHd-Xa_footerActions button[aria-label="导入会话"], .hHd-Xa_footerActions button[aria-label="Import Sessions"]{margin-left:-21px !important;}',
-      '  .hHd-Xa_footerActions .dsh-custom-export, .hHd-Xa_footArea .dsh-custom-export{margin-left:-24px !important;}',
-      '  .usg_layer .usg_footerButtons, .usg_layer .usg_badge{flex:0 1 auto !important;width:auto !important;}',
-      '  .usg_layer button{width:auto !important;}',
-      '}',
     ].join("");
     function injectCss() {
       if (document.querySelector("style[data-dsh-custom-ui]")) return;
@@ -147,7 +115,6 @@ window.__ModuleLoader__.load({
       if (!orig || !anchor) return;
       var lang = detectLang() === "en" ? "en" : "zh";
       var s = STRINGS[lang];
-      var actions = anchor.closest(".hHd-Xa_footerActions");
       if (actions === null || actions === undefined) return;
       // orphan sweep: exactly one clone, inside the live footerActions only
       var strays = document.querySelectorAll("button.dsh-custom-export");
@@ -327,7 +294,9 @@ window.__ModuleLoader__.load({
       var sa = document.querySelector('[class*="settingsArea"]');
       if (fa === null || sa === null) return;
       var collapsed = fa.getBoundingClientRect().width <= 120;
-      var want = collapsed ? "-5px" : "4px";
+      // 底部块拉偏 2.5px；折叠态归零，居中交给 desktop-chrome shim 的
+      // align-items:center（内联 important 会压过样式表 important，必须改这里）
+      var want = collapsed ? "0px" : "4px";
       sa.style.setProperty('margin-left', want, 'important');
     }
 
