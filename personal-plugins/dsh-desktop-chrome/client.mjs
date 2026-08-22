@@ -1195,6 +1195,21 @@ async function buildRows() {
 			}, 1000);
 			const statsTimer = window.setInterval(() => void updateStatsTotals(), 60_000);
 			const ringsTimer = window.setInterval(() => { renderModelRings(); void refreshModelRings(); }, 30_000);
+			// PATCH 2026-08-22(b): 轮询兜底 —— 宿主进程若带着旧 inject 快照(改 package.json
+			// 前启动),ctx.sessions 不可用,事件订阅空转;且 MutationObserver 300ms 防抖
+			// 与 React 重渲时序偶发漏检 aria-label 变化。5s 直查一次 model button,
+			// 变化即刷新,保证模型/供应商切换最多 5 秒内跟上。
+			const modelPollTimer = window.setInterval(() => {
+				try {
+					const model = currentModelName();
+					if (model !== lastModel) {
+						lastModel = model;
+						modelRingsAt = 0;
+						void refreshWidget();
+						void refreshModelRings();
+					}
+				} catch { /* 瞬态 */ }
+			}, 5_000);
 
 			ctx.effect(() => () => {
 				observer.disconnect();
@@ -1203,6 +1218,7 @@ async function buildRows() {
 				window.clearInterval(chipsTimer);
 				window.clearInterval(statsTimer);
 				window.clearInterval(ringsTimer);
+				window.clearInterval(modelPollTimer);
 				document.getElementById(WIDGET_ID)?.remove();
 				document.getElementById("dshc-top-chips")?.remove();
 				style.remove();
