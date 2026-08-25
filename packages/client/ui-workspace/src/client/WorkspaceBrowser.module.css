@@ -337,6 +337,10 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* patch(2026-08-26 overscroll-contain): webui 侧栏列表滚到头后滚动链冒泡到
+     body，配合面板宿主内隐藏动画期间的瞬时溢出把页面拖出底部空白（桌面 app
+     的原生窗口不受影响）。contain 切断传导，对齐桌面版行为。 */
+  overscroll-behavior: contain;
   margin-left: -4px;
   margin-right: var(--dsh-session-list-scrollbar-offset);
   padding-left: 4px;

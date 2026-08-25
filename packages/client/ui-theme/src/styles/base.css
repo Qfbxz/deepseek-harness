@@ -3,6 +3,19 @@
  * --dsw-font-* variables resolve and motion rides the upstream curve. Code
  * font stack deliberately omits a bare `monospace` tail (Windows CJK falls
  * back to SimSun otherwise). */
+
+/* patch(2026-08-26 webui-no-body-scroll): html/body 钉死默认生效（防 webui 滚动空白，
+ * 舰队 p57 replay-ui-theme-body-pin.mjs 负责官方包重装后重放）。
+ * Electron 桌面版由 desktop-chrome 的 body-scroll-guard v8 补偿：壳标题栏给 body 加
+ * padding-top:32px，钉死令 body 总盒 952>920 视口、overflow:hidden 硬裁底部 32px；
+ * guard 用 html.dshc-electron 类把 body 高度改 calc(100%-32px)（高度链不能动——
+ * height:auto|unset 会炸掉侧栏文件树的高度约束，CDP 实测页面撑到 5394px）。 */
+html, body {
+  overscroll-behavior: none;
+  overflow: hidden;
+  height: 100%;
+}
+
 :root {
   --dsw-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;

@@ -79,6 +79,14 @@ button[aria-label="导入会话"] { width: auto !important; flex: 0 0 auto !impo
 /* slot 包装层（footerActions 内的无类名 flex DIV，w74 横排）也要跟着转列 */
 [class*="_collapsed"] [class*="_footerActions"] > div:not([class]) { flex-direction: column !important; align-items: center !important; width: auto !important; }
 [class*="_collapsed"] [class*="_footerActions"] :has(button[aria-label*="检查更新"]) { order: 0 !important; gap: 6px !important; margin-left: 0 !important; }
+/* patch(2026-08-26 body-scroll-guard v8, CDP 实测定稿): Electron 桌面壳的标题栏
+ * (dsh-custom-titlebar) 给 body 加 padding-top:32px，主题补丁的 html,body{height:100%}
+ * 令 body 总盒 952>920 视口、overflow:hidden 硬裁底部 32px（状态栏/底行消失）。
+ * v4/v5 的 height:auto|unset 会炸掉布局高度链（侧栏文件树撑到 5394px）——高度链
+ * 必须保住。终态：html 100%、body calc(100%-32px)（888 内容+32 padding=920 恰满，
+ * 零滚动），实测 root/侧栏贴底 920、状态栏底 908 可见。浏览器端无此类、钉死原样。 */
+html.dshc-electron { height: 100% !important; overflow: hidden !important; }
+html.dshc-electron body { height: calc(100% - 32px) !important; overflow: hidden !important; }
 /* PATCH 2026-08-22: rail-mode absolute centering. Offenders measured from
  * the live rail (center 27.5): settingsArea keeps its wide-mode -5px left
  * margin (whole bottom block -2.5); the usage badge is 48px wide with
@@ -98,6 +106,20 @@ button[aria-label="导入会话"] { width: auto !important; flex: 0 0 auto !impo
 .usg_layer:not(.usg_rail) .usg_badgeCount { display: none; }
 .hHd-Xa_collapsed .hHd-Xa_footerActions { flex-direction: column; align-items: center; }
 html { font-size: 93.75%; }
+/* PATCH 2026-08-23: launcher 电源钮钉到侧栏折叠钮旁（28px 同款图标钮；
+ * 几何由 placeLauncherButton 内联驱动，p25 的 display:none 基线被内联覆盖） */
+[class*="triggerFloating"].dshc-pinned { width: 28px; height: 28px; box-shadow: none; background: transparent; transition: none !important; }
+[class*="triggerFloating"].dshc-pinned:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+[class*="triggerFloating"].dshc-pinned svg { width: 16px; height: 16px; }
+[class*="_collapsed"] [class*="_newSession"] { margin-top: 30px; }
+/* PATCH 2026-08-23: 会话区全宽 CSS 先行——首帧即全宽，消除加载/切换会话时
+ * 窄→宽的可见过渡（JS widenConversation 是 mutation+300ms 后置扫描，每轮
+ * 会话切换都会重演一次窄帧）。scope 到中列区控制影响面；JS 扫描保留作兜底
+ * （元素已被 CSS 置宽后其 600-900 过滤自然跳过，不冲突）。 */
+[class*="centerCol"] [class*="_column"], [class*="centerCol"] [class*="_card"] { max-width: none !important; transition: none !important; }
+/* 队列条 CSS 先行默认态：首帧即全宽对齐输入卡（JS place() 的内联精调随后覆盖，
+ * 100%≈精确 px 视觉无差）；对齐有 goal 的钉宽常态，无 goal 挪 chips 行由 JS 处理。 */
+[data-queue-dock] { flex: 0 0 auto; width: 100%; max-width: none; margin: 0; }
 .usg_panel { width: var(--dshc-sidebar-w, 280px) !important; max-height: 62vh !important; font-size: 12px !important; background: var(--dsw-alias-bg-base) !important; backdrop-filter: none !important; opacity: 1 !important; }
 .usg_panel * { opacity: 1 !important; backdrop-filter: none !important; }
 .usg_statsRow { flex-wrap: wrap !important; }
@@ -557,6 +579,7 @@ async function buildRows() {
 		// placeGoalGitRow 内 patch(fixed-v) 注释）。16 = 标题行 y12 + (32-24)/2 的实测值。
 		let pinnedChipTop = 16;
 		function placeGoalGitRow() {
+			/*patch(hidden-guard)*/ if (document.documentElement.hasAttribute('data-dsh-taskboard-active') || document.documentElement.hasAttribute('data-dsh-ssh-active')) return;
 			// Hero (blank-session) phase: no composer row needed; the branch chip
 			// still rides the sidebar top. Just drop any stale composer row.
 			const heroStack = document.querySelector('[class*="composerStack"]');
@@ -705,6 +728,7 @@ async function buildRows() {
 				if (stackEl !== null) {
 					// 对齐参照 = 输入卡（2026-08-20 用户定稿：条与输入框左右边界对齐）
 					const cr0 = card.getBoundingClientRect();
+					/*patch(hidden-guard)*/ if (cr0.width <= 0) return; // 隐藏/瞬态:保持上次几何,禁止钉 0
 					const cardW = Math.round(cr0.width) + "px";
 					const items = [];
 					for (const w of stackEl.children) {
@@ -744,6 +768,7 @@ async function buildRows() {
 								if (t.style.marginRight !== "0px") t.style.marginRight = "0px";
 							// 条目下间距统一 4px（排序间距目标，2026-08-20）
 							if (t.style.marginBottom !== "0px") t.style.marginBottom = "0px";
+						/*patch(hidden-guard)*/ if (t.style.marginTop === "-2px") t.style.marginTop = ""; // 复位 zero-height 分支残留
 							} else {
 								if (t.style.marginLeft !== "0px") t.style.marginLeft = "0px";
 								// pin inner to card width so the colored bg edges match the card
@@ -762,6 +787,7 @@ async function buildRows() {
 				// 与通用 pass / queue-dock 同一收敛式：按当前实测误差自校正到
 				// 输入卡左缘（相对公式在行已有 margin 残留时双重偏移）。
 				const cr = card.getBoundingClientRect();
+				/*patch(hidden-guard)*/ if (cr.width <= 0) return;
 				const w = Math.round(cr.width) + "px";
 				if (row.style.width !== w) row.style.width = w;
 				const rowCur = row.getBoundingClientRect();
@@ -786,9 +812,18 @@ async function buildRows() {
 	 * node alone when it is already parented. */
 
 		/*patch(usage-row)*/function moveUsageToMemoryRow() {
+			// patch(2026-08-26 fail-loud): 缺锚点不再永久静默——首次诊断性告警
+			//（重复 pass 只报一次），升级/DOM 变化导致的搬运失效可在 console 定位。
 			const usg = document.querySelector('.usg_layer');
 			const settingsArea = document.querySelector('[class*="_settingsArea"]');
-			if (usg === null || settingsArea === null) return;
+			if (usg === null || settingsArea === null) {
+				if (!moveUsageToMemoryRow._warned) {
+					moveUsageToMemoryRow._warned = true;
+					console.warn('[desktop-chrome] moveUsageToMemoryRow 跳过: usg_layer=' + (usg ? 'ok' : 'MISSING') + ' settingsArea=' + (settingsArea ? 'ok' : 'MISSING') + '（dsh-usage-stats 未加载或 DOM 结构变化）');
+				}
+				return;
+			}
+			moveUsageToMemoryRow._warned = false;
 			// PATCH 2026-08-21: row layout = [导入 left] …spacer… [用量] 记忆 设置.
 			// 导入 pinned to the row's left edge; 用量 sits immediately left of
 			// the 记忆 icon with a 2px gap, height matched to that icon.
@@ -1167,6 +1202,9 @@ async function buildRows() {
 		}
 
 		function apply(ctx) {
+			// Electron 桌面壳标记：body-scroll-guard v4 的豁免条件（UA 检测打类，
+			// 替代已消失的 retroTitlebar 元素）。
+			if (/Electron/i.test(navigator.userAgent)) document.documentElement.classList.add("dshc-electron");
 			// One-time migration: better-sidebar's old default width (360) was
 			// wider than the official left sidebar; the new default floors at 280.
 			try {
@@ -1254,9 +1292,45 @@ async function buildRows() {
 					document.documentElement.style.setProperty("--dshc-sidebar-w", val);
 				}
 			};
-			const runHeavyPatches = () => {
+			// 2026-08-23: launcher 电源钮钉到侧栏折叠钮旁。不搬节点（React 事件委托），
+		// fixed 钉位 + 1s 兜底重算；折叠窄轨占第二图标位居中（新会话钮 CSS 让位）；
+		// aria-label 翻转触发 rAF 追踪 350ms 逐帧跟随侧栏动画，无独立滑动。
+		function placeLauncherButton() {
+			const btn = document.querySelector('[class*="triggerFloating"]');
+			const toggle = document.querySelector('button[aria-label="收起侧边栏"], button[aria-label="打开侧边栏"]');
+			if (btn === null || toggle === null) return;
+			const tr = toggle.getBoundingClientRect();
+			if (tr.width === 0) return;
+			btn.classList.add("dshc-pinned");
+			if (!toggle.__dshcPinObs) {
+				toggle.__dshcPinObs = new MutationObserver(() => {
+					if (toggle.__dshcPinRaf) return;
+					const end = performance.now() + 350;
+					const step = () => {
+						try { placeLauncherButton(); } catch { /* 1s 兜底仍在 */ }
+						if (performance.now() < end) toggle.__dshcPinRaf = requestAnimationFrame(step);
+						else toggle.__dshcPinRaf = 0;
+					};
+					toggle.__dshcPinRaf = requestAnimationFrame(step);
+				});
+				toggle.__dshcPinObs.observe(toggle, { attributes: true, attributeFilter: ["aria-label"] });
+			}
+			btn.style.display = "inline-flex";
+			btn.style.right = "auto";
+			const left = tr.left - 34;
+			if (left < 4) {
+				// 折叠窄轨：占第二个图标位（折叠钮下方），相对图标列居中；
+				// 新会话钮由 CSS margin-top 让位（见 STYLE_TEXT launcher-pin 段）。
+				btn.style.left = Math.round(tr.left + (tr.width - 28) / 2) + "px";
+				btn.style.top = Math.round(tr.bottom + 8) + "px";
+			} else {
+				btn.style.left = Math.round(left) + "px";
+				btn.style.top = Math.round(tr.top + tr.height / 2 - 14) + "px";
+			}
+		}
+		const runHeavyPatches = () => {
 				observerTimer = 0;
-				for (const patch of [wrapDayBars, placeGoalGitRow, widenConversation, patchStatsLine, ensureStatsSegment, patchCompactNumbers, mountModelRings, syncRingTexture, patchContextPercent, syncSidebarWidthVar, moveUsageToMemoryRow]) {
+				for (const patch of [wrapDayBars, placeGoalGitRow, widenConversation, patchStatsLine, ensureStatsSegment, patchCompactNumbers, mountModelRings, syncRingTexture, patchContextPercent, syncSidebarWidthVar, moveUsageToMemoryRow, placeLauncherButton]) {
 					try { patch(); } catch (error) { console.warn("dshc:", patch.name, error?.message ?? error); }
 				}
 				if (document.querySelector(".usg_panel") !== null) void patchPanelStats();
@@ -1268,17 +1342,58 @@ async function buildRows() {
 					void refreshModelRings();
 				}
 			};
+			// 2026-08-23 防闪三件套：mutation 微任务后、同一帧绘制前（rAF 时序）先跑
+			// 几何关键补丁——放宽列卡/标记 stats 行/钉 chips，首帧即终态，消除切换
+			// 会话时窄→宽跳动；300ms 防抖的全量补丁保持不变（重活不进每帧路径）。
+			let dshcFlickerRaf = 0;
+			const runAntiFlicker = () => {
+				if (dshcFlickerRaf !== 0) return;
+				dshcFlickerRaf = window.requestAnimationFrame(() => {
+					dshcFlickerRaf = 0;
+					for (const patch of [widenConversation, patchStatsLine, placeGoalGitRow]) {
+						try { patch(); } catch { /* 全量补丁兜底 */ }
+					}
+				});
+			};
 			const observer = new MutationObserver(() => {
 				wire();
 				mountWidget();
+				/*patch(anti-flicker)*/ runAntiFlicker();
 				if (observerTimer === 0) observerTimer = window.setTimeout(runHeavyPatches, 300);
 			});
 			observer.observe(document.body, { childList: true, subtree: true });
+			/*patch(geo-observers)*/ {
+				const dshcRerunGoalRow = () => { try { placeGoalGitRow(); } catch (e) { /* 1s 兜底仍在 */ } };
+				const dshcAttrObs = new MutationObserver((muts) => {
+					for (const m of muts) {
+						if (m.attributeName !== 'data-dsh-taskboard-active' && m.attributeName !== 'data-dsh-ssh-active') continue;
+						if (!document.documentElement.hasAttribute(m.attributeName)) dshcRerunGoalRow();
+					}
+				});
+				dshcAttrObs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-dsh-taskboard-active', 'data-dsh-ssh-active'] });
+				let dshcGeoTimer = 0;
+				const dshcGeoObs = new ResizeObserver(() => {
+					window.clearTimeout(dshcGeoTimer);
+					dshcGeoTimer = window.setTimeout(dshcRerunGoalRow, 150);
+				});
+				let dshcGeoAttached = null;
+				const dshcGeoAttach = () => {
+					const col = document.querySelector('[class*="centerCol"]');
+					if (col === null || col === dshcGeoAttached) return;
+					dshcGeoObs.disconnect();
+					dshcGeoObs.observe(col);
+					dshcGeoAttached = col;
+				};
+				dshcGeoAttach();
+				const dshcGeoTimer2 = window.setInterval(dshcGeoAttach, 3000);
+				window.dshcDisposeGeo = () => { window.clearInterval(dshcGeoTimer2); window.clearTimeout(dshcGeoTimer); dshcGeoObs.disconnect(); dshcAttrObs.disconnect(); };
+			}
 			const timer = window.setInterval(() => void refreshWidget(), REFRESH_MS);
 			// 顶部 chips 定位依赖实时几何（toggleCluster/会话区右缘），mutation
 			// observer 只看 childList，纯位置变化不触发——1s 低频重算兜底。
 			let placeErrStreak = 0;
 			const chipsTimer = window.setInterval(() => {
+				try { placeLauncherButton(); } catch { /* 钉位失败保持隐藏基线 */ }
 				try { placeGoalGitRow(); placeErrStreak = 0 } catch (e) {
 					/* 布局中途的瞬态常见，但持续性失败不能静默——首错详记、其后每 20 次摘要 */
 					placeErrStreak++;
@@ -1322,6 +1437,7 @@ async function buildRows() {
 				window.clearInterval(statsTimer);
 				window.clearInterval(ringsTimer);
 				window.clearInterval(modelPollTimer);
+				/*patch(hidden-guard)*/ if (typeof window.dshcDisposeGeo === 'function') window.dshcDisposeGeo();
 				document.getElementById(WIDGET_ID)?.remove();
 				document.getElementById("dshc-top-chips")?.remove();
 				style.remove();
