@@ -54,6 +54,7 @@ window.__ModuleLoader__.load({
         if (qdock.parentElement !== host || qdock.nextElementSibling !== row) host.insertBefore(qdock, row);
         // 对齐参照 = 输入卡（2026-08-20 用户定稿：条与输入框左右边界对齐）
         var cr = card.getBoundingClientRect();
+        if (cr.width <= 0) /*patch(hidden-guard)*/ return; // board/ssh 隐藏态:保持上次几何,禁止钉 0
         var w = Math.round(cr.width) + "px";
         var qcur = qdock.getBoundingClientRect();
         var qML = parseFloat(getComputedStyle(qdock).marginLeft) || 0;
@@ -79,6 +80,23 @@ window.__ModuleLoader__.load({
         timer = setTimeout(function () { pendingSince = 0; place(); }, wait);
       });
       obs.observe(document.body, { childList: true, subtree: true });
+      /*patch(geo-observer)*/ (function () {
+        var geoTimer = null;
+        var geoAttached = null;
+        var geoObs = new ResizeObserver(function () {
+          clearTimeout(geoTimer);
+          geoTimer = setTimeout(function () { try { place(); } catch (e) {} }, 200);
+        });
+        var geoAttach = function () {
+          var col = document.querySelector('[class*="centerCol"]');
+          if (!col || col === geoAttached) return;
+          geoObs.disconnect();
+          geoObs.observe(col);
+          geoAttached = col;
+        };
+        geoAttach();
+        setInterval(geoAttach, 3000);
+      })();
       place();
     }
 
