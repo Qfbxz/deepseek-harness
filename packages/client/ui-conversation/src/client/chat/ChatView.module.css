@@ -64,10 +64,8 @@
 /* Selection still sets data-selected for details linkage; no outline —
    tool rows match Think chrome (no selected ring). */
 
-/* Turn activity keeps the former loader's one-line footprint. A pale
-   brand-blue band sweeps from left to right; reduced-motion keeps it static. */
 /* patch(2026-08-26 inline-usage): 收敛为紧凑元数据行样式——token 数不再大字独占一行，
- * 与 MessageIconActions 的时间行同级视觉（13px/无 shimmer 大底），保留 shimmer 微动效。 */
+ * 与 MessageIconActions 的时间行同级视觉（13px 实色文字；动效只留 ✳ 一处）。 */
 .turnStatus {
   align-self: flex-start;
   flex: none;
@@ -87,10 +85,6 @@
   background-position: 100% 0;
   background-size: 250% 100%;
   background-clip: text;
-  color: transparent;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: dsh-turn-status-shimmer 1.8s linear infinite;
 }
 
 .turnStatusGlyph {
@@ -131,11 +125,6 @@
   -webkit-text-fill-color: var(--dsw-alias-label-caption);
 }
 
-@keyframes dsh-turn-status-shimmer {
-  to {
-    background-position: 0 0;
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .turnStatus {

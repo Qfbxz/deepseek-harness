@@ -19,7 +19,7 @@ import { Button, IconChevronDownOutline14, Modal } from '@deepseek-ai/dsh-client
 import type { ChatViewSlotProps, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble } from './MessageItem.tsx'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
-import { formatRunDuration, formatTokensPerSecond } from './message-chrome.ts'
+import { formatRunDuration } from './message-chrome.ts'
 import { formatTokens } from './StatsLine.tsx'
 import { assistantStepReading } from './turn-metrics.ts'
 import css from './ChatView.module.css'
@@ -123,8 +123,6 @@ interface RunningTurnUsage {
   input: number
   /** Provider completion tokens (thinking included, as reported). */
   output: number
-  /** Latest step's decode rate (outputTokens / decodeMs); null until a step reports both. */
-  tps: number | null
 }
 
 /** Reads one optional non-negative numeric usage field. */
@@ -174,7 +172,6 @@ function TurnStatus({ startTime, t, usage, phaseLabel }: {
           {usage.input > 0
             ? t('turn.statusTokensBoth', { input: formatTokens(usage.input), output: formatTokens(usage.output) })
             : t('turn.statusTokensOut', { output: formatTokens(usage.output) })}
-          {usage.tps !== null ? ` · ${t('turn.statusRate', { rate: formatTokensPerSecond(usage.tps) })}` : ''}
         </span>
       )}
     </div>
@@ -213,23 +210,17 @@ export function ChatView({
     if (open === null) return null
     let input = 0
     let output = 0
-    let tps: number | null = null
     for (const node of legacyNodes) {
       if (node.kind !== 'assistant' || node.turn !== open) continue
       const reading = assistantStepReading(node)
       if (reading.outputTokens !== null) output += reading.outputTokens
-      // 速度=增量输出速率：最新一步的 outputTokens/decodeMs（该步新增输出的
-      // 解码速度），不用全轮平均——用户口径是"现在生成多快"。
-      if (reading.decodeMs !== null && reading.outputTokens !== null && reading.outputTokens > 0) {
-        tps = reading.outputTokens / (reading.decodeMs / 1_000)
-      }
       if (typeof node.usage === 'object' && node.usage !== null) {
         input += nonNegTokens((node.usage as { inputTokens?: unknown }).inputTokens)
           + nonNegTokens((node.usage as { cacheReadTokens?: unknown }).cacheReadTokens)
           + nonNegTokens((node.usage as { cacheWriteTokens?: unknown }).cacheWriteTokens)
       }
     }
-    return { input, output, tps }
+    return { input, output }
   }, [timeline, legacyNodes])
   // 相位标签：工具执行 > 思考（reasoning 块在流或等首 token）> 生成（text 块在流）。
   // 工具名取最后一个在跑的调用，与 Claude Code 的活动指示同粒度。

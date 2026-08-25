@@ -338,11 +338,10 @@ window.__ModuleLoader__.load({
     }
     //#endregion
 
-    //#region 运行轮去重：StatsLine 的速度/用量组与状态行实时显示重复，运行期间隐藏
-    // 状态行（✳ … ↑输入 ↓输出 · 速度）承载轮次实时数据；底部 StatsLine 同屏
-    // 再显示「首 token 平均 · N tokens/s」与「输入 X · 输出 Y tok」即双份。
-    // 运行轮在场时隐藏这两组（轮数/时长/缓存命中保留），空闲恢复。文本特征
-    // 定位 StatsLine 根（哈希类名版本脆），1s 轮询兜底 React 重渲染。
+    //#region StatsLine 用量组去重：与用量徽章（今日/全部）的 token 总量同屏重复
+    // 「输入 X · 输出 Y tok」组永久隐藏；速度组（首 token 平均 · N tokens/s）常驻
+    // （用户口径：删状态行速度、留最后一个速度显示）。文本特征定位 StatsLine 根
+    // （哈希类名版本脆），1s 轮询 + 观察器兜底 React 重渲染。
     function dedupeStatsLine() {
       try {
         // 精确定位：叶子 span（首 token 平均）上溯到直接子级全为 SPAN 的容器
@@ -366,12 +365,13 @@ window.__ModuleLoader__.load({
           root = root.parentElement;
         }
         if (root === null || root === document.body) return;
-        var running = document.querySelector('[role="status"]') !== null;
         for (var j = 0; j < root.children.length; j++) {
           var g = root.children[j];
           var txt = (g.textContent || "").trim();
-          var dup = txt.indexOf("tokens/s") >= 0 || (txt.indexOf("输入") >= 0 && txt.indexOf("tok") >= 0);
-          g.style.display = dup && running ? "none" : "";
+          // 用量组（输入 X · 输出 Y tok）与用量徽章（今日/全部）同屏重复——永久隐藏；
+          // 速度组（首 token 平均 · N tokens/s）常驻（用户口径：留最后一个速度显示）。
+          var hide = txt.indexOf("输入") >= 0 && txt.indexOf("tok") >= 0;
+          g.style.display = hide ? "none" : "";
         }
       } catch (e) { /* 去重失败不阻断 */ }
     }

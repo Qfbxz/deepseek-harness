@@ -713,7 +713,7 @@ describe('ChatView', () => {
     })
     const status = view.getByRole('status')
     expect(status.textContent).toContain('↓10 tokens')
-    expect(status.textContent).toContain('20 tokens/s')
+    expect(status.textContent).not.toContain('tokens/s')
   })
 
   it('user and assistant message containers scope the hover-revealed time chrome', () => {
