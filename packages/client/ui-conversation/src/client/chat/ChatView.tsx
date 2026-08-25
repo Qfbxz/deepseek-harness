@@ -211,16 +211,15 @@ export function ChatView({
     if (open === null) return null
     let input = 0
     let output = 0
-    let decodeMsTotal = 0
-    // patch(2026-08-26 tps-final): 速率=全 turn 累计口径（output 总量 / decode 总时长）
-    // ——与结尾 footer 的 tokensPerSecond 同源同值，彻底消除瞬时爆值
-    // （54667/151750 这类 prefill 计入的假速率）与"时间前后速度不一致"。
+    let tps: number | null = null
     for (const node of legacyNodes) {
       if (node.kind !== 'assistant' || node.turn !== open) continue
       const reading = assistantStepReading(node)
       if (reading.outputTokens !== null) output += reading.outputTokens
+      // 速度=增量输出速率：最新一步的 outputTokens/decodeMs（该步新增输出的
+      // 解码速度），不用全轮平均——用户口径是"现在生成多快"。
       if (reading.decodeMs !== null && reading.outputTokens !== null && reading.outputTokens > 0) {
-        decodeMsTotal += reading.decodeMs
+        tps = reading.outputTokens / (reading.decodeMs / 1_000)
       }
       if (typeof node.usage === 'object' && node.usage !== null) {
         input += nonNegTokens((node.usage as { inputTokens?: unknown }).inputTokens)
@@ -228,7 +227,6 @@ export function ChatView({
           + nonNegTokens((node.usage as { cacheWriteTokens?: unknown }).cacheWriteTokens)
       }
     }
-    const tps = decodeMsTotal > 0 ? output / (decodeMsTotal / 1_000) : null
     return { input, output, tps }
   }, [timeline, legacyNodes])
   const openState = useSession(s => s.openState)
