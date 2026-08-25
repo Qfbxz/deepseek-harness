@@ -45,10 +45,10 @@ interface RunCodeFlavor {
  */
 const TYPESCRIPT_FLAVOR: RunCodeFlavor = {
   description:
-    'Execute a TypeScript program against the available tools. Takes two required '
-    + 'arguments: `code`, the BODY of an async function (erasable syntax only; top-level '
-    + '`await` and `return` work), and `description`, a short summary of what the program '
-    + 'does. Call tools as `await tools.name(args)` per the declarations in the system '
+    'Execute a TypeScript program against the available tools. Takes `code`, the '
+    + 'BODY of an async function (erasable syntax only; top-level `await` and '
+    + '`return` work), and `description`, a short summary of what the program does. '
+    + 'Call tools as `await tools.name(args)` per the declarations in the system '
     + 'prompt. Only what you print or return is program output — curate it. Image-bearing '
     + 'subtool results are attached after the run.',
   codeDescription: 'The program: the body of an async TypeScript function.',
@@ -61,9 +61,9 @@ const TYPESCRIPT_FLAVOR: RunCodeFlavor = {
  */
 const PYTHON_FLAVOR: RunCodeFlavor = {
   description:
-    'Execute a Python program against the available tools. Takes two required '
-    + 'arguments: `code`, the BODY of an async function (top-level `await` and `return` '
-    + 'work), and `description`, a short summary of what the program does. Call tools as '
+    'Execute a Python program against the available tools. Takes `code`, the BODY '
+    + 'of an async function (top-level `await` and `return` work), and '
+    + '`description`, a short summary of what the program does. Call tools as '
     + '`await tools.name(args)` per the declarations in the system prompt. Use '
     + '`print(...)` and/or `return <value>` for program output — curate it. Image-bearing '
     + 'subtool results are attached after the run.',
@@ -258,8 +258,61 @@ function renderValue(value: JsonValue): string {
   return typeof value === 'string' ? value : renderJsonValue(value)
 }
 
+/** Safety cap for one binding result carried into the run's completion value. */
+const BINDING_VALUE_MAX_CHARS = 24_000
+
+/**
+ * Depth-clamp one binding result so a huge tool payload (e.g. a 50 KB bash
+ * stdout) cannot overflow the outer output ledger and surface as an opaque
+ * abort. Strings beyond the cap truncate with an explicit marker; arrays and
+ * objects clamp per-element/key recursively, preserving the JSON shape.
+ */
+function clampBindingValue(value: JsonValue): JsonValue {
+  if (typeof value === 'string') {
+    return value.length > BINDING_VALUE_MAX_CHARS
+      ? value.slice(0, BINDING_VALUE_MAX_CHARS) + `…[truncated ${value.length - BINDING_VALUE_MAX_CHARS} of ${value.length} chars]`
+      : value
+  }
+  if (Array.isArray(value)) return value.map(clampBindingValue)
+  if (typeof value === 'object' && value !== null) {
+    const out: Record<string, JsonValue> = {}
+    for (const [k, v] of Object.entries(value)) out[k] = clampBindingValue(v)
+    return out
+  }
+  return value
+}
+
 /** Canonical value returned by the outer Code Mode transport. */
 type RunCodeOutput = { logs: string[]; result?: JsonValue }
+
+/** Cap for the derived call label; long enough to identify, short enough for a header. */
+const DERIVED_TITLE_MAX_CHARS = 60
+
+/** Strip one leading line-comment or doc-comment marker with its trailing space. */
+function stripCommentMarker(line: string): string {
+  if (line.startsWith('//')) return line.slice(2).trimStart()
+  if (line.startsWith('/*')) return line.slice(2).replace(/^\*+/, '').trimStart()
+  return line
+}
+
+/**
+ * Present-tense label for a call whose model omitted `description`: the first
+ * meaningful program line (after a comment marker, if any), trimmed and capped.
+ * Pure — replay of logged args reproduces it exactly.
+ * @param code - the program body.
+ * @returns a non-empty label.
+ */
+export function deriveRunCodeTitle(code: string): string {
+  for (const rawLine of code.split('\n')) {
+    const line = rawLine.trim()
+    if (line.length === 0) continue
+    const stripped = stripCommentMarker(line)
+    return stripped.length > DERIVED_TITLE_MAX_CHARS
+      ? stripped.slice(0, DERIVED_TITLE_MAX_CHARS - 1) + '…'
+      : stripped
+  }
+  return '(empty program)'
+}
 
 /**
  * Registry-private capabilities the bridge receives at construction — the
@@ -306,9 +359,12 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
     description: TYPESCRIPT_FLAVOR.description,
     parameters: {
       code: { type: 'string', required: true, description: TYPESCRIPT_FLAVOR.codeDescription },
+      // Optional by design: a missing or blank description must never fail the
+      // call — presentCall derives a fallback label from the program instead.
+      // Models omit it under context pressure and a hard requirement turned
+      // that into a wasted round-trip ("missing required property").
       description: {
         type: 'string',
-        required: true,
         description: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION,
       },
     },
@@ -328,9 +384,6 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
       },
     },
     async execute(args, exec): Promise<RunCodeOutput> {
-      if (args.description.trim().length === 0) {
-        throw new Error('invalid description: expected a non-empty string')
-      }
       const runtime = requireRuntime()
 
       // The run-scoped abort: follows the outer signal in, and fires when the
@@ -495,7 +548,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
             // chain cannot reject).
             resolve(result.isError
               ? { isError: true, message: result.error.message }
-              : { isError: false, value: result.value })
+              : { isError: false, value: clampBindingValue(result.value) })
             const agent = exec.agent
             if (agent === undefined) return
             const task: Promise<void> = (async () => {
@@ -650,12 +703,15 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
     },
     // The model-authored description is the call's always-visible UI label
     // (the bash `description` precedent); the program itself rides rawInput.
-    presentCall: args => ({
-      card: 'generic',
-      title: args.description,
-      kind: 'execute',
-      rawInput: args.code,
-    }),
+    presentCall: (args) => {
+      const given = args.description?.trim()
+      return {
+        card: 'generic',
+        title: given !== undefined && given.length > 0 ? given : deriveRunCodeTitle(args.code),
+        kind: 'execute',
+        rawInput: args.code,
+      }
+    },
     // Deliberately no presentResult: the generic card fallback keeps this
     // title and reads durable result content without duplicating a large raw
     // result into the host view payload.
@@ -674,7 +730,7 @@ export function createRunCodeTool(registry: ToolRuntime, options: RunCodeBridgeO
     // the emitted schema always matches the validated specification.
     get: () => parameterSchemaSpecToJsonSchema({
       code: { type: 'string', required: true, description: resolveFlavor(peekRuntime).codeDescription },
-      description: { type: 'string', required: true, description: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION },
+      description: { type: 'string', description: RUN_CODE_DESCRIPTION_PARAM_DESCRIPTION },
     }) as unknown as Record<string, unknown>,
   })
   return definition
