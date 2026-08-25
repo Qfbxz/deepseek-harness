@@ -885,7 +885,7 @@ describe('ChatView', () => {
     expect(view.getByTestId('tool-seat-r1')).toBeTruthy()
     expect(h.toolOwners[0]?.block).toMatchObject({ callId: 'r1', argsRaw: '{"command":"cmd-r1"}' })
     // TurnStatus now carries the live glyph + token stat beside the label.
-    expect(view.getByRole('status').textContent).toContain('生成中…')
+    expect(view.getByRole('status').textContent).toContain('调用 bash…')
   })
 
   it('keeps the Tool renderer mounted when a running call settles into log order', () => {
@@ -945,7 +945,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     // Freshly mounted (as after a reload) yet already past the 15s gate.
     const status = view.getByRole('status')
-    expect(status.textContent).toMatch(/生成中…/)
+    expect(status.textContent).toMatch(/思考中…/)
     expect(status.textContent).toMatch(/2分0\d秒$/)
     expect(status.querySelector('[aria-hidden="true"]')).not.toBeNull()
     act(() => {
@@ -958,7 +958,7 @@ describe('ChatView', () => {
         text: 'also',
       }] })
     })
-    expect(status.textContent).toMatch(/生成中…/)
+    expect(status.textContent).toMatch(/思考中…/)
     expect(status.textContent).toMatch(/2分0\d秒$/)
   })
 

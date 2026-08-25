@@ -133,7 +133,7 @@ function nonNegTokens(value: unknown): number {
 }
 
 /** Turn-level model activity label retained across first-token, tool, and streaming phases. */
-function TurnStatus({ startTime, t, usage }: {
+function TurnStatus({ startTime, t, usage, phaseLabel }: {
   /** The running turn's logged `turn/start` time; null falls back to mount
    *  time when that boundary is outside the window. */
   startTime: number | null
@@ -141,6 +141,8 @@ function TurnStatus({ startTime, t, usage }: {
   t: ChatViewSlotProps['t']
   /** Running-turn settled usage; null before any turn is open. */
   usage: RunningTurnUsage | null
+  /** Phase-derived label: thinking / tool call / generating. */
+  phaseLabel: string
 }) {
   const [mountedAt] = useState(() => Date.now())
   // Anchored to turn/start so a mid-turn reload keeps the real
@@ -161,7 +163,7 @@ function TurnStatus({ startTime, t, usage }: {
   return (
     <div className={css.turnStatus} role="status" aria-live="polite">
       <span className={css.turnStatusGlyph} aria-hidden>✳</span>
-      {t('turn.status')}
+      {phaseLabel}
       {showClock && (
         <span className={css.turnStatusClock} aria-hidden>
           {formatRunDuration(elapsedMs, t)}
@@ -229,6 +231,21 @@ export function ChatView({
     }
     return { input, output, tps }
   }, [timeline, legacyNodes])
+  // 相位标签：工具执行 > 思考（reasoning 块在流或等首 token）> 生成（text 块在流）。
+  // 工具名取最后一个在跑的调用，与 Claude Code 的活动指示同粒度。
+  const runningCalls = useSession(s => s.chat.legacy.runningCalls)
+  const partial = useSession(s => s.chat.legacy.partial)
+  const runningPhaseLabel = useMemo(() => {
+    const lastCall = runningCalls.length > 0 ? runningCalls[runningCalls.length - 1] : undefined
+    if (lastCall !== undefined) {
+      return t('turn.status.tools', { tool: lastCall.name })
+    }
+    const blocks = partial?.blocks
+    const last = blocks !== undefined && blocks.length > 0 ? blocks[blocks.length - 1] : undefined
+    if (last?.kind === 'reasoning') return t('turn.status.thinking')
+    if (last?.kind === 'text') return t('turn.status.generating')
+    return t('turn.status.thinking')
+  }, [runningCalls, partial, t])
   const openState = useSession(s => s.openState)
   const openError = useSession(s => s.openError)
   const hasMore = useSession(s => s.hasMore)
@@ -513,7 +530,14 @@ export function ChatView({
               double-render the same wait. */}
           {/* Turn-level loading signal: rides the whole running turn (first-token
               wait, tool execution, streaming) so it never flickers per step. */}
-          {running && <TurnStatus startTime={runningTurnStart} t={t} usage={runningTurnUsage} />}
+          {running && (
+            <TurnStatus
+              startTime={runningTurnStart}
+              t={t}
+              usage={runningTurnUsage}
+              phaseLabel={runningPhaseLabel}
+            />
+          )}
           {pendingSteering.map(item => (
             <PendingSteeringBubble
               key={item.id}

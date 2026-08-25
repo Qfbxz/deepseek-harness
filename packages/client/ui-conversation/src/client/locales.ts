@@ -11,7 +11,9 @@ const PLAN_NEXT_ACTION_EN = 'describe your task to generate plan'
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
   'view.chat': '对话',
-  'turn.status': '生成中…',
+  'turn.status.thinking': '思考中…',
+  'turn.status.tools': '调用 {tool}…',
+  'turn.status.generating': '生成中…',
   'turn.statusTokensBoth': '↑{input} tokens ↓{output} tokens',
   'turn.statusTokensOut': '↓{output} tokens',
   'turn.statusRate': '{rate} tokens/s',
@@ -192,7 +194,9 @@ export type ConversationKey = keyof typeof zh
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
   'view.chat': 'Chat',
-  'turn.status': 'Generating…',
+  'turn.status.thinking': 'Thinking…',
+  'turn.status.tools': 'Running {tool}…',
+  'turn.status.generating': 'Generating…',
   'turn.statusTokensBoth': '↑{input} tokens ↓{output} tokens',
   'turn.statusTokensOut': '↓{output} tokens',
   'turn.statusRate': '{rate} tokens/s',
