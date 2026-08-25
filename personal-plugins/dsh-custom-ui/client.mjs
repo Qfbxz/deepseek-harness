@@ -91,6 +91,8 @@ window.__ModuleLoader__.load({
       '.usg_layer .usg_footerButtons, .usg_layer .usg_badge{flex:1 1 auto !important;width:auto !important;min-width:0 !important;}',
       '.usg_layer button{width:100% !important;box-sizing:border-box !important;}',
       // --- 折叠态（窄栏）：底部按钮单列垂直居中对齐 ---
+      // --- 思考行扫光与状态行 ✳ 双动效归一：思考进行中只留状态行动画 ---
+      '[data-state="running"] [class*="_row"]::after { animation: none !important; }',
       // --- dsh-mobile：去掉「移动访问」字样（图标与 aria 保留） ---
       ".dsh-mobile-control__trigger-label{display:none !important;}",
       ".dsh-mobile-control__header h2{display:none !important;}",
