@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 export const name = 'reasoning-row-watch'
 
-const MARK = 'override ?? running'
+const MARK = 'override ?? false'
 const ANCHOR = 'function ReasoningRow'
 
 function targetFile() {
@@ -27,19 +27,22 @@ function tryPatch(f, log) {
   try {
     const src = readFileSync(f, 'utf8')
     if (src.includes(MARK)) return false
+    // 旧版（运行中自动展开）迁移为默认折叠
+    if (src.includes('override ?? running')) { writeFileSync(f, src.replace(/override \?\? running/g, 'override ?? false').replace(/value === null \? !running : !value/g, 'value === null ? true : !value')); return true }
     const i = src.indexOf(ANCHOR)
     if (i < 0) { log('anchor missing (upstream restructured) — needs manual review'); return false }
     const seg = src.slice(i, i + 2500)
     const ns = seg
-      .replace(/const \[expanded, setExpanded\] = \(0, react\.useState\)\(false\);(\s*)const summaryRef/, 'const [override, setOverride] = (0, react.useState)(null);$1const expanded = override ?? running;$1(0, react.useEffect)(() => { setOverride(null); }, [running]);$1const summaryRef')
-      .replace(/setExpanded\(\(value\) => !value\);/, 'setOverride((value) => value === null ? !running : !value);')
+      .replace(/const \[expanded, setExpanded\] = \(0, react\.useState\)\(false\);(\s*)const summaryRef/, 'const [override, setOverride] = (0, react.useState)(null);$1const expanded = override ?? false;$1(0, react.useEffect)(() => { setOverride(null); }, [running]);$1const summaryRef')
+      .replace(/setExpanded\(\(value\) => !value\);/, 'setOverride((value) => value === null ? true : !value);')
     if (ns === seg) { log('pattern not found in ReasoningRow window — needs manual review'); return false }
     writeFileSync(f, src.slice(0, i) + ns + src.slice(i + 2500))
     return true
   } catch (err) { log('ERROR ' + (err && err.message ? err.message : String(err))); return false }
 }
 
-export function apply(ctx) {
+// 2026-08-22 PERMANENTLY DISABLED：官方默认即折叠（useState(false)），本补丁使命完成。
+export function apply(ctx) { return
   const log = (line) => { try { writeFileSync(join(homedir(), '.dsh', 'reasoning-row-watch.log'), '[' + new Date().toISOString() + '] ' + line + '\n', { flag: 'a' }) } catch { } }
   try {
     const f = targetFile()

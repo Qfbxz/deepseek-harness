@@ -37,6 +37,8 @@ function scanAndPatch() {
 }
 /** 思考块自动展开/完成折叠补丁（CLI 更新后自动重打，幂等）。 */
 function patchReasoning() {
+  // 2026-08-22 官方默认即折叠（useState(false)），补丁使命完成，永久停用
+  return { patched: 0, already: 0, unknown: [] }
   const home = homedir(); let patched = 0, already = 0; const unknown = []
   const nvm = join(home, '.nvm', 'versions', 'node')
   for (const v of listDir(nvm)) {
@@ -44,13 +46,14 @@ function patchReasoning() {
     if (!existsSync(f)) continue
     let src
     try { src = readFileSync(f, 'utf8') } catch { unknown.push(f); continue }
-    if (src.includes('override ?? running')) { already += 1; continue }
+    if (src.includes('override ?? false')) { already += 1; continue }
+    if (src.includes('override ?? running')) { try { writeFileSync(f, src.replace(/override \\?\\? running/g, 'override ?? false').replace(/value === null \? !running : !value/g, 'value === null ? true : !value')); already += 1 } catch { unknown.push(f) } continue }
     const i = src.indexOf('function ReasoningRow')
     if (i < 0) { unknown.push(f); continue }
     const seg = src.slice(i, i + 2500)
     const ns = seg
-      .replace(/const \[expanded, setExpanded\] = \(0, react\.useState\)\(false\);(\s*)const summaryRef/, 'const [override, setOverride] = (0, react.useState)(null);$1const expanded = override ?? running;$1(0, react.useEffect)(() => { setOverride(null); }, [running]);$1const summaryRef')
-      .replace(/setExpanded\(\(value\) => !value\);/, 'setOverride((value) => value === null ? !running : !value);')
+      .replace(/const \[expanded, setExpanded\] = \(0, react\.useState\)\(false\);(\s*)const summaryRef/, 'const [override, setOverride] = (0, react.useState)(null);$1const expanded = override ?? false;$1(0, react.useEffect)(() => { setOverride(null); }, [running]);$1const summaryRef')
+      .replace(/setExpanded\(\(value\) => !value\);/, 'setOverride((value) => value === null ? true : !value);')
     if (ns === seg) { unknown.push(f); continue }
     try { writeFileSync(f, src.slice(0, i) + ns + src.slice(i + 2500)); patched += 1 } catch { unknown.push(f) }
   }

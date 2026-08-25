@@ -6,6 +6,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { autorunJobs } from './patches-table.mjs'
 export const name = 'runtime-patches-autorun'
 
 const REPO_RT = '/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/runtime-patches'
@@ -17,38 +18,8 @@ export function apply(ctx) {
   const run = () => {
   try {
     if (!existsSync(REPO_RT)) { log('repo runtime-patches/ missing — skip'); return }
-    const G = join(execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim(), '@deepseek-ai/dsh/node_modules')
-    const profilesShared = join(homedir(), '.dsh', 'profiles', 'node_modules', '@deepseek-ai/dsh-tool-bash/lib/index.js')
-    const jobs = [
-      ['replay-tool-bash-optional-description.mjs', [join(G, '@deepseek-ai/dsh-tool-bash/lib/index.js'), profilesShared]],
-      ['replay-run-code-optional-description.mjs', [join(G, '@deepseek-ai/dsh-tools/lib/index.js')]],
-      ['replay-worker-binding-omitted-args.mjs', [join(G, '@deepseek-ai/dsh-code-runtime-worker-thread/lib/worker.cjs')]],
-      ['replay-code-runtime-parse-hint.mjs', [join(G, '@deepseek-ai/dsh-code-runtime-worker-thread/lib/index.js')]],
-      ['replay-object-throw-serialization.mjs', []],
-      ['replay-abort-reason-and-parse-locator.mjs', [join(G, '@deepseek-ai/dsh-code-runtime-worker-thread/lib/index.js')]],
-      ['replay-skill-explorer-symlinks.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/@linxin666/dsh-client-ui-skill-explorer/lib/index.js')]],
-      ['replay-git-commit-panel-below.mjs', ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-git-commit/client.mjs']],
-      ['replay-desktop-chrome-anchor-fallback.mjs', ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-desktop-chrome/client.mjs']],
-      ['replay-git-graph-chip-always.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/@linxin666/dsh-client-ui-git-graph/lib/client.js')]],
-      ['replay-discard-diagnostic.mjs', [join(G, '@deepseek-ai/dsh-tools/lib/types/code-mode.js')]],
-      ['replay-git-graph-popover-below.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/@linxin666/dsh-client-ui-git-graph/lib/client.js')]],
-      ['replay-auto-continue-slot-key.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/dsh-client-auto-continue/lib/client.js')]],
-      ['replay-auto-memory-settings-row.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/@a9i5k4/dsh-auto-memory/lib/client.js')]],
-      ['replay-ui-sidebar-settings-action.mjs', [join(G, '@deepseek-ai/dsh-client-ui-sidebar/lib/client.js')]],
-      ['replay-mobile-nav-desktop-session-log.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/@dsh-external/dsh-mobile-nav/lib/client.js')]],
-      ['replay-chat-import-short-label.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/dsh-chat-import/lib/client.js')]],
-      ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-experts-roster/convert-my-experts.mjs', []],
-      ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-experts-roster/sync-builtin-experts.mjs', []],
-      ['replay-agency-own-roster.mjs', []],
-      ['replay-worker-abort-object-message.mjs', []],
-      ['replay-agency-list-experts-shape.mjs', []],
-      ['replay-git-commit-subagent-guard.mjs', ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-git-commit/client.mjs']],
-      ['replay-frostfin-terminal.mjs', [join(homedir(), '.dsh', 'profiles/web/node_modules/dsh-frostfin/lib/acp-process.js')]],
-      ['replay-desktop-chrome-fixed-v.mjs', ['/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness/personal-plugins/dsh-desktop-chrome/client.mjs']],
-      ['replay-git-graph-body-portal.mjs', [join(homedir(), '.dsh/profiles/web/node_modules/@linxin666/dsh-client-ui-git-graph/lib/client.js')]],
-      ['replay-model-select-mode-filter.mjs', [join(homedir(), '.dsh', 'profiles/node_modules/@deepseek-ai/dsh-client-ui-model-selection/lib/client.js')]],
-      ['replay-subagent-driver-agents-access.mjs', [join(execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim(), '@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-subagent-in-process-driver/lib/index.js'), join(homedir(), '.dsh/profiles/node_modules/@deepseek-ai/dsh-subagent-in-process-driver/lib/index.js')]],
-    ]
+    // 作业清单来自 patches-table.mjs 单一事实源（2026-08-26 合并重构）
+    const jobs = autorunJobs()
     let patched = 0, clean = 0; const failed = []
     for (const [script, args] of jobs) {
       try {
@@ -62,6 +33,13 @@ export function apply(ctx) {
       }
     }
     log('autorun done: patched=' + patched + ' already-ok=' + clean + ' failed=' + failed.length);
+    // 2026-08-22: 配置漂移检查（webStartup 服务名/版本钉/个人插件依赖/
+    // custom-ui 折叠 margin）并入本 autorun——与 replay 补丁同触发点，
+    // 覆盖"重启+更新"两场景（postinstall 里也有一份，双保险）。
+    try {
+      const cfgOut = execFileSync('node', ['/Users/boergege/.dsh/apply-dsh-patches.mjs'], { encoding: 'utf8', timeout: 30000 })
+      log('config-check: ' + (cfgOut || '').trim().split('\n').join(' | '))
+    } catch (err) { log('config-check ERROR: ' + (err && err.message ? err.message.split('\n')[0] : String(err))) }
     if (patched > 0) ctx?.logger?.warn?.('[runtime-patches] re-patched ' + patched + ' patch(es) after CLI upgrade; log: ~/.dsh/runtime-patches-autorun.log');
     if (failed.length > 0) ctx?.logger?.warn?.('[runtime-patches] ' + failed.join(', ') + ' no longer applies — upstream changed, review manually');
     if (patched === 0 && failed.length === 0) ctx?.logger?.info?.('[runtime-patches] all ' + clean + ' patches verified in place');

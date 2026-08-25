@@ -4,6 +4,28 @@
 
 官方 npm 包尚未携带、但已在本机运行时手工落地的修复。任何 `@deepseek-ai/dsh` 全局重装或 `~/.dsh/profiles` 重建（含升级 rc.7+）都会覆盖这些文件——**2026-08-24 起无需手动重放**：启动自愈 + 运行中看护 + 文件监听三层插件按三态机理（见「自动化」节）自动恢复或退役；本 README 的手动重放命令保留作兜底与离线恢复路径。
 
+## 单一事实源与分类（2026-08-26 分类合并重构）
+
+`self-heal-fleet/patches-table.mjs` 是全部补丁的唯一注册表：autorun（启动重放）与
+watchdog（30s 巡检）都从它派生，消除双注册漂移（p31 marker 错位空转、p35 死脚本
+引用、p17/p44 死条目的共同根因）。**新增补丁只改这一个文件**（一条目同时声明
+args/bare 的 autorun 调用方式与 file/marker/bad/extra 的 watchdog 检查）。
+
+分类（`cat` 字段，2026-08-26 口径 51 条）：
+
+| cat | 含义 | 条数 | 退役信号 |
+|---|---|---|---|
+| A | 官方包 bug 修复（仓库 src 同源，replay 嫁接官方运行时） | 18 | 官方修复 → bad 消失 → 自动 RETIRED |
+| B | 官方包行为偏好（无 src 对应的 bundle 调整） | 5 | 官方升级锚点失配 → 人工复核 |
+| C | 个人插件补丁（personal-plugins/ 源内） | 9 | git checkout 即 wipe → 重放 |
+| D | 社区插件补丁（市场包就地补丁） | 14 | 包升级即 wipe → 重放 |
+| E | 配置层（cordis.patch.yml 自愈） | 1 | — |
+| F | 工具/同步（转换器、副本同步，非补丁） | 4 | — |
+
+重构时等价性已机械验证：派生 autorun 作业 49/49 与旧清单零差异；watchdog 检查
+39→44（+p50 mcp 超时、p51 preset-wrap、p52 model-select、p53 body-portal、
+p54 usage-row 五项补上缺失的看护；p35 死引用修正为 fixed-v）。
+
 ## 构建管线已修复（2026-08-24）
 
 `pnpm run build:lib`（host+client，342 单元）已在本机跑通。此前 `[@deepseek-ai/dsh-root] Cannot find entry` 的根因：profile `link:` 安装把社区插件依赖骨架（空 node_modules、无 package.json/lib）提升到 `packages/community/*`，tsdown workspace 枚举把每个骨架当构建单元、继承根 entry glob 相对空目录解析为空，报错标签经向上 config 查找误取根包名。修复：`tsdown.config.ts` 的 workspace 改对象形式并 exclude `packages/community/**`（源码级，非环境妥协）。**「从本仓库源码重建 bundle」路径自此可用**：`pnpm run build:lib` 后将产物同步到全局/profiles 即可。
@@ -171,10 +193,15 @@ watchdog 条目 `p11-chip-always`（marker=`patch(chip-always)`，bad=旧 guard 
 
 ```sh
 node runtime-patches/replay-discard-diagnostic.mjs \
-  "$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tools/lib/types/code-mode.js"
+  "$(npm root -g)/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-tools/lib/index.js" \
+  ~/.dsh/profiles/node_modules/@deepseek-ai/dsh-tools/lib/index.js \
+  ~/.dsh/profiles/web/node_modules/@deepseek-ai/dsh-tools/lib/index.js
 ```
 
-watchdog 条目 `p12-discard-diagnostic`（marker=`clampBindingValue`，bad=`result discarded`，官方修复后自动退役）+ autorun 启动重放。
+2026-08-26 rc.2 适配：运行时读打包产物 lib/index.js（code-mode 内联），打 lib/types/code-mode.js
+深路径是空操作；脚本改为自包含多目标载荷（global/profiles-root/web-local 三路径），与仓库 src
+的 clampBindingValue 同源（packages/core/tools/src/code-mode.ts，01cc9ed3b8 被 merge 冲掉后还原）。
+watchdog 条目 `p12-binding-clamp`（marker=`function clampBindingValue`，bad=settle 位原文，官方修复后自动退役）+ autorun 启动重放。
 
 ## 补丁 13：git-graph 分支弹出层向下展开（@linxin666/dsh-client-ui-git-graph）
 
