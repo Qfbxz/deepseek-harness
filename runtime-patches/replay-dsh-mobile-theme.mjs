@@ -28,6 +28,7 @@ const MAP = {
   'color:#dc2626': 'color:var(--dsw-alias-state-error-primary,#dc2626)',
   'border:1px solid #bfdbfe': 'border:1px solid var(--dsw-alias-border-l2,#bfdbfe)',
   'border:1px solid #dc2626': 'border:1px solid var(--dsw-alias-state-error-primary,#dc2626)',
+  '.dsh-mobile-control__provider-info-popover strong{margin-bottom:3px;font-size:12px}': '.dsh-mobile-control__provider-info-popover strong{margin-bottom:3px;font-size:12px;color:var(--dsw-alias-label-primary,#1e293b)}',
 }
 const MARK = MAP['background:#fff']
 
