@@ -19,7 +19,9 @@ import { Button, IconChevronDownOutline14, Modal } from '@deepseek-ai/dsh-client
 import type { ChatViewSlotProps, RenderMessageImages } from '../contract/slots.ts'
 import { PendingSteeringBubble } from './MessageItem.tsx'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
-import { formatRunDuration } from './message-chrome.ts'
+import { formatRunDuration, formatTokensPerSecond } from './message-chrome.ts'
+import { formatTokens } from './StatsLine.tsx'
+import { assistantStepReading } from './turn-metrics.ts'
 import css from './ChatView.module.css'
 
 const FOLLOW_THRESHOLD = 24
@@ -115,13 +117,30 @@ function runningTurnStartTime(timeline: ConversationTimelineSnapshot): number | 
   return latest
 }
 
+/** Settled usage of the running turn, folded from its assistant nodes. */
+interface RunningTurnUsage {
+  /** Billed prompt-side tokens: uncached input + cache read + cache write. */
+  input: number
+  /** Provider completion tokens (thinking included, as reported). */
+  output: number
+  /** Latest step's decode rate (outputTokens / decodeMs); null until a step reports both. */
+  tps: number | null
+}
+
+/** Reads one optional non-negative numeric usage field. */
+function nonNegTokens(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0
+}
+
 /** Turn-level model activity label retained across first-token, tool, and streaming phases. */
-function TurnStatus({ startTime, t }: {
+function TurnStatus({ startTime, t, usage }: {
   /** The running turn's logged `turn/start` time; null falls back to mount
    *  time when that boundary is outside the window. */
   startTime: number | null
   /** The owning view's locale seat. */
   t: ChatViewSlotProps['t']
+  /** Running-turn settled usage; null before any turn is open. */
+  usage: RunningTurnUsage | null
 }) {
   const [mountedAt] = useState(() => Date.now())
   // Anchored to turn/start so a mid-turn reload keeps the real
@@ -141,10 +160,19 @@ function TurnStatus({ startTime, t }: {
   const showClock = elapsedMs >= 15_000
   return (
     <div className={css.turnStatus} role="status" aria-live="polite">
-      Deep diving...
+      <span className={css.turnStatusGlyph} aria-hidden>✳</span>
+      {t('turn.status')}
       {showClock && (
         <span className={css.turnStatusClock} aria-hidden>
           {formatRunDuration(elapsedMs, t)}
+        </span>
+      )}
+      {usage !== null && usage.output > 0 && (
+        <span className={css.turnStatusStat} aria-hidden>
+          {usage.input > 0
+            ? t('turn.statusTokensBoth', { input: formatTokens(usage.input), output: formatTokens(usage.output) })
+            : t('turn.statusTokensOut', { output: formatTokens(usage.output) })}
+          {usage.tps !== null ? ` · ${t('turn.statusRate', { rate: formatTokensPerSecond(usage.tps) })}` : ''}
         </span>
       )}
     </div>
@@ -166,6 +194,43 @@ export function ChatView({
   // Workspace root off the session list row: path summaries display relative to it.
   const cwd = useSessions(s => s.byId[sessionId]?.cwd)
   const running = useSession(s => s.running)
+  // Live token total for the running turn: sum usage (input+output+cacheRead)
+  // across the turn's assistant nodes; tool-only phases carry the last sum.
+  // Running-turn settled usage, folded from the legacy compatibility
+  // projection — the same stable domain nodes StatsLine reads (guaranteed
+  // `turn`/`usage` fields, no view-layer casts). Each assistant/message lands
+  // its provider usage, so totals step forward per completed step; the step
+  // in flight joins on completion. tps is the latest step's decode rate,
+  // matching the settled turn footer's tokensPerSecond.
+  const legacyNodes = useSession(s => s.chat.legacy.nodes)
+  const runningTurnUsage = useMemo<RunningTurnUsage | null>(() => {
+    let open: number | null = null
+    for (const turn of timeline.turns.values()) {
+      if (turn.status === 'open') open = turn.turn
+    }
+    if (open === null) return null
+    let input = 0
+    let output = 0
+    let decodeMsTotal = 0
+    // patch(2026-08-26 tps-final): 速率=全 turn 累计口径（output 总量 / decode 总时长）
+    // ——与结尾 footer 的 tokensPerSecond 同源同值，彻底消除瞬时爆值
+    // （54667/151750 这类 prefill 计入的假速率）与"时间前后速度不一致"。
+    for (const node of legacyNodes) {
+      if (node.kind !== 'assistant' || node.turn !== open) continue
+      const reading = assistantStepReading(node)
+      if (reading.outputTokens !== null) output += reading.outputTokens
+      if (reading.decodeMs !== null && reading.outputTokens !== null && reading.outputTokens > 0) {
+        decodeMsTotal += reading.decodeMs
+      }
+      if (typeof node.usage === 'object' && node.usage !== null) {
+        input += nonNegTokens((node.usage as { inputTokens?: unknown }).inputTokens)
+          + nonNegTokens((node.usage as { cacheReadTokens?: unknown }).cacheReadTokens)
+          + nonNegTokens((node.usage as { cacheWriteTokens?: unknown }).cacheWriteTokens)
+      }
+    }
+    const tps = decodeMsTotal > 0 ? output / (decodeMsTotal / 1_000) : null
+    return { input, output, tps }
+  }, [timeline, legacyNodes])
   const openState = useSession(s => s.openState)
   const openError = useSession(s => s.openError)
   const hasMore = useSession(s => s.hasMore)
@@ -450,7 +515,7 @@ export function ChatView({
               double-render the same wait. */}
           {/* Turn-level loading signal: rides the whole running turn (first-token
               wait, tool execution, streaming) so it never flickers per step. */}
-          {running && <TurnStatus startTime={runningTurnStart} t={t} />}
+          {running && <TurnStatus startTime={runningTurnStart} t={t} usage={runningTurnUsage} />}
           {pendingSteering.map(item => (
             <PendingSteeringBubble
               key={item.id}

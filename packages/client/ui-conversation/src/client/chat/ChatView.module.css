@@ -66,13 +66,15 @@
 
 /* Turn activity keeps the former loader's one-line footprint. A pale
    brand-blue band sweeps from left to right; reduced-motion keeps it static. */
+/* patch(2026-08-26 inline-usage): 收敛为紧凑元数据行样式——token 数不再大字独占一行，
+ * 与 MessageIconActions 的时间行同级视觉（13px/无 shimmer 大底），保留 shimmer 微动效。 */
 .turnStatus {
   align-self: flex-start;
   flex: none;
   display: inline-flex;
   align-items: center;
-  height: 26px;
-  font: var(--dsw-font-s-strong-14);
+  height: 20px;
+  font: var(--dsw-font-xs-13);
   white-space: nowrap;
   background: linear-gradient(
     90deg,
@@ -89,6 +91,35 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   animation: dsh-turn-status-shimmer 1.8s linear infinite;
+}
+
+.turnStatusGlyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1em;
+  height: 0.9em;
+  margin-right: 0.25em;
+  overflow: hidden;
+  color: var(--dsw-alias-brand-primary, #e2954d);
+  animation: turnStatusGlyphPulse 1.4s steps(1, end) infinite;
+}
+
+@keyframes turnStatusGlyphPulse {
+  0%, 14% { content: '✢'; }
+  15%, 29% { content: '✳'; }
+  30%, 44% { content: '✶'; }
+  45%, 59% { content: '✻'; }
+  60%, 74% { content: '✽'; }
+  75%, 89% { content: '✻'; }
+  90%, 100% { content: '✶'; }
+}
+
+.turnStatusStat {
+  margin-left: 0.6em;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary, #8b93a5);
+  white-space: nowrap;
 }
 
 .turnStatusClock {

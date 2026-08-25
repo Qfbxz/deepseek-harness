@@ -688,7 +688,7 @@ describe('ChatView', () => {
     // First-step ttft (1.2s) plus 100 tokens over 5s of decode.
     expect(view.getAllByText(/用时 19秒/)).toHaveLength(1)
     expect(view.getAllByText(/首 token 1\.2秒/)).toHaveLength(1)
-    expect(view.getAllByText(/20 tok\/s/)).toHaveLength(1)
+    expect(view.getAllByText(/20 tokens\/s/)).toHaveLength(1)
   })
 
   it('withholds ttft and throughput while the turn is still running', () => {
@@ -704,7 +704,16 @@ describe('ChatView', () => {
       running: true,
     })
     const view = render(<h.ChatView {...h.props} />)
-    expect(view.queryByText(/首 token|tok\/s/)).toBeNull()
+    // Settled-row chrome stays withheld while running: no ttft anywhere, and no
+    // tokens/s inside any hover-revealed time scope. The running-turn status row is
+    // the one live token surface (settled usage of the turn so far).
+    expect(view.queryByText(/首 token/)).toBeNull()
+    view.container.querySelectorAll('[data-time-hover-root]').forEach((root) => {
+      expect(within(root as HTMLElement).queryByText(/tokens\/s/)).toBeNull()
+    })
+    const status = view.getByRole('status')
+    expect(status.textContent).toContain('↓10 tokens')
+    expect(status.textContent).toContain('20 tokens/s')
   })
 
   it('user and assistant message containers scope the hover-revealed time chrome', () => {
@@ -875,7 +884,8 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     expect(view.getByTestId('tool-seat-r1')).toBeTruthy()
     expect(h.toolOwners[0]?.block).toMatchObject({ callId: 'r1', argsRaw: '{"command":"cmd-r1"}' })
-    expect(view.getByRole('status').textContent).toBe('Deep diving...')
+    // TurnStatus now carries the live glyph + token stat beside the label.
+    expect(view.getByRole('status').textContent).toContain('生成中…')
   })
 
   it('keeps the Tool renderer mounted when a running call settles into log order', () => {
@@ -935,7 +945,8 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     // Freshly mounted (as after a reload) yet already past the 15s gate.
     const status = view.getByRole('status')
-    expect(status.textContent).toMatch(/^Deep diving\.\.\.2分0\d秒$/)
+    expect(status.textContent).toMatch(/生成中…/)
+    expect(status.textContent).toMatch(/2分0\d秒$/)
     expect(status.querySelector('[aria-hidden="true"]')).not.toBeNull()
     act(() => {
       h.set({ queue: [{
@@ -947,7 +958,8 @@ describe('ChatView', () => {
         text: 'also',
       }] })
     })
-    expect(status.textContent).toMatch(/^Deep diving\.\.\.2分0\d秒$/)
+    expect(status.textContent).toMatch(/生成中…/)
+    expect(status.textContent).toMatch(/2分0\d秒$/)
   })
 
   it('hands each ordered root call to the keyed business-node slot', () => {

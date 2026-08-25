@@ -244,6 +244,9 @@
      gutter moves the input card sideways by the bar's width whenever the two
      differ ([decision](../../../../../../.agents/notes/implemented/bug-fix/2026-08-04-composer-tab-gutter-reservation.md)). */
   scrollbar-gutter: stable;
+  /* 滚动链断点：列表滚到头不再把滚动冒泡给 body（webui 拖出底部空白的修复层①，
+   * 2026-08-26 与 ui-theme 钉死（p57）、host-clip（p45）三层配合）。 */
+  overscroll-behavior: contain;
 }
 
 .root[data-phase='active'] .viewArea {
