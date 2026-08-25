@@ -338,6 +338,54 @@ window.__ModuleLoader__.load({
     }
     //#endregion
 
+    //#region 运行轮去重：StatsLine 的速度/用量组与状态行实时显示重复，运行期间隐藏
+    // 状态行（✳ … ↑输入 ↓输出 · 速度）承载轮次实时数据；底部 StatsLine 同屏
+    // 再显示「首 token 平均 · N tokens/s」与「输入 X · 输出 Y tok」即双份。
+    // 运行轮在场时隐藏这两组（轮数/时长/缓存命中保留），空闲恢复。文本特征
+    // 定位 StatsLine 根（哈希类名版本脆），1s 轮询兜底 React 重渲染。
+    function dedupeStatsLine() {
+      try {
+        // 精确定位：叶子 span（首 token 平均）上溯到直接子级全为 SPAN 的容器
+        // （StatsLine 的组与分隔符都是 span；宽松文本匹配曾误中详情列容器）。
+        var leaf = null;
+        var spans = document.querySelectorAll("span");
+        for (var i = 0; i < spans.length; i++) {
+          var sp = spans[i];
+          var st = sp.textContent || "";
+          if (st.indexOf("首 token 平均") >= 0 && st.length < 40 && sp.children.length === 0) { leaf = sp; break; }
+        }
+        if (leaf === null) return;
+        var root = leaf.parentElement;
+        while (root !== null && root !== document.body) {
+          var kids = root.children;
+          if (kids.length >= 3) {
+            var allSpan = true;
+            for (var k = 0; k < kids.length; k++) if (kids[k].tagName !== "SPAN") { allSpan = false; break; }
+            if (allSpan) break;
+          }
+          root = root.parentElement;
+        }
+        if (root === null || root === document.body) return;
+        var running = document.querySelector('[role="status"]') !== null;
+        for (var j = 0; j < root.children.length; j++) {
+          var g = root.children[j];
+          var txt = (g.textContent || "").trim();
+          var dup = txt.indexOf("tokens/s") >= 0 || (txt.indexOf("输入") >= 0 && txt.indexOf("tok") >= 0);
+          g.style.display = dup && running ? "none" : "";
+        }
+      } catch (e) { /* 去重失败不阻断 */ }
+    }
+    window.setInterval(dedupeStatsLine, 1000);
+    // 后台标签页 setInterval 会被节流到分钟级——状态行出现/消失是 DOM 变更，
+    // 用观察器驱动恢复（300ms 防抖，同本文件既有模式）。
+    var dedupTimer = 0;
+    new MutationObserver(function () {
+      if (dedupTimer !== 0) return;
+      dedupTimer = window.setTimeout(function () { dedupTimer = 0; dedupeStatsLine(); }, 300);
+    }).observe(document.body, { childList: true, subtree: true });
+    dedupeStatsLine();
+    //#endregion
+
     // ⚠️ MODULE LOADER CONTRACT — DO NOT REMOVE (breaks the whole UI if lost):
     // the factory MUST return a plugin object with an `apply` method, else the
     // loader throws "invalid plugin ... received undefined" and the error page
