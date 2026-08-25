@@ -97,6 +97,9 @@ html.dshc-electron body { height: calc(100% - 32px) !important; overflow: hidden
 [class*="_collapsed"] button[class*="_entry"] { max-width: 35px; }
 [class*="_collapsed"] [class*="_settingsArea"] { margin: 0 !important; align-items: center; }
 [class*="_collapsed"] .usg_rail { margin: 0 !important; padding-left: 4px !important; padding-right: 4px !important; }
+/* rail 下 dsh-mobile 触发钮塌缩成 4px（width:calc(100% + 8px) 在列布局里解析不出
+ * 宽度）——钉成 28px 图标钮同款，居中。 */
+[class*="_collapsed"] .dsh-mobile-control__trigger { width: 28px !important; min-width: 28px !important; margin: 0 !important; padding: 6px !important; justify-content: center !important; }
 /* rail 下记忆/设置按钮内部图标偏 2px（隐藏 label 残留间隙）——强制对称 */
 [class*="_collapsed"] [class*="_settingsArea"] button { justify-content: center !important; padding-inline: 0 !important; }
 /* 记忆按钮 svg 带 4px 右 margin（隐藏 label 的残留间隙）——rail 下清零 */
