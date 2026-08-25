@@ -16,7 +16,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from './connection.ts'
+import { DEFAULT_CONNECT_TIMEOUT_MS, RECONNECT_DEFAULTS, resolveConnectTimeoutMs, resolveReconnectPolicy, startConnection } from './connection.ts'
 import type { ReconnectConfig } from './connection.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
 import type {} from '@deepseek-ai/dsh-tools'
@@ -66,6 +66,12 @@ export interface StdioConfig {
   cwd: string
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /**
+   * Bound for one connection attempt — the initialize handshake plus the
+   * initial tool synchronization — in milliseconds; also bounds each
+   * reconnect attempt.
+   */
+  connectTimeoutMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -88,6 +94,12 @@ export interface StreamableHttpConfig {
   headers: Record<string, string>
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /**
+   * Bound for one connection attempt — the initialize handshake plus the
+   * initial tool synchronization — in milliseconds; also bounds each
+   * reconnect attempt.
+   */
+  connectTimeoutMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -113,6 +125,7 @@ export const Config = z.union([
     env: z.dict(String).default({}),
     cwd: z.string().default(''),
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+    connectTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_CONNECT_TIMEOUT_MS),
     failOnStartupError: z.boolean().default(false),
     reconnect: Reconnect,
   }),
@@ -122,6 +135,7 @@ export const Config = z.union([
     url: z.string().required(),
     headers: z.dict(String).default({}),
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+    connectTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_CONNECT_TIMEOUT_MS),
     failOnStartupError: z.boolean().default(false),
     reconnect: Reconnect,
   }),
@@ -142,6 +156,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // construction that bypassed Schemastery) rejects THIS instance before any
   // effect registers.
   const reconnect = resolveReconnectPolicy(config.reconnect, `mcp-client(${config.serverName}): reconnect`)
+  // Same fail-loud contract for the per-attempt bound.
+  const connectTimeoutMs = resolveConnectTimeoutMs(config.connectTimeoutMs, `mcp-client(${config.serverName}): connectTimeoutMs`)
 
   // Reserve the namespace next: a duplicate `serverName` fails THIS instance
   // at load with an actionable error and leaves the earlier instance intact.
@@ -163,7 +179,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // The supervisor owns the client/transport generations, the reconnect
   // loop, and the live tool registrations; disposal stops reconnection,
   // quiesces in-flight work, and unregisters the current generation.
-  const connection = startConnection(ctx, config, reconnect)
+  const connection = startConnection(ctx, config, reconnect, connectTimeoutMs)
 
   ctx.effect(() => {
     return () => connection.dispose()

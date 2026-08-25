@@ -59,7 +59,7 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
 // vi.mock is hoisted above static imports, so the modules under test see the
 // mocked SDK even through a static import.
 import { apply } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
-import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from '@deepseek-ai/dsh-mcp-client/src/connection.ts'
+import { DEFAULT_CONNECT_TIMEOUT_MS, RECONNECT_DEFAULTS, resolveConnectTimeoutMs, resolveReconnectPolicy, startConnection } from '@deepseek-ai/dsh-mcp-client/src/connection.ts'
 
 // ---- Helpers ----
 
@@ -101,6 +101,7 @@ function stdioConfig(reconnect?: Config['reconnect']): Config {
     env: {},
     cwd: '',
     toolCallTimeoutMs: 60_000,
+    connectTimeoutMs: 30_000,
     failOnStartupError: false,
     ...reconnect === undefined ? {} : { reconnect },
   }
@@ -262,7 +263,7 @@ describe('reconnect supervisor', () => {
     const { warns } = captureLogs(ctx)
     const gate: PromiseWithResolvers<void> = Promise.withResolvers()
     mockConnect.mockImplementation(() => gate.promise)
-    const handle = startConnection(ctx, stdioConfig(), resolveReconnectPolicy(undefined, 'reconnect'))
+    const handle = startConnection(ctx, stdioConfig(), resolveReconnectPolicy(undefined, 'reconnect'), DEFAULT_CONNECT_TIMEOUT_MS)
     await vi.waitFor(() => { expect(instances).toHaveLength(1) })
 
     const disposing = handle.dispose()
@@ -281,7 +282,7 @@ describe('reconnect supervisor', () => {
       const gate: PromiseWithResolvers<void> = Promise.withResolvers()
       mockConnect.mockImplementation(() => gate.promise)
       mockClose.mockResolvedValue(undefined)
-      const handle = startConnection(ctx, stdioConfig(), resolveReconnectPolicy(undefined, 'reconnect'))
+      const handle = startConnection(ctx, stdioConfig(), resolveReconnectPolicy(undefined, 'reconnect'), DEFAULT_CONNECT_TIMEOUT_MS)
       await vi.advanceTimersByTimeAsync(0)
 
       const disposing = handle.dispose()
@@ -472,6 +473,73 @@ describe('reconnect supervisor', () => {
     await staleHandler()
     expect(mockListTools).toHaveBeenCalledTimes(listCalls)
   })
+
+  it('bounds a hung initial connect with connectTimeoutMs and drains the reconnect budget', async () => {
+    vi.useFakeTimers()
+    try {
+      const { warns, errors } = captureLogs(ctx)
+      // A server that accepts the spawn and then stays silent: connect never
+      // settles on its own.
+      mockConnect.mockImplementation(() => new Promise<void>(() => {}))
+      mockClose.mockImplementation(function (this: { onclose?: () => void }) {
+        this.onclose?.()
+        return Promise.resolve()
+      })
+
+      const applying = apply(ctx, { ...stdioConfig({ initialDelayMs: 5, maxDelayMs: 20, maxAttempts: 1 }), connectTimeoutMs: 5_000 })
+      await vi.advanceTimersByTimeAsync(5_000)
+      // Activation is bounded by the first attempt's deadline, not the SDK's
+      // per-request budget: apply settles with the timeout outcome.
+      await applying
+
+      expect(warns.some(line => line.includes('connection attempt timed out after 5000ms (connectTimeoutMs)'))).toBe(true)
+      // The timed-out generation was closed and the budget drained: exactly
+      // one reconnect attempt, then give-up.
+      await vi.advanceTimersByTimeAsync(5_030)
+      expect(errors.some(line => line.includes('giving up after 1 consecutive failed reconnect attempts'))).toBe(true)
+      expect(mockConnect).toHaveBeenCalledTimes(2)
+      expect(mockClose).toHaveBeenCalledTimes(2)
+      expect(ctx.tools.get('mcp__srv__remote')).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('bounds a hung initial tool synchronization with connectTimeoutMs', async () => {
+    vi.useFakeTimers()
+    try {
+      const { warns } = captureLogs(ctx)
+      const gate: PromiseWithResolvers<unknown> = Promise.withResolvers()
+      mockListTools.mockImplementation(() => gate.promise)
+
+      const applying = apply(ctx, { ...stdioConfig({ initialDelayMs: 5, maxDelayMs: 20, maxAttempts: 1 }), connectTimeoutMs: 5_000 })
+      await vi.advanceTimersByTimeAsync(5_000)
+      await applying
+
+      expect(warns.some(line => line.includes('connection attempt timed out after 5000ms (connectTimeoutMs)'))).toBe(true)
+      expect(ctx.tools.get('mcp__srv__remote')).toBeUndefined()
+      // A late-settling superseded sync may still publish through the sync
+      // chain; the give-up and dispose paths own unregistering it, covered by
+      // the in-flight re-sync tests above.
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('failOnStartupError rejects activation when the initial attempt times out', async () => {
+    vi.useFakeTimers()
+    try {
+      mockConnect.mockImplementation(() => new Promise<void>(() => {}))
+      const applying = apply(ctx, { ...stdioConfig({ enabled: false }), connectTimeoutMs: 5_000, failOnStartupError: true })
+      // Attach the rejection consumer before firing the deadline so the
+      // rejection is never momentarily unhandled.
+      const rejection = expect(applying).rejects.toThrow(/initial connection or tool synchronization failed/)
+      await vi.advanceTimersByTimeAsync(5_000)
+      await rejection
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 // ---- Policy resolution ----
@@ -517,5 +585,29 @@ describe('resolveReconnectPolicy', () => {
     const ctx = await mountRegistry()
     await expect(apply(ctx, stdioConfig({ initialDelayMs: 100, maxDelayMs: 5 })))
       .rejects.toThrow(/initialDelayMs must be less than or equal to maxDelayMs/)
+  })
+})
+
+describe('resolveConnectTimeoutMs', () => {
+  const path = 'mcp-client(srv): connectTimeoutMs'
+
+  it('resolves omission to the default', () => {
+    expect(resolveConnectTimeoutMs(undefined, path)).toBe(DEFAULT_CONNECT_TIMEOUT_MS)
+  })
+
+  it('keeps explicit values', () => {
+    expect(resolveConnectTimeoutMs(15_000, path)).toBe(15_000)
+  })
+
+  it('rejects out-of-range values', () => {
+    expect(() => resolveConnectTimeoutMs(0, path)).toThrow(/connectTimeoutMs must be a positive finite number/)
+    expect(() => resolveConnectTimeoutMs(-1, path)).toThrow(/connectTimeoutMs/)
+    expect(() => resolveConnectTimeoutMs(Number.POSITIVE_INFINITY, path)).toThrow(/connectTimeoutMs/)
+  })
+
+  it('apply fails loud at load on an invalid connectTimeoutMs', async () => {
+    const ctx = await mountRegistry()
+    await expect(apply(ctx, { ...stdioConfig(), connectTimeoutMs: 0 }))
+      .rejects.toThrow(/connectTimeoutMs must be a positive finite number/)
   })
 })

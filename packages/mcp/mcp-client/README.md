@@ -44,6 +44,7 @@ The model sees `mcp__github__create_issue`, `mcp__web__search`, … — the same
 | `url` | http | yes | MCP server URL |
 | `headers` | http | no | Extra headers (e.g. auth tokens) |
 | `toolCallTimeoutMs` | both | no | Timeout per `callTool` invocation (default 60000) |
+| `connectTimeoutMs` | both | no | Bound for one connection attempt — initialize handshake plus initial tool synchronization; also bounds each reconnect attempt (default 30000) |
 | `failOnStartupError` | both | no | Reject plugin activation when initial connection or tool synchronization fails (default `false`) |
 | `reconnect.enabled` | both | no | Reconnect automatically after a lost connection (default `true`) |
 | `reconnect.initialDelayMs` | both | no | First reconnect delay in ms; doubles per consecutive failed attempt (default 500) |
@@ -61,7 +62,7 @@ Every MCP tool has two names: the raw MCP name (sent on the wire in `tools/call`
 
 ## Behavior
 
-- On connect: plugin activation awaits `listTools()` and registers each tool via `ctx.tools.register()` under its public name before the composition starts its first turn. Initial connection, discovery, or registration failure is always logged; it rejects activation when `failOnStartupError` is true and otherwise activates with no tools.
+- On connect: plugin activation awaits `listTools()` and registers each tool via `ctx.tools.register()` under its public name before the composition starts its first turn. One connection attempt — the initialize handshake plus the initial synchronization — is bounded by `connectTimeoutMs`; a server that accepts the spawn but never completes them fails the attempt at the bound, closes the generation, and feeds the reconnect budget instead of holding activation. Initial connection, discovery, or registration failure is always logged; it rejects activation when `failOnStartupError` is true and otherwise activates with no tools.
 - Listens for `notifications/tools/list_changed` → re-syncs; a fetch-phase failure keeps the previous generation registered, while a registration conflict rolls back the attempted generation and leaves no tools from that server.
 - Tool execute: `client.callTool({ name: rawName, arguments }, { signal })` with timeout + abort support—the public name is never sent to the server.
 - Canonical success is `{ content: JsonValue[], structuredContent? }`; complete JSON MCP blocks survive for programmatic callers. A supported advertised `outputSchema` validates `structuredContent`; unsupported schema vocabulary falls back to unconstrained `JsonValue`.

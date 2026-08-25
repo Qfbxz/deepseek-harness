@@ -44,6 +44,17 @@ export const RECONNECT_DEFAULTS: Required<ReconnectConfig> = Object.freeze({
   maxAttempts: 10,
 })
 
+/**
+ * Default bound for one connection attempt (initialize handshake plus initial
+ * tool synchronization), shared by the Config schema and
+ * {@link resolveConnectTimeoutMs}. The MCP SDK bounds each individual request
+ * at 60s, but plugin activation awaits the whole first attempt: without an
+ * attempt-level bound a server that accepts the spawn and then stays silent
+ * delays activation — and therefore Host boot — by the full SDK budget per
+ * attempt, with no operator control.
+ */
+export const DEFAULT_CONNECT_TIMEOUT_MS = 30_000
+
 // The SDK's stdio transport owns two two-second termination grace periods.
 // Keep one additional second for the process-close event that proves the old
 // generation is gone; timing out fails closed instead of overlapping children.
@@ -89,6 +100,23 @@ export function resolveReconnectPolicy(config: ReconnectConfig | undefined, path
   return Object.freeze({ enabled, initialDelayMs, maxDelayMs, maxAttempts })
 }
 
+/**
+ * The explicit resolve step for one connection-attempt bound. Programmatic
+ * construction may bypass Schemastery normalization, so the default and bounds
+ * are re-judged here — misconfiguration fails the plugin instance at load.
+ *
+ * @param value - Raw `connectTimeoutMs` config; omission uses the default.
+ * @param path - Diagnostic prefix naming the config location in thrown messages.
+ * @returns The validated bound in milliseconds.
+ */
+export function resolveConnectTimeoutMs(value: number | undefined, path: string): number {
+  const timeoutMs = value ?? DEFAULT_CONNECT_TIMEOUT_MS
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_TIMER_DELAY_MS) {
+    throw new Error(`${path} must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`)
+  }
+  return timeoutMs
+}
+
 /** Result from the initial connection attempt, for startup-await semantics. */
 export interface ConnectionOutcome {
   /** If the initial connection or tool sync failed, the error; otherwise absent. */
@@ -118,9 +146,15 @@ export interface ConnectionHandle {
  * @param ctx - Cordis context providing the `tools` registry and logger.
  * @param config - Resolved plugin config selecting the transport and server identity.
  * @param policy - Resolved reconnect policy from {@link resolveReconnectPolicy}.
+ * @param connectTimeoutMs - Resolved per-attempt bound from {@link resolveConnectTimeoutMs}.
  * @returns Handle with a `ready` promise for startup-await and a `dispose` for teardown.
  */
-export function startConnection(ctx: Context, config: Config, policy: ResolvedReconnectPolicy): ConnectionHandle {
+export function startConnection(
+  ctx: Context,
+  config: Config,
+  policy: ResolvedReconnectPolicy,
+  connectTimeoutMs: number,
+): ConnectionHandle {
   const label = `mcp-client(${config.serverName})`
   const opts: ToolBridgeOptions = {
     registrationFailure: 'contain',
@@ -268,14 +302,27 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         }
       },
     )
+    // One bound per attempt, covering the initialize handshake and the initial
+    // tool synchronization together: a server that accepts the spawn but never
+    // completes them must not hold plugin activation (and Host boot) for the
+    // SDK's per-request budgets, and the reconnect attempt budget needs a
+    // bounded attempt to drain at all. The losing attempt's late settlement is
+    // inert — the isCurrent guards in this continuation and in the sync queue
+    // skip a generation the catch path already replaced.
+    const deadline: PromiseWithResolvers<never> = Promise.withResolvers()
+    const attemptTimer = setTimeout(() => {
+      deadline.reject(new Error(`${label}: connection attempt timed out after ${connectTimeoutMs}ms (connectTimeoutMs)`))
+    }, connectTimeoutMs)
+    attemptTimer.unref()
     try {
-      await generation.connect(createTransport(config))
-      if (hasClosed()) {
-        attemptSettled = true
-        generationDown(generation)
-        return
-      }
-      await enqueueSync(generation, startup ? startupOpts : opts)
+      await Promise.race([
+        (async () => {
+          await generation.connect(createTransport(config))
+          if (hasClosed()) return
+          await enqueueSync(generation, startup ? startupOpts : opts)
+        })(),
+        deadline.promise,
+      ])
     } catch (error) {
       if (firstAttemptError === undefined) firstAttemptError = error
       // Disposal clears current ownership before it closes the generation, so
@@ -293,6 +340,8 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       }
       generationDown(generation)
       return
+    } finally {
+      clearTimeout(attemptTimer)
     }
     attemptSettled = true
     if (hasClosed()) {
