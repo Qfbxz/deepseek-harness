@@ -9,6 +9,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 const CANDIDATES = [
+  join(homedir(), '.dsh', 'profiles', 'web', 'node_modules', '@michengai', 'dsh-agency-agents', 'lib', 'src-CtqSbp2k.js'),
   join(homedir(), '.dsh', 'profiles', 'web', 'node_modules', '@michengai', 'dsh-agency-agents', 'lib', 'index.js'),
   join(execFileSync('npm', ['root', '-g'], { encoding: 'utf8' }).trim(), '@deepseek-ai/dsh/node_modules/@michengai/dsh-agency-agents/lib/index.js'),
 ]
@@ -33,6 +34,32 @@ const NEW = [
   '\t\t\t}',
   '\t\t}',
 ].join('\n')
+// 2026-09 升级案：上游 bundle 拆分后 summon 逻辑迁移至 src chunk，锚点已改写
+const OLD2 = '\t\tconst expert = resolveExpert((await library.catalog()).experts.filter((expert) => !expert.conflict), query, locale);\n\t\tif (!enabledSet().has(expert.slug)) throw new Error(formatHost(locale, "error.expertDisabled", { name: localizedExpertName(expert, locale) }));'
+const NEW2 = [
+  '\t\t/*patch(enabled-first-summon)*/',
+  '\t\tconst catalogExperts = (await library.catalog()).experts.filter((expert) => !expert.conflict);',
+  '\t\tconst enabledPool = catalogExperts.filter((e) => enabledSet().has(e.slug));',
+  '\t\tlet expert;',
+  '\t\ttry {',
+  '\t\t\texpert = resolveExpert(enabledPool, query, locale);',
+  '\t\t} catch {',
+  '\t\t\tconst full = resolveExpert(catalogExperts, query, locale);',
+  '\t\t\tif (enabledSet().has(full.slug)) expert = full;',
+  '\t\t\telse {',
+  '\t\t\t\tconst pool = enabledPool.filter((e) => e.division === full.division);',
+  '\t\t\t\tconst alts = (pool.length > 0 ? pool : enabledPool).slice(0, 6).map((e) => e.slug).join(", ");',
+  '\t\t\t\tthrow new Error(formatHost(locale, "error.expertDisabled", { name: localizedExpertName(full, locale) }) + "；可用替代（已启用）：" + alts + "。先调用 list_experts() 查看已启用名册。");',
+  '\t\t\t}',
+  '\t\t}',
+].join('\n')
+if (s.includes(OLD2)) {
+  s = s.replace(OLD2, NEW2)
+  writeFileSync(target, s)
+  execFileSync(process.execPath, ['--check', target], { stdio: 'pipe' })
+  console.log('[patched]', target)
+  process.exit(0)
+}
 if (!s.includes(OLD)) { console.log('[skip] anchor missing (plugin updated):', target); process.exit(0) }
 s = s.replace(OLD, NEW)
 writeFileSync(target, s)
