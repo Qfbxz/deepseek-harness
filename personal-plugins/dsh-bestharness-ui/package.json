@@ -1,0 +1,18 @@
+{
+  "name": "dsh-bestharness-ui",
+  "version": "1.0.0",
+  "description": "BestHarness UI 增强：Claude Code 同款生成状态动画（动词微光 spinner + 帧动画 glyph + 实时 token 平滑跳动 + 停滞渐红）。host 侧惰性聚合会话 usage，client 侧增强 .turnStatus 状态条。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  }
+}

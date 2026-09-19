@@ -1,0 +1,26 @@
+{
+  "name": "dsh-bestharness-guard",
+  "version": "1.0.0",
+  "description": "BestHarness 综合守卫：四级防死循环梯子(3/5/8提醒+12强停) + turn级token预算(边际递减检测) + 子代理摘要质量门。五家 harness 源码分析结晶，设置服务为唯一数据源。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./package.json": "./package.json",
+    "./client": "./client.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins"
+      ]
+    }
+  }
+}

@@ -1,0 +1,120 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+
+function usageEvent(seq, inputTokens) {
+	return {
+		seq,
+		time: Date.UTC(2026, 7, 13),
+		type: "assistant/message",
+		data: {
+			turn: `turn-${seq}`,
+			step: 0,
+			usage: { inputTokens, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+			message: { source: { model: "deepseek-chat" } }
+		}
+	};
+}
+
+async function freshModule(label, home) {
+	process.env.DSH_HOME = home;
+	return import(new URL(`../lib/index.js?test=${label}-${Date.now()}-${Math.random()}`, import.meta.url));
+}
+
+function makeResponse() {
+	return {
+		status: null,
+		body: "",
+		writeHead(status) { this.status = status; },
+		end(body = "") { this.body = body; }
+	};
+}
+
+function makeContext({ sessions, persistence, routes } = {}) {
+	return {
+		logger: { warn: () => {} },
+		credentials: { resolve: async () => void 0 },
+		webServer: { register: (entry) => { routes?.set(entry.path, entry.handler); return () => {}; } },
+		effect: (register) => register(),
+		get: (name) => name === "sessions" ? sessions : name === "sessionPersistence" ? persistence : void 0
+	};
+}
+
+async function testRouteFence(root) {
+	const plugin = await freshModule("routes", join(root, "routes"));
+	const routes = new Map();
+	const empty = { list: () => [] };
+	const persistence = { listSnapshots: async () => [], list: async () => [] };
+	plugin.apply(makeContext({ sessions: empty, persistence, routes }));
+	const handler = routes.get(plugin.USAGE_PATH);
+	assert.equal(typeof handler, "function");
+
+	const ipv6 = makeResponse();
+	await handler({ method: "GET", headers: { host: "[::1]:3080" }, socket: { remoteAddress: "::1" } }, ipv6);
+	assert.equal(ipv6.status, 200, "bracketed IPv6 loopback must be accepted");
+
+	const foreign = makeResponse();
+	await handler({ method: "GET", headers: { host: "localhost:3080" }, socket: { remoteAddress: "203.0.113.7" } }, foreign);
+	assert.equal(foreign.status, 403, "a spoofed Host must not bypass the peer fence");
+
+	const head = makeResponse();
+	await handler({ method: "HEAD", headers: { host: "localhost:3080" }, socket: { remoteAddress: "127.0.0.1" } }, head);
+	assert.equal(head.status, 405, "the endpoints are GET-only");
+
+	const subscriptions = makeResponse();
+	await routes.get(plugin.SUBSCRIPTIONS_PATH)({ method: "GET", url: plugin.SUBSCRIPTIONS_PATH, headers: { host: "localhost:3080" }, socket: { remoteAddress: "127.0.0.1" } }, subscriptions);
+	assert.equal(subscriptions.status, 200);
+	assert.deepEqual(JSON.parse(subscriptions.body).subscriptions.map((provider) => provider.status), ["not-configured", "not-configured"]);
+}
+
+async function testPersistedToLive(root) {
+	const plugin = await freshModule("transition", join(root, "transition"));
+	const id = "transition-session";
+	const persisted = usageEvent(100, 11);
+	let live = false;
+	const sessions = { list: () => live ? [{ id, events: [usageEvent(1, 7)] }] : [] };
+	const persistence = {
+		listSnapshots: async () => live ? [] : [{ header: { id }, revision: "r1" }],
+		list: async () => [],
+		readFrom: async () => ({ events: [persisted] })
+	};
+	const ctx = makeContext({ sessions, persistence });
+	assert.equal((await plugin.collectUsage(ctx)).total.tokens, 11);
+	live = true;
+	assert.equal((await plugin.collectUsage(ctx)).total.tokens, 7, "persisted-to-live must refold the full live log");
+}
+
+async function testRevisionRewrite(root) {
+	const plugin = await freshModule("rewrite", join(root, "rewrite"));
+	const id = "rewritten-session";
+	let revision = "r1";
+	let reads = 0;
+	const persistence = {
+		listSnapshots: async () => [{ header: { id }, revision }],
+		list: async () => [],
+		readFrom: async (_id, fromSeq) => {
+			reads += 1;
+			if (revision === "r1") return { events: [usageEvent(100, 11)] };
+			return { events: fromSeq === 0 ? [usageEvent(1, 5)] : [] };
+		}
+	};
+	const ctx = makeContext({ sessions: { list: () => [] }, persistence });
+	assert.equal((await plugin.collectUsage(ctx)).total.tokens, 11);
+	await plugin.collectUsage(ctx);
+	assert.equal(reads, 1, "an unchanged opaque revision must skip storage reads");
+	revision = "r2";
+	assert.equal((await plugin.collectUsage(ctx)).total.tokens, 5, "a rewritten log must replace cached usage");
+	assert.equal(reads, 3, "rewrite detection must retry from seq 0");
+}
+
+const root = await mkdtemp(join(tmpdir(), "dsh-usage-stats-"));
+try {
+	await testRouteFence(root);
+	await testPersistedToLive(root);
+	await testRevisionRewrite(root);
+	console.log("SERVER REGRESSION TESTS PASSED");
+} finally {
+	delete process.env.DSH_HOME;
+	await rm(root, { recursive: true, force: true });
+}

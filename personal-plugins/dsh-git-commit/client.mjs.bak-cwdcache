@@ -1,0 +1,1389 @@
+/* P44: 原客户端封存（gitbar 接管） */
+if (false) {
+// dsh-git-commit — client 半边：goal 行的提交 chip（±N 未提交数）+ Codex 风格提交弹窗。
+// 弹窗：提交信息（留空自动生成）、包含未暂存的更改（+N -M 徽章）、提交/提交并推送/推送。
+// 仓库定位：当前选中会话的 cwd（fiber 取 sessionId 精确解析，与 git-graph 的
+// byId[sessionId].cwd 同源语义；标题前缀匹配与最近会话仅作兜底——跨工作区
+// 同前缀标题会错配）。
+//
+// ⚠️ REWRITE RULE: 本文件是 ModuleLoader 脚本契约，不是裸 ESM。
+// factory 必须 `return module.exports`，且 module.exports 必须带 .apply。
+window.__ModuleLoader__.load({
+  id: "dsh-git-commit",
+  factory: function () {
+    var module = { exports: {} };
+
+    var P = "dshGc";
+    var CHIP_ID = "dsh-git-commit-chip";
+    var PANEL_ID = "dsh-git-commit-panel";
+
+    var CSS = [
+      "#" + CHIP_ID + "{display:inline-flex;align-items:center;gap:4px;min-height:28px;padding:0 8px;line-height:20px;border:0;border-radius:16px;background:transparent;cursor:pointer;font-size:13px;font-weight:500;color:var(--dsw-alias-label-primary, inherit);flex:0 0 auto;transition:background-color .12s,color .12s}",
+      "#" + CHIP_ID + ":hover{background:var(--dsw-alias-interactive-bg-hover, transparent)}",
+      "#" + CHIP_ID + ":active{background:var(--dsw-alias-interactive-bg-active, transparent)}",
+      "#" + CHIP_ID + ".dirty{color:var(--dsw-alias-brand-primary, #4c8dff)}",
+      "." + P + "Num{font-weight:600}",
+      "." + P + "Clean{opacity:.7}",
+      "#" + PANEL_ID + "{position:fixed;z-index:60;width:380px;box-sizing:border-box;display:none;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--dsw-alias-border-l2, rgba(168,200,232,0.18));border-radius:12px;background:var(--dsw-alias-bg-layer-2, #16233f);box-shadow:0 12px 32px rgba(0,0,0,.35);font:inherit}",
+      "#" + PANEL_ID + "[data-open='1']{display:flex}",
+      "." + P + "Head{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dsw-alias-label-secondary, #a5b3da)}",
+      "." + P + "Branch{font-weight:600;color:var(--dsw-alias-label-primary, inherit)}",
+      "." + P + "HeadLabel{font-size:12.5px;color:var(--dsw-alias-label-secondary, #a5b3da);flex:0 0 auto}",
+      "." + P + "BranchSel{font:inherit;font-size:12.5px;font-weight:600;max-width:150px;padding:2px 6px;border:1px solid var(--dsw-alias-border-l2, rgba(168,200,232,0.18));border-radius:6px;background:var(--dsw-alias-bg-module-platform, rgba(28,52,100,0.64));color:var(--dsw-alias-label-primary, inherit);cursor:pointer;outline:none}",
+      "." + P + "Ab{font-size:11px;padding:1px 8px;border-radius:999px;background:var(--dsw-alias-bg-module-platform, rgba(127,150,190,0.15))}",
+      "." + P + "Close{margin-left:auto;background:none;border:0;color:var(--dsw-alias-label-tertiary, #8896bd);font:inherit;font-size:14px;cursor:pointer;padding:0 4px}",
+      "." + P + "Msg{box-sizing:border-box;width:100%;min-height:64px;max-height:160px;padding:8px 12px;border:1px solid var(--dsw-alias-border-l2, rgba(168,200,232,0.18));border-radius:8px;background:var(--dsw-alias-bg-module-platform, rgba(28,52,100,0.64));color:var(--dsw-alias-label-primary, inherit);font:inherit;font-size:13px;line-height:1.55;resize:vertical;outline:none}",
+      "." + P + "Msg:focus-visible{outline:2px solid var(--dsw-alias-brand-primary, #4c8dff);outline-offset:-1px}",
+      "." + P + "Opt{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dsw-alias-label-primary, inherit);cursor:pointer;user-select:none}",
+      "." + P + "Opt input{accent-color:var(--dsw-alias-brand-primary, #4c8dff);cursor:pointer}",
+      "." + P + "Badge{font-size:11.5px;font-weight:600}",
+      "." + P + "Add{color:#4ade80}",
+      "." + P + "Del{color:#f87171}",
+      "." + P + "Btns{display:flex;gap:8px}",
+      "." + P + "Btn{flex:1;padding:6px 10px;border-radius:8px;font:inherit;font-size:12.5px;cursor:pointer;border:1px solid var(--dsw-alias-border-l2, rgba(168,200,232,0.18));background:none;color:var(--dsw-alias-label-primary, inherit);white-space:nowrap}",
+      "." + P + "Btn:hover:not(:disabled){border-color:var(--dsw-alias-label-dimmed, rgba(168,200,232,0.4))}",
+      "." + P + "Btn:disabled{opacity:.45;cursor:default}",
+      "." + P + "Primary{background:var(--dsw-alias-label-primary, #d8e5f5);color:var(--dsw-alias-bg-layer-3, #1c3464);border-color:transparent;font-weight:600}",
+      "." + P + "Result{font-size:12px;line-height:1.5;min-height:16px;color:var(--dsw-alias-label-tertiary, #8896bd);word-break:break-all}",
+      "." + P + "Err{color:var(--dsw-alias-label-error, #ef4444)}",
+      "." + P + "Ok{color:#4ade80}"
+    ].join("");
+
+    // ---------- 状态 ----------
+    var cwd = null;
+    var cwdTitle = null;   // 解析 cwd 时的选中会话标题——变了就必须重解析，
+                           // 否则切会话后提交面板还挂着上一个仓库的分支
+    // ... existing states ...
+    var status = null;      // {branch, ahead, behind, staged, unstaged, untracked, dirty}
+    var panelOpen = false;
+    var busy = false;
+    var includeUnstaged = true;
+
+    function ensureStyle() {
+      if (document.getElementById("dsh-git-commit-style")) return;
+      var st = document.createElement("style");
+      st.id = "dsh-git-commit-style";
+      st.textContent = CSS;
+      document.head.appendChild(st);
+    }
+
+    function el(tag, cls, text) {
+      var e = document.createElement(tag);
+      if (cls) e.className = cls;
+      if (text != null) e.textContent = text;
+      return e;
+    }
+
+    // ---------- 仓库定位：选中会话的 cwd ----------
+    function selectedTitle() {
+      var sel = document.querySelector('[role="treeitem"][aria-selected="true"], [role="treeitem"][data-selected]');
+      if (sel === null) return null;
+      var spans = sel.querySelectorAll("span, div");
+      var best = "";
+      for (var i = 0; i < spans.length; i++) {
+        var t = (spans[i].textContent || "").trim();
+        if (t.length > best.length && t.length < 60) best = t;
+      }
+      return best || null;
+    }
+
+    // 选中会话行的 React fiber 携带视图模型 { id, title, ... }——id 即 sessionId。
+    // 按它精确解析 cwd；标题前缀匹配只作兜底（跨工作区同前缀标题会张冠李戴，
+    // 见 git-graph 的 byId[sessionId].cwd 同源语义）。
+    function selectedSessionId() {
+      var sel = document.querySelector('[role="treeitem"][aria-selected="true"], [role="treeitem"][data-selected]');
+      if (sel === null) return null;
+      var fk = null;
+      for (var k in sel) if (k.indexOf("__reactFiber") === 0) { fk = k; break; }
+      if (fk === null) return null;
+      var f = sel[fk];
+      for (var i = 0; i < 6 && f; i++) {
+        var p = f.memoizedProps;
+        if (p && typeof p === "object" && p.node && p.node.id && p.currentId !== undefined) return String(p.node.id);
+        f = f.return;
+      }
+      return null;
+    }
+
+    function resolveCwd(force) {
+      var title = selectedTitle();
+      // 选中会话变了就必须重解析——否则切会话后提交面板还挂着上一个仓库的
+      // 分支，与分支 chip（跟随活跃会话）不一致
+      if (cwd !== null && !force && title === cwdTitle) return Promise.resolve(cwd);
+      cwdTitle = title;
+      return fetch("/api/session.list", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ type: "client-request", rpcId: "gc-cwd", method: "session.list", payload: {} })
+      }).then(function (r) { return r.text().then(function (t) { try { return JSON.parse(t); } catch (e) { return null; } }); }).then(function (msg) {
+        var items = (msg.result && msg.result.value && msg.result.value.items) || [];
+        if (items.length === 0) return null;
+        var sid = selectedSessionId();
+        var pick = null;
+        if (sid !== null) {
+          for (var i = 0; i < items.length; i++) if (String(items[i].sessionId || "") === sid) { pick = items[i]; break; }
+        }
+        var title = selectedTitle();
+        if (pick === null && title !== null) {
+          for (var i = 0; i < items.length; i++) {
+            var t = String(((items[i].projections || {}).values || {}).title || "");
+            if (t && title.indexOf(t.slice(0, 12)) >= 0) { pick = items[i]; break; }
+          }
+        }
+        if (pick === null) {
+          pick = items[0];
+          for (var j = 0; j < items.length; j++) if ((items[j].updatedAt || 0) > (pick.updatedAt || 0) && !items[j].blank) pick = items[j];
+        }
+        cwd = pick && pick.cwd ? pick.cwd : null;
+        return cwd;
+      }).catch(function () { return null; });
+    }
+
+    function fetchStatus() {
+      return resolveCwd().then(function (dir) {
+        if (dir === null) return null;
+        return fetch("/api/dsh-git-commit/status?cwd=" + encodeURIComponent(dir))
+          .then(function (r) { return r.text().then(function (t) { try { return JSON.parse(t); } catch (e) { return null; } }); }).then(function (b) {
+            status = b && b.ok ? b.status : null;
+            return status;
+          });
+      }).catch(function () { status = null; return null; });
+    }
+
+    // ---------- chip ----------
+    function buildChip() {
+      var chip = el("div");
+      chip.id = CHIP_ID;
+      chip.title = "提交 / 推送";
+      chip.setAttribute("role", "button");
+      chip.setAttribute("aria-label", "提交与推送");
+      var label = el("span", null, "⎇ 提交");
+      label.id = CHIP_ID + "-label";
+      var num = el("span", P + "Num", "");
+      num.id = CHIP_ID + "-num";
+      chip.appendChild(label); chip.appendChild(num);
+      chip.addEventListener("click", function (e) {
+        e.stopPropagation();
+        togglePanel();
+      });
+      return chip;
+    }
+
+    function updateChip() {
+      var chip = document.getElementById(CHIP_ID);
+      if (chip === null) return;
+      var num = document.getElementById(CHIP_ID + "-num");
+      if (status === null) {
+        chip.classList.remove("dirty");
+        if (num !== null) { num.textContent = ""; num.className = P + "Num " + P + "Clean"; }
+        return;
+      }
+      var total = status.staged.n + status.unstaged.n + status.untracked;
+      chip.classList.toggle("dirty", status.dirty || status.ahead > 0);
+      if (num !== null) {
+        num.textContent = status.dirty ? "±" + total : (status.ahead > 0 ? "↑" + status.ahead : "✓");
+        num.className = P + "Num";
+      }
+    }
+
+    // patch(subagent-guard): 子代理页面不显示提交按钮（子代理不提交）。
+    // 检测：会话层级导航存在多个 crumb（父/子层级，用“/”分隔）→ 子代理页面。
+    function isSubagentPage() {
+      // 子代理页面：会话层级导航存在多于 1 个 crumb（父/子层级，用“/”分隔）。
+      // 普通页面只有当前会话 1 个 crumb，无分隔符。
+      var nav = document.querySelector('nav[aria-label="会话层级"]');
+      if (nav === null) return false;
+      return nav.querySelectorAll('[class*="crumbSep"]').length > 0;
+    }
+    function placeChip() {
+      // chip 只需存在（挂在 body）；定位由 dsh-desktop-chrome 统一负责：
+      // position:fixed 钉在分支 chip 左边、与 tab 栏水平对齐。
+      // 子代理页面不显示提交按钮（子代理不提交）。
+      var existing = document.getElementById(CHIP_ID);
+      if (isSubagentPage()) {
+        if (existing !== null) existing.remove();
+        return;
+      }
+      if (existing === null) {
+        document.body.appendChild(buildChip());
+      }
+    }
+
+    // ---------- 弹窗 ----------
+    function buildPanel() {
+      var p = el("div");
+      p.id = PANEL_ID;
+      p.setAttribute("data-open", "0");
+
+      var head = el("div", P + "Head");
+      var branchLabel = el("span", P + "HeadLabel", "提交到:");
+      var branch = el("select", P + "BranchSel");
+      branch.id = PANEL_ID + "-branch";
+      branch.title = "提交到该分支";
+      var ab = el("span", P + "Ab", "");
+      ab.id = PANEL_ID + "-ab";
+      var close = el("button", P + "Close", "×");
+      close.type = "button";
+      close.setAttribute("aria-label", "关闭");
+      close.addEventListener("click", function () { togglePanel(false); });
+      head.appendChild(branchLabel); head.appendChild(branch); head.appendChild(ab); head.appendChild(close);
+
+      var msg = el("textarea", P + "Msg");
+      msg.id = PANEL_ID + "-msg";
+      msg.placeholder = "提交信息（留空将自动生成）…";
+      msg.spellcheck = false;
+
+      var opt = el("label", P + "Opt");
+      var cb = el("input");
+      cb.type = "checkbox";
+      cb.id = PANEL_ID + "-cb";
+      cb.checked = includeUnstaged;
+      cb.addEventListener("change", function () { includeUnstaged = cb.checked; });
+      var optText = el("span", null, "包含未暂存的更改");
+      var badge = el("span", P + "Badge", "");
+      badge.id = PANEL_ID + "-badge";
+      opt.appendChild(cb); opt.appendChild(optText); opt.appendChild(badge);
+
+      var btns = el("div", P + "Btns");
+      function mkBtn(text, cls, action) {
+        var b = el("button", P + "Btn" + (cls ? " " + cls : ""), text);
+        b.type = "button";
+        b.addEventListener("click", function () { action(); });
+        return b;
+      }
+      var bCommit = mkBtn("提交", "", function () { run("commit"); });
+      var bBoth = mkBtn("提交并推送", P + "Primary", function () { run("commit-push"); });
+      var bPush = mkBtn("推送", "", function () { run("push"); });
+      btns.appendChild(bCommit); btns.appendChild(bBoth); btns.appendChild(bPush);
+
+      var result = el("div", P + "Result", "");
+      result.id = PANEL_ID + "-result";
+
+      p.appendChild(head); p.appendChild(msg); p.appendChild(opt); p.appendChild(btns); p.appendChild(result);
+      document.body.appendChild(p);
+
+      // 点击外部关闭
+      document.addEventListener("click", function (e) {
+        if (!panelOpen) return;
+        var panel = document.getElementById(PANEL_ID);
+        var chip = document.getElementById(CHIP_ID);
+        if (panel === null) return;
+        if (panel.contains(e.target) || (chip !== null && chip.contains(e.target))) return;
+        togglePanel(false);
+      }, true);
+      return p;
+    }
+
+    function updatePanel() {
+      var p = document.getElementById(PANEL_ID);
+      if (p === null) return;
+      var branch = document.getElementById(PANEL_ID + "-branch");
+      var ab = document.getElementById(PANEL_ID + "-ab");
+      var badge = document.getElementById(PANEL_ID + "-badge");
+      if (status === null) {
+        if (branch !== null) branch.textContent = cwd === null ? "未找到 git 仓库" : "非 git 仓库";
+        if (ab !== null) ab.textContent = "";
+        if (badge !== null) badge.textContent = "";
+        return;
+      }
+      if (branch !== null) {
+        var want = status.branch || "";
+        var has = false;
+        for (var bi = 0; bi < branch.options.length; bi++) if (branch.options[bi].value === want) { has = true; break; }
+        if (!has && want !== "") branch.insertBefore(new Option(want, want), branch.firstChild);
+        if (branch.value !== want) branch.value = want;
+      }
+      if (ab !== null) {
+        var parts = [];
+        if (status.ahead > 0) parts.push("↑" + status.ahead + " 待推送");
+        if (status.behind > 0) parts.push("↓" + status.behind + " 落后");
+        ab.textContent = parts.join(" · ");
+      }
+      if (badge !== null) {
+        badge.textContent = "";
+        var add = el("span", P + "Add", "+" + (status.unstaged.add + status.staged.add));
+        var del = el("span", P + "Del", " -" + (status.unstaged.del + status.staged.del));
+        badge.appendChild(add); badge.appendChild(del);
+      }
+    }
+
+    function positionPanel() {
+      var p = document.getElementById(PANEL_ID);
+      var chip = document.getElementById(CHIP_ID);
+      if (p === null || chip === null) return;
+      var r = chip.getBoundingClientRect();
+      var w = 380;
+      var left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
+      // patch(panel-below): the commit panel MUST open downward from the chip.
+      // The old default opened upward (top - height - 8), which clipped against
+      // the tab bar above; only an overflow past the viewport bottom falls back up.
+      var top = r.bottom + 8;
+      if (top + p.offsetHeight > window.innerHeight - 8) top = r.top - p.offsetHeight - 8;
+      if (top < 8) top = 8;
+      p.style.left = left + "px";
+      p.style.top = top + "px";
+    }
+
+    function togglePanel(force) {
+      var target = force === undefined ? !panelOpen : force;
+      if (target === panelOpen) return;
+      panelOpen = target;
+      var p = document.getElementById(PANEL_ID);
+      if (p === null && panelOpen) p = buildPanel();
+      if (p === null) return;
+      p.setAttribute("data-open", panelOpen ? "1" : "0");
+      if (panelOpen) {
+        fetchStatus().then(function () { updateChip(); updatePanel(); positionPanel(); });
+        resolveCwd().then(function (dir) {
+          if (dir === null) return;
+          fetch("/api/dsh-git-commit/branches?cwd=" + encodeURIComponent(dir))
+            .then(function (r) { return r.text().then(function (t) { try { return JSON.parse(t); } catch (e) { return null; } }); }).then(function (b) {
+              if (!b.ok) return;
+              var sel = document.getElementById(PANEL_ID + "-branch");
+              if (sel === null) return;
+              var keep = sel.value || b.current;
+              sel.textContent = "";
+              b.branches.forEach(function (nm) { sel.appendChild(new Option(nm, nm)); });
+              sel.value = keep && b.branches.indexOf(keep) >= 0 ? keep : b.current;
+            }).catch(function () {});
+        });
+        var msg = document.getElementById(PANEL_ID + "-msg");
+        if (msg !== null) setTimeout(function () { msg.focus(); }, 0);
+      }
+    }
+
+    function setResult(text, ok) {
+      var r = document.getElementById(PANEL_ID + "-result");
+      if (r === null) return;
+      r.textContent = text;
+      r.className = P + "Result " + (ok === true ? P + "Ok" : ok === false ? P + "Err" : "");
+    }
+
+    function setBusy(b) {
+      busy = b;
+      var p = document.getElementById(PANEL_ID);
+      if (p === null) return;
+      var btns = p.querySelectorAll("." + P + "Btn");
+      for (var i = 0; i < btns.length; i++) btns[i].disabled = b;
+    }
+
+    function run(action) {
+      if (busy) return;
+      resolveCwd(true).then(function (dir) {
+        if (dir === null) { setResult("未找到当前会话的仓库目录", false); return; }
+        setBusy(true);
+        setResult("执行中…");
+        // PATCH 2026-08-22(d): commit→push 串行。原实现两 fetch 并发(Promise.all),
+        // 「提交并推送」时 push 可能抢在 commit 落盘前到达 host,git push 推的
+        // 还是旧 HEAD(Everything up-to-date, exit 0)→ {ok:true} → 面板显示
+        // 「已推送」但远端零推进(2026-08-22 98c32ee0dc 事故:三 remote 停留旧
+        // HEAD,reflog 无 push 记录)。串行后 push 必然看到新 commit;commit
+        // 失败则 push 不发出。
+        var msgEl = document.getElementById(PANEL_ID + "-msg");
+        var msgs = [];
+        var chain = Promise.resolve();
+        if (action === "commit" || action === "commit-push") {
+          chain = chain.then(function () {
+            return fetch("/api/dsh-git-commit/commit", {
+              method: "POST", headers: { "content-type": "application/json" },
+              body: JSON.stringify({ cwd: dir, message: msgEl ? msgEl.value : "", includeUnstaged: includeUnstaged, targetBranch: (document.getElementById(PANEL_ID + "-branch") || {}).value || "" })
+            }).then(function (r) { return r.text().then(function (t) { try { return JSON.parse(t); } catch (e) { return null; } }); }).then(function (b) {
+              if (!b.ok) throw new Error(b.error || "commit failed");
+              msgs.push((b.switched || "") + "已提交 " + b.commit + "（" + b.message.slice(0, 40) + "）");
+            });
+          });
+        }
+        if (action === "push" || action === "commit-push") {
+          chain = chain.then(function () {
+            return fetch("/api/dsh-git-commit/push", {
+              method: "POST", headers: { "content-type": "application/json" },
+              body: JSON.stringify({ cwd: dir })
+            }).then(function (r) { return r.text().then(function (t) { try { return JSON.parse(t); } catch (e) { return null; } }); }).then(function (b) {
+              if (!b.ok) throw new Error(b.error || "push failed");
+              msgs.push("已推送");
+            });
+          });
+        }
+        return chain.then(function () {
+          setResult(msgs.join(" · "), true);
+          if (msgEl) msgEl.value = "";
+          return fetchStatus();
+        }).then(function () { updateChip(); updatePanel(); positionPanel(); });
+      }).catch(function (e) {
+        setResult(String(e && e.message ? e.message : e), false);
+        return fetchStatus();
+      }).then(function () { setBusy(false); });
+    }
+
+    // ---------- 挂载与刷新 ----------
+    var timer = null;
+    function mount() {
+      ensureStyle();
+      placeChip();
+      updateChip();
+    }
+
+    function apply() {
+      var obs = new MutationObserver(function () {
+        if (timer !== null) clearTimeout(timer);
+        timer = setTimeout(mount, 300);
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+      mount();
+      // 每 12s 刷新状态（chip 徽章）；弹窗开着也顺带更新
+      setInterval(function () {
+        fetchStatus().then(function () { updateChip(); if (panelOpen) { updatePanel(); positionPanel(); } });
+      }, 12000);
+      fetchStatus().then(updateChip);
+    }
+
+    module.exports.apply = apply;
+    return module.exports;
+  }
+});
+}
+window.__ModuleLoader__.load({ id: "dsh-git-commit", factory: () => ({ apply: () => {} }) });
+/* patch(gitbar-merge) P41v2 2026-08-28 完全体：单界面三合一（分支/图谱/提交），功能对齐两原面板；同源端点+fiber解析cwd+运行时host发现 */
+/* P46 2026-08-30 封存：本块与文末 gitbar-v2 争用同一 #dsh-gitbar——它先建出
+   「git/commit」双按钮，v2 的 ensure() 只能捡现成节点重定位，单按钮永远出
+   不来；且其 refresh() 每 6s 覆写 -bl 文案，抹掉 v2 的 ±N 徽章。legacy chip
+   隐藏样式已迁入 gitbar-v2 的 css。 */
+if (false) {
+(function(){
+  var ID = 'dsh-gitbar';
+  window.__gbVer = 'v3-final';
+  console.log('[gitbar] v3-final loaded');
+  var hide = document.createElement('style');
+  hide.textContent = '#dsh-git-commit-chip{visibility:hidden!important;pointer-events:none!important}[data-gitgraph-chip-anchor]{visibility:hidden!important;pointer-events:none!important}[data-gitgraph-chip]{visibility:hidden!important;pointer-events:none!important}';
+  hide.textContent += '#' + ID + ' button{outline:none}#' + ID + ' button:focus-visible{box-shadow:0 0 0 2px var(--dsw-alias-brand-primary,#4c8dff)}#' + ID + ' button:hover{filter:brightness(1.18)}';
+  hide.textContent += '.gb-pop{position:fixed;z-index:2147483002;background:var(--dsw-alias-bg-layer-2,#101a30);border:1px solid rgba(168,200,232,.25);border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.45);font-size:12.5px;color:var(--dsw-alias-label-primary,#dfe8f8);padding:10px;animation:gbIn .12s ease-out}@keyframes gbIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}';
+  hide.textContent += '.gb-row{display:flex;gap:8px;align-items:center;padding:4px 8px;border-radius:6px;cursor:pointer}.gb-row:hover{background:rgba(76,141,255,.14)}.gb-cur{background:rgba(76,141,255,.22)}';
+  document.head.appendChild(hide);
+  var st = { cwd: '', branch: '', dirty: 0, branches: [], host: null };
+  var JJ = function(r){ return r.json().catch(function(){ return null; }); };
+  // ---------- cwd 解析（fiber sessionId → session.list）----------
+  var selId = function(){
+    var sel = document.querySelector('[role="treeitem"][aria-selected="true"], [role="treeitem"][data-selected]');
+    if (!sel) return null;
+    var fk = null; for (var k in sel) if (k.indexOf('__reactFiber') === 0) { fk = k; break; }
+    if (!fk) return null;
+    var f = sel[fk];
+    for (var i = 0; i < 8 && f; i++) {
+      var p = f.memoizedProps;
+      if (p && typeof p === 'object' && p.node && p.node.id) return String(p.node.id);
+      f = f.return;
+    }
+    return null;
+  };
+  var resolveCwd = async function(){
+    if (st.cwd) return;
+    var cands = [];
+    try {
+      var sel = document.querySelector('[role="treeitem"][aria-selected="true"], [role="treeitem"][data-selected]');
+      if (sel) {
+        var fk = null; for (var k in sel) if (k.indexOf('__reactFiber') === 0) { fk = k; break; }
+        if (fk) {
+          var f = sel[fk];
+          for (var i = 0; i < 8 && f; i++) {
+            var p = f.memoizedProps;
+            if (p && p.node && typeof p.node === 'object') {
+              ['cwd', 'workdir', 'workDir', 'path', 'dir'].forEach(function(kk) { if (p.node[kk] && typeof p.node[kk] === 'string' && p.node[kk].indexOf('/') === 0) cands.push(p.node[kk]); });
+            }
+            f = f.return;
+          }
+        }
+      }
+    } catch (e) {}
+    try { var txt = document.body.innerText || ''; var mm = txt.match(/\/Users\/[\w\u4e00-\u9fff\/\-\.]{4,90}/g) || []; cands = cands.concat(mm); } catch (e) {}
+    for (var c = 0; c < cands.length && c < 14; c++) {
+      var d = cands[c];
+      try {
+        var r = await fetch('/api/dsh-git-commit/status?cwd=' + encodeURIComponent(d));
+        if (r.ok) { var j = await r.json(); if (j && j.ok) { st.cwd = d; return; } }
+      } catch (e) {}
+    }
+  };
+  // ---------- host 发现（图谱用）----------
+  var findHost = function(){
+    if (st.host !== null) return st.host;
+    var a = document.querySelector('[data-gitgraph-chip-anchor]');
+    if (!a) return null;
+    for (var k in a) {
+      if (k.indexOf('__reactFiber') === 0) {
+        var f = a[k];
+        for (var i = 0; i < 30 && f; i++) {
+          try {
+            var p = f.memoizedProps;
+            if (p && typeof p === 'object') {
+              var s = '';
+              try { s = JSON.stringify(p); } catch (e) { s = ''; }
+              var m = s && s.match(/https?:\/\/127\.0\.0\.1:\d+/);
+              if (m) { st.host = m[0]; return st.host; }
+              var h = p.host || p.baseUrl || p.endpoint;
+              if (typeof h === 'string' && h.indexOf('http') === 0) { st.host = h; return h; }
+            }
+          } catch (e) {}
+          f = f.return;
+        }
+      }
+    }
+    return null;
+  };
+  // ---------- 数据刷新 ----------
+  var refresh = async function(){
+    if (!st.cwd) await resolveCwd();
+    if (!st.cwd) return;
+    try {
+      var s0 = await JJ(await fetch('/api/dsh-git-commit/status?cwd=' + encodeURIComponent(st.cwd)));
+      var s = s0 && s0.ok ? s0.status : (s0 || null);
+      if (s) {
+        st.branch = s.branch || s.current || s.head || st.branch || '';
+        st.dirty = (s.untracked || 0) + ((s.staged && s.staged.n) || 0) + ((s.unstaged && s.unstaged.n) || 0);
+      }
+    } catch (e) {}
+    var bl = document.getElementById(ID + '-bl'); if (bl) bl.textContent = st.branch || '⎇';
+    var cb = document.getElementById(ID + '-commit'); if (cb) cb.textContent = '⎇ 提交' + (st.dirty ? '±' + st.dirty : '');
+  };
+  var loadBranches = async function(){
+    if (!st.cwd) await resolveCwd();
+    if (!st.cwd) return [];
+    try {
+      var b0 = await JJ(await fetch('/api/dsh-git-commit/branches?cwd=' + encodeURIComponent(st.cwd)));
+      var b = b0 && b0.ok ? (b0.branches || b0.list || b0.status) : b0;
+      var arr = (b && (b.branches || b.list || b)) || [];
+      st.branches = Array.isArray(arr) ? arr.map(function(x){ return typeof x === 'string' ? x : (x.name || x.branch || ''); }).filter(Boolean) : [];
+    } catch (e) { st.branches = []; }
+    return st.branches;
+  };
+  // ---------- 弹层框架 ----------
+  var openPop = function(anchor, id, w){
+    closePops();
+    var p = document.createElement('div');
+    p.id = id; p.className = 'gb-pop';
+    var r = anchor.getBoundingClientRect();
+    p.style.left = Math.max(8, Math.min(window.innerWidth - w - 12, Math.round(r.left))) + 'px';
+    p.style.top = Math.round(r.bottom + 6) + 'px';
+    p.style.width = w + 'px';
+    p.style.maxHeight = '62vh';
+    p.style.overflow = 'auto';
+    document.body.appendChild(p);
+    return p;
+  };
+  var closePops = function(){ document.querySelectorAll('.gb-pop').forEach(function(e){ e.remove(); }); };
+  document.addEventListener('click', function(e){ if (!e.target.closest('.gb-pop') && !e.target.closest('#' + ID)) closePops(); }, true);
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closePops(); });
+  // ---------- 分支弹层（列表+搜索+切换+图谱入口）----------
+  var branchPop = async function(){
+    var btn = document.getElementById(ID + '-branch');
+    var p = openPop(btn, ID + '-bp', 340);
+    p.innerHTML = '<div style="opacity:.6;padding:2px 0 6px">加载分支…</div>';
+    var list = await loadBranches();
+    var cur = st.branch;
+    var h = '<input id="' + ID + '-q" placeholder="过滤分支…" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,.25);border:1px solid rgba(168,200,232,.25);border-radius:6px;color:inherit;padding:4px 8px;font:inherit;margin-bottom:6px">' +
+      '<div style="font-weight:600;margin-bottom:4px">分支 (' + list.length + ')</div><div id="' + ID + '-rows"></div>' +
+      '<div style="border-top:1px solid rgba(168,200,232,.2);margin-top:8px;padding-top:8px;display:flex;gap:6px"><button id="' + ID + '-g" style="flex:1;' + BTN() + '">📊 提交图谱</button></div>';
+    p.innerHTML = h;
+    var rows = document.getElementById(ID + '-rows');
+    var render = function(q){
+      q = (q || '').toLowerCase();
+      rows.innerHTML = '';
+      list.filter(function(n){ return !q || n.toLowerCase().indexOf(q) > -1; }).slice(0, 50).forEach(function(n){
+        var d = document.createElement('div');
+        d.className = 'gb-row' + (n === cur ? ' gb-cur' : '');
+        d.innerHTML = '<span style="opacity:.7">' + (n === cur ? '●' : '○') + '</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + n + '</span>' + (n !== cur ? '<span class="gb-sw" style="opacity:0;font-size:11px">切换</span>' : '<span style="opacity:.6;font-size:11px">当前</span>');
+        d.onmouseenter = function(){ var s = d.querySelector('.gb-sw'); if (s) s.style.opacity = '.8'; };
+        d.onmouseleave = function(){ var s = d.querySelector('.gb-sw'); if (s) s.style.opacity = '0'; };
+        d.onclick = n === cur ? null : async function(){
+          d.style.opacity = '.5';
+          var host = findHost();
+          var done = false;
+          if (host) { try { var r = await fetch(host + '/git/switch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ branch: n, path: st.cwd }) }); done = r.ok; } catch (e) {} }
+          if (!done) { d.title = '切换需图谱插件 host（未发现）'; d.style.opacity = '1'; return; }
+          await refresh(); closePops();
+        };
+        rows.appendChild(d);
+      });
+      if (!rows.children.length) rows.innerHTML = '<div style="opacity:.5;padding:6px">无匹配分支</div>';
+    };
+    render('');
+    document.getElementById(ID + '-q').oninput = function(){ render(this.value); };
+    document.getElementById(ID + '-g').onclick = graphPop;
+  };
+  // ---------- 图谱弹层 ----------
+  var graphPop = async function(){
+    var btn = document.getElementById(ID + '-branch');
+    var p = openPop(btn, ID + '-gp', 560);
+    p.innerHTML = '<div style="opacity:.6">图谱加载中…</div>';
+    var host = findHost();
+    var g = null;
+    if (host) { try { g = await JJ(await fetch(host + '/git/graph')); } catch (e) {} }
+    var items = g && (g.commits || g.nodes || g.graph) || [];
+    if (!Array.isArray(items) || !items.length) {
+      p.innerHTML = '<div style="opacity:.6;white-space:pre-wrap;font-size:11.5px;line-height:1.6">' + (g ? JSON.stringify(g, null, 1).slice(0, 800) : '图谱数据端点未发现（插件 host 不可达）。\n分支与提交功能不受影响。') + '</div>';
+      return;
+    }
+    var COLS = ['#4c8dff', '#37c871', '#f5a623', '#b57bff', '#ff6b8a'];
+    var h = '<div style="font-weight:600;margin-bottom:6px">提交图谱 (' + items.length + ')</div><svg width="100%" height="' + Math.min(items.length * 22 + 8, 500) + '">' +
+      '<defs></defs>';
+    items.slice(0, 120).forEach(function(c, i){
+      var lane = i % 5;
+      var x = 14 + lane * 16, y = 12 + i * 22;
+      var msg = String(c.message || c.subject || c.title || '').slice(0, 58).replace(/[<>&]/g, '');
+      var ha = String(c.hash || c.sha || c.id || '').slice(0, 7);
+      var refs = String(c.refs || c.branches || '').slice(0, 22).replace(/[<>&]/g, '');
+      h += '<line x1="' + x + '" y1="' + (y - 22) + '" x2="' + x + '" y2="' + y + '" stroke="' + COLS[lane] + '" stroke-width="1.5" opacity=".55"/>' +
+        '<circle cx="' + x + '" cy="' + y + '" r="4.5" fill="' + COLS[lane] + '"/>' +
+        '<text x="' + (x + 12) + '" y="' + (y - 3) + '" fill="currentColor" opacity=".85" font-size="11.5" font-family="monospace">' + ha + ' ' + msg + '</text>' +
+        (refs ? '<text x="' + (x + 12) + '" y="' + (y + 8) + '" fill="currentColor" opacity=".5" font-size="10">' + refs + '</text>' : '');
+    });
+    h += '</svg>';
+    p.innerHTML = h;
+  };
+  // ---------- 提交面板（全功能对齐）----------
+  var commitPop = async function(){
+    var btn = document.getElementById(ID + '-commit');
+    var p = openPop(btn, ID + '-cp', 400);
+    p.innerHTML = '<div style="opacity:.6;padding:2px 0">加载中…</div>';
+    var list = await loadBranches();
+    var cur = st.branch || (list[0] || '');
+    var opts = list.map(function(n){ return '<option value="' + n + '"' + (n === cur ? ' selected' : '') + '>' + n + '</option>'; }).join('');
+    p.innerHTML =
+      '<div style="font-weight:600;margin-bottom:6px">提交到:</div>' +
+      '<select id="' + ID + '-br" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,.25);border:1px solid rgba(168,200,232,.25);border-radius:8px;color:inherit;padding:5px 6px;font:inherit;margin-bottom:6px">' + opts + '</select>' +
+      '<textarea id="' + ID + '-msg" placeholder="提交信息…" style="width:100%;box-sizing:border-box;height:58px;background:rgba(0,0,0,.25);border:1px solid rgba(168,200,232,.25);border-radius:8px;color:inherit;padding:6px;font:inherit;resize:none"></textarea>' +
+      '<label style="display:flex;gap:6px;align-items:center;margin:6px 0"><input type="checkbox" id="' + ID + '-un" checked>包含未暂存改动</label>' +
+      '<div style="display:flex;gap:8px"><button id="' + ID + '-ok" style="flex:1;padding:6px;border-radius:8px;border:1px solid rgba(76,141,255,.5);background:rgba(76,141,255,.2);color:inherit;cursor:pointer">提交' + (st.dirty ? ' (' + st.dirty + ')' : '') + '</button>' +
+      '<button id="' + ID + '-okp" style="padding:6px 10px;border-radius:8px;border:1px solid rgba(168,200,232,.3);background:transparent;color:inherit;cursor:pointer">提交并推送</button></div>' +
+      '<div id="' + ID + '-r" style="margin-top:6px;opacity:.75;font-size:11.5px;min-height:14px"></div>';
+    var send = async function(push){
+      var msg = (document.getElementById(ID + '-msg').value || '').trim();
+      var rr = document.getElementById(ID + '-r');
+      var okBtn = document.getElementById(ID + '-ok');
+      if (!msg) { rr.textContent = '⚠ 请填写提交信息'; return; }
+      rr.textContent = '⏳ 提交中…'; okBtn.disabled = true; okBtn.style.opacity = '.6';
+      var body = { cwd: st.cwd, message: msg, includeUnstaged: document.getElementById(ID + '-un').checked, targetBranch: document.getElementById(ID + '-br').value };
+      var ok = false, why = '';
+      try { var r = await fetch('/api/dsh-git-commit/commit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); var j = await JJ(r); ok = r.ok && (!j || j.ok !== false); why = j && (j.error || j.message || ''); } catch (e) { why = String(e && e.message); }
+      if (ok && push) { try { rr.textContent = '⏳ 推送中…'; await fetch('/api/dsh-git-commit/push', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cwd: st.cwd }) }); } catch (e) {} }
+      rr.textContent = ok ? (push ? '✓ 已提交并推送' : '✓ 已提交') : ('✗ 失败 ' + String(why).slice(0, 80));
+      okBtn.disabled = false; okBtn.style.opacity = '1';
+      await refresh();
+    };
+    document.getElementById(ID + '-ok').onclick = function(){ send(false); };
+    document.getElementById(ID + '-okp').onclick = function(){ send(true); };
+    document.getElementById(ID + '-msg').addEventListener('keydown', function(e){ if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') send(false); });
+  };
+  function BTN(){ return 'display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border:1px solid rgba(168,200,232,.25);border-radius:13px;background:var(--dsw-alias-bg-layer-2,#16233f);color:var(--dsw-alias-label-primary,#dfe8f8);font-size:12.5px;cursor:pointer;white-space:nowrap;'; }
+  var build = function(){
+    var tb = document.querySelector('.dsh-custom-titlebar');
+    if (!tb) return false;
+    if (document.getElementById(ID)) return true;
+    var bar = document.createElement('div'); bar.id = ID;
+    bar.style.cssText = 'display:inline-flex;align-items:center;gap:6px;height:28px;margin-left:10px;flex:0 0 auto;';
+    var bb = document.createElement('button'); bb.id = ID + '-branch'; bb.title = '分支 · 图谱'; bb.style.cssText = BTN();
+    bb.innerHTML = '<span id="' + ID + '-bl">⎇ …</span><span style="opacity:.55;font-size:10px">▾</span>';
+    bb.onclick = branchPop;
+    var cb = document.createElement('button'); cb.id = ID + '-commit'; cb.title = '提交'; cb.style.cssText = BTN(); cb.textContent = '⎇ 提交';
+    cb.onclick = commitPop;
+    bar.appendChild(bb); bar.appendChild(cb);
+    tb.appendChild(bar);
+    return true;
+  };
+  var boot = function(){ if (build()) { refresh(); loadBranches(); } };
+  setInterval(boot, 1500);
+  setInterval(refresh, 6000);
+  boot();
+})();
+}
+
+/* patch(restart-cancel-refresh) P42 2026-08-28: Electron 无刷新键——重启对话框「取消」= 清缓存+刷新页面；另接 Cmd/Ctrl+R。
+   2026-08-31 修复: 左栏顶部电源钮(@linxin666/dsh-desktop-launcher)弹的是「确认退出/Confirm exit」对话框,
+   原正则 /重启|restart/ 恒不命中 → 取消只关弹窗。判定扩为 确认退出|确定要退出|Confirm exit|want to exit。tests/p42-restart-cancel.test.mjs */
+(function(){
+  var clearing = false;
+  var clearCacheReload = function(){
+    if (clearing) return;
+    clearing = true;
+    try { var lbl = document.getElementById('dsh-gitbar'); if (lbl) lbl.title = '刷新中…'; } catch (e) {}
+    var hardReload = function(){ try { fetch('/', { cache: 'reload', method: 'GET' }).catch(function(){}); } catch (e) {} setTimeout(function(){ location.reload(); }, 60); };
+    var n = 0, need = 0, fin = function(){ n++; if (n >= need) hardReload(); };
+    try {
+      if (window.caches && caches.keys) {
+        need++;
+        caches.keys().then(function(ks){
+          need += ks.length;
+          if (!ks.length) fin();
+          ks.forEach(function(k){ caches.delete(k).then(fin, fin); });
+        }, fin);
+      }
+    } catch (e) {}
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+        need++;
+        navigator.serviceWorker.getRegistrations().then(function(rs){
+          need += rs.length;
+          if (!rs.length) fin();
+          rs.forEach(function(r){ r.unregister().then(fin, fin); });
+        }, fin);
+      }
+    } catch (e) {}
+    if (need === 0) hardReload();
+    setTimeout(function(){ if (!clearing) return; try { location.reload(); } catch (e) {} }, 2500);
+  };
+  window.__p42ClearReload = clearCacheReload;
+  /*patch(p42v3-layer-memory) 2026-09-02: 折叠钮旁重启按钮的弹出页容器类名不在任何 closest 集合、
+    且「重启」字样落在祖先前 200 字符外 -> 判定恒 false。根治: MutationObserver 记忆含目标文案的
+    fixed/absolute 浮层根, 取消点击 contains 即触发(不猜类名)。*/
+  var restartLayers = [];
+  var layerPend = null;
+  var layerScan = function(){
+    layerPend = null;
+    try {
+      var els = document.querySelectorAll('body *');
+      for (var i = 0; i < els.length; i++) {
+        var el = els[i], cs = '';
+        try { cs = window.getComputedStyle(el).position; } catch (e) {}
+        if (cs !== 'fixed' && cs !== 'absolute') continue;
+        if (!/重启|restart|重新启动|确认退出|确定要退出|Confirm exit|want to exit/i.test((el.textContent || '').slice(0, 800))) continue;
+        if (restartLayers.indexOf(el) < 0) { restartLayers.push(el); if (restartLayers.length > 8) restartLayers.shift(); }
+      }
+    } catch (e) {}
+  };
+  try {
+    var p42mo = new MutationObserver(function(muts){
+      var dirty = false;
+      for (var i = 0; i < muts.length && !dirty; i++) {
+        var ad = muts[i].addedNodes;
+        for (var k = 0; k < ad.length; k++) {
+          var n = ad[k];
+          if (n.nodeType === 1 && /重启|restart|重新启动|确认退出|确定要退出|Confirm exit|want to exit/i.test((n.textContent || '').slice(0, 800))) { dirty = true; break; }
+        }
+      }
+      if (dirty && !layerPend) layerPend = setTimeout(layerScan, 300);
+    });
+    p42mo.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    setTimeout(layerScan, 800);
+  } catch (e) {}
+  window.addEventListener('keydown', function(e){
+    if ((e.metaKey || e.ctrlKey) && (e.key === 'r' || e.key === 'R')) { e.preventDefault(); e.stopPropagation(); clearCacheReload(); }
+  }, true);
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    for (var i = 0; i < 6 && t && t !== document; i++, t = t.parentElement) {
+      if ((t.tagName === 'BUTTON' || (t.getAttribute && t.getAttribute('role') === 'button')) ) {
+        var txt = (t.textContent || '').trim();
+        if (txt === '取消' || txt === 'Cancel' || (t.getAttribute && (t.getAttribute('title') === '取消' || t.getAttribute('aria-label') === '取消' || t.getAttribute('aria-label') === 'Cancel'))) {
+          /*patch(p42v3) 2026-09-02: 1)浮层记忆优先(不猜类名) 2)容器文本窗口800 3)祖先兜底12层x800 4)title/aria-label取消锚点*/
+          for (var li = 0; li < restartLayers.length; li++) {
+            var lay = restartLayers[li];
+            if (lay && lay.isConnected && lay.contains(t)) { clearCacheReload(); return; }
+          }
+          var dlg = t.closest('dialog, [role="dialog"], [class*="dialog"], [class*="Dialog"], [class*="modal"], [class*="Modal"], [class*="overlay"], [class*="Overlay"], [class*="menu"], [class*="Menu"], [class*="dropdown"], [class*="Dropdown"], [class*="popover"], [class*="Popover"], [class*="popper"], [data-radix-popper-content-wrapper], [class*="sheet"], [class*="Sheet"], [class*="drawer"], [class*="Drawer"], [class*="flyout"]');
+          if (dlg && /重启|restart|重新启动|确认退出|确定要退出|Confirm exit|want to exit/i.test((dlg.textContent || '').slice(0, 800))) { clearCacheReload(); return; }
+          var host = t.closest('[class*="restart"], [id*="restart"], [data-dsh-part*="restart"]');
+          if (host) { clearCacheReload(); return; }
+          var anc = t.parentElement, hitRestart = false;
+          for (var ai = 0; ai < 12 && anc && anc !== document; ai++, anc = anc.parentElement) {
+            if (/重启|restart/i.test((anc.textContent || '').slice(0, 800))) { hitRestart = true; break; }
+          }
+          if (hitRestart) { clearCacheReload(); }
+        }
+        return;
+      }
+    }
+  }, true);
+})();
+
+/* ModuleLoader 契约：封存体外空注册（factory 必须返回带 .apply 的对象），否则 "loaded without registering" */
+try { window.__ModuleLoader__.load({ id: "dsh-git-commit", factory: function () { return { apply: function () {} }; } }); } catch (e) { /* already registered by a previous boot pass */ }
+/* patch(gitbar-v2) 2026-08-28 干净重写 */
+(function(){
+  var ID = 'dsh-gitbar';
+  var esc = function(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(m){ return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]; }); };
+  var st = { cwd: '', branch: '', gbr: '', dirty: 0, add: 0, del: 0, branches: [], fp: '' };
+
+  // ===== 样式 =====
+  var css = document.createElement('style');
+  css.textContent = '#' + ID + '{-webkit-app-region:no-drag;pointer-events:auto;background:transparent;border:none;display:inline-flex;align-items:center;color:inherit}';
+  css.textContent += '.gb-pop{position:fixed;z-index:2147483002;background:var(--dsw-alias-bg-layer-2,rgba(16,26,48,.88));backdrop-filter:blur(12px);border:1px solid var(--dsw-alias-border-l2,rgba(168,200,232,.25));border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.45);font-size:var(--dsw-alias-font-size-sm,12.5px);color:var(--dsw-alias-label-primary,inherit);padding:12px;width:520px;max-height:80vh;overflow:auto}';
+  css.textContent += '.gb-row{display:flex;gap:8px;align-items:center;padding:4px 8px;border-radius:6px;cursor:pointer}.gb-row:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(76,141,255,.14))}.gb-cur{background:var(--dsw-alias-brand-primary-bg,rgba(76,141,255,.22))}';
+  css.textContent += '.gb-btn{display:inline-flex;align-items:center;gap:4px;height:auto;padding:0 6px;border:none;border-radius:0;background:transparent;color:inherit;font-size:inherit;font-family:inherit;line-height:inherit;cursor:pointer;white-space:nowrap}';
+  css.textContent += '.gb-tab{flex:1;padding:5px 0;text-align:center;border-bottom:2px solid transparent;cursor:pointer;color:var(--dsw-alias-label-secondary,inherit)}.gb-tab.on{border-color:var(--dsw-alias-brand-primary,inherit);color:inherit}';
+  // P46：legacy chip 隐藏规则迁入（原 v3-final hide 样式 + P44 cssRoute 同款）——
+  // 旧分支 chip / 提交 chip / 其停靠行全部退场，git 状态只走本单按钮。
+  css.textContent += '#dsh-git-commit-chip{display:none!important}[data-gitgraph-chip-anchor]{display:none!important}[data-gitgraph-chip]{display:none!important}[class*="chipWrap"]{display:none!important}#dshc-goal-git-row{display:none!important}';
+  document.head.appendChild(css);
+
+  // ===== 数据 =====
+  var J = function(r){ return r.json().catch(function(){ return null; }); };
+  var TO = function(ms){ try { return { signal: AbortSignal.timeout(ms || 6000) }; } catch (e) { return {}; } };
+  var API = function(p, cwd, extra) { return fetch('/api/dsh-git-commit/' + p + '?cwd=' + encodeURIComponent(cwd) + (extra || ''), TO(8000)).then(J); };
+
+  var selId = function(){
+    var sel = document.querySelector('[role="treeitem"][aria-selected="true"]');
+    if (!sel) return null;
+    for (var k in sel) { if (k.indexOf('__reactFiber') === 0) {
+      var f = sel[k];
+      for (var i = 0; i < 8 && f; i++) {
+        var p = f.memoizedProps;
+        if (p && p.node && p.node.id) return String(p.node.id);
+        f = f.return;
+      }
+    }}
+    return null;
+  };
+
+  var resolveCwd = async function(){
+    // 1) RPC session.list
+    try {
+      var r = await fetch('/api/session.list', Object.assign({ method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'client-request', rpcId: 'gb-' + Date.now(), method: 'session.list', payload: {} }) }, TO(5000)));
+      var j = await J(r);
+      var items = j && j.result && j.result.value && j.result.value.items;
+      if (Array.isArray(items) && items.length) {
+        var sid = selId();
+        for (var i = 0; i < items.length; i++) {
+          if (sid && String(items[i].sessionId) === sid && items[i].cwd) return items[i].cwd;
+        }
+        // 无 sid 匹配则取第一个 running 的
+        for (var k = 0; k < items.length; k++) { if (items[k].running && items[k].cwd) return items[k].cwd; }
+        // 再不行取第一个有 cwd 的
+        for (var m = 0; m < items.length; m++) { if (items[m].cwd) return items[m].cwd; }
+      }
+    } catch (e) {}
+    // 2) 种子
+// 无会话来源时宁可显示「未定位到工作区」也不静默绑定一个猜测的仓库。
+    return null;
+  };
+
+  var refresh = async function(){
+    var sid = selId();
+    var fp = sid || 'default';
+    if (fp !== st.fp) { st.fp = fp; st.cwd = ''; st.branch = ''; st.gbr = ''; st.dirty = 0; st.add = 0; st.del = 0; st.branches = []; }
+    if (!st.cwd) {
+      var nc = await resolveCwd();
+      if (!nc) return;
+      st.cwd = nc;
+    }
+    try {
+      var sv = await API('status', st.cwd);
+      if (sv && sv.ok && sv.status) {
+        st.branch = sv.status.branch || '';
+        var sg = sv.status.staged || {}, us = sv.status.unstaged || {};
+        st.add = (sg.add || 0) + (us.add || 0);
+        st.del = (sg.del || 0) + (us.del || 0);
+        st.dirty = (sg.n || 0) + (us.n || 0) + (sv.status.untracked || 0);
+      }
+    } catch (e) {}
+    var bl = document.getElementById(ID + '-bl');
+    if (bl) {
+      var t = '⎇ ' + (st.branch || '…');
+      if (st.add || st.del) t += ' +' + st.add + ' -' + st.del;
+      if (bl.textContent !== t) bl.textContent = t;
+    }
+  };
+
+  // ===== 弹层 =====
+  var pop = null;
+  var closePop = function(){ if (pop) { pop.remove(); pop = null; } };
+  document.addEventListener('click', function(e){ if (pop && !e.target.closest('.gb-pop') && !e.target.closest('#' + ID)) closePop(); }, true);
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closePop(); });
+
+  // ===== 图谱渲染（按分支） =====
+  var COLS = ['#4c8dff', '#37c871', '#f5a623', '#b57bff', '#ff6b8a'];
+  var buildSvg = function(commits, cur) {
+    var rowH = 26;
+    var s = '<div style="overflow:auto;max-height:52vh;border:1px solid rgba(168,200,232,.15);border-radius:8px">';
+    s += '<svg width="680" height="' + (commits.length * rowH + 8) + '" style="display:block">';
+    var idxOf = {}; commits.forEach(function(c, i){ idxOf[c.oid] = i; });
+    commits.forEach(function(c, i) {
+      var x = 16, y = 12 + i * rowH;
+      var refs = String(c.refs || '');
+      var isCur = (cur && refs.indexOf(cur) > -1) || refs.indexOf('HEAD') > -1;
+      (c.parents || []).forEach(function(p) {
+        var pj = idxOf[p];
+        if (pj === undefined) return;
+        s += '<line x1="' + x + '" y1="' + y + '" x2="16" y2="' + (12 + pj * rowH) + '" stroke="' + COLS[i % 5] + '" stroke-width="1.2" opacity=".4"/>';
+      });
+      s += '<circle cx="' + x + '" cy="' + y + '" r="' + (isCur ? 5 : 4) + '" fill="' + (isCur ? '#4c8dff' : COLS[i % 5]) + '"/>';
+      var ha = (c.oid || '').slice(0, 7);
+      var au = String(c.author || '').replace(/[<>&]/g, '');
+      var dt = c.at ? new Date(c.at * 1000).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+      var sub = String(c.subject || '').replace(/[<>&]/g, '').slice(0, 52);
+      var rf = refs.replace(/[<>&]/g, '').replace('HEAD -> ', '★').split(',').slice(0, 2).join(',');
+      s += '<text x="30" y="' + (y + 4) + '" fill="currentColor" opacity="' + (isCur ? 1 : .75) + '" font-size="11" font-family="monospace" font-weight="' + (isCur ? 700 : 400) + '">' + ha + ' ' + au + ' ' + dt + (rf ? ' [' + rf + ']' : '') + '</text>';
+      s += '<text x="30" y="' + (y + 16) + '" fill="currentColor" opacity=".55" font-size="10.5">' + sub + '</text>';
+    });
+    s += '</svg></div>';
+    return s;
+  };
+  var renderGraph = async function(gb) {
+    if (!pop) return;
+    var box = pop.querySelector('#gb-graph');
+    if (!box) return;
+    box.innerHTML = '<div style="opacity:.55;padding:8px">⏳ 加载中…</div>';
+    var gj2 = null;
+    try { gj2 = await API('graph', st.cwd, '&limit=200' + (gb ? '&branch=' + encodeURIComponent(gb) : '')); } catch (e) {}
+    var cs = gj2 && gj2.ok && Array.isArray(gj2.commits) ? gj2.commits : [];
+    box.innerHTML = cs.length ? buildSvg(cs, gb) : '<div style="opacity:.55;padding:8px">暂无提交数据' + (gj2 && gj2.error ? ' · ' + esc(gj2.error) : '') + '</div>';
+  };
+
+
+  var openPop = function(preferTab){
+    closePop();
+    var btn = document.getElementById(ID + '-btn');
+    if (!btn) return;
+    var r0 = btn.getBoundingClientRect();
+    pop = document.createElement('div');
+    pop.className = 'gb-pop';
+    pop.style.left = Math.max(8, Math.min(window.innerWidth - 540, Math.round(r0.left))) + 'px';
+    pop.style.top = Math.round(r0.bottom + 6) + 'px';
+    pop.innerHTML = '<div style="opacity:.6;padding:4px 2px">⏳ 加载中…</div>';
+    document.body.appendChild(pop);
+    fillPop(preferTab);
+  };
+
+  var fillPop = async function(preferTab){
+    var my = pop;
+    if (!st.cwd) await refresh();
+    if (!pop || pop !== my) return;
+    if (!st.cwd) { pop.innerHTML = '<div style="opacity:.6;padding:4px 2px">✗ 未定位到工作区（无会话 cwd）</div>'; return; }
+    // 并行取分支+图谱（图谱默认跟随工作分支）
+    if (!st.gbr) st.gbr = st.branch || '';
+    var bPromise = API('branches', st.cwd);
+    var gPromise = API('graph', st.cwd, '&limit=200' + (st.gbr ? '&branch=' + encodeURIComponent(st.gbr) : ''));
+    var bj = null;
+    try { bj = await bPromise; } catch (e) { console.error('[gitbar] branches fetch error:', e); }
+    var gj = null;
+    try { gj = await gPromise; } catch (e) { console.error('[gitbar] graph fetch error:', e); }
+    if (!pop || pop !== my) return;
+    var brs = bj && bj.ok && Array.isArray(bj.branches) ? bj.branches : [];
+    var commits = gj && gj.ok && Array.isArray(gj.commits) ? gj.commits : [];
+    st.branches = brs;
+
+    // 页签
+    var h = '<div style="display:flex;gap:4px;margin-bottom:10px;border-bottom:1px solid rgba(168,200,232,.2)">';
+    h += '<div class="gb-tab on" data-t="b">分支(' + brs.length + ')</div>';
+    h += '<div class="gb-tab" data-t="g">图谱(' + commits.length + ')</div>';
+    h += '<div class="gb-tab" data-t="c">提交</div></div>';
+
+    // 分支页
+    h += '<div data-p="b"><input placeholder="过滤…" style="width:100%;background:rgba(0,0,0,.25);border:1px solid rgba(168,200,232,.25);border-radius:6px;color:inherit;padding:4px 8px;font:inherit;margin-bottom:6px"><div id="gb-rows"></div></div>';
+
+    // 图谱页（按分支的提交 DAG：默认工作分支，下拉即切）
+    h += '<div data-p="g" style="display:none">';
+    h += '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="opacity:.6;font-size:11.5px;flex:0 0 auto">分支</span>';
+    h += '<select id="gb-gbr" style="flex:1;background:rgba(0,0,0,.25);border:1px solid rgba(168,200,232,.25);border-radius:6px;color:inherit;padding:3px 6px;font:inherit">' + brs.map(function(bn){ return '<option' + (bn === st.gbr ? ' selected' : '') + '>' + esc(bn) + '</option>'; }).join('') + '</select></div>';
+    h += '<div id="gb-graph">' + (commits.length ? buildSvg(commits, st.gbr || st.branch) : '<div style="opacity:.55;padding:8px">暂无提交数据' + (gj && gj.error ? ' · ' + esc(gj.error) : '') + '</div>') + '</div>';
+    h += '</div>';
+
+    // 提交页
+    h += '<div data-p="c" style="display:none">';
+    h += '<select id="gb-br" style="width:100%;background:rgba(0,0,0,.25);border:1px solid rgba(168,200,232,.25);border-radius:8px;color:inherit;padding:5px;font:inherit;margin-bottom:8px">' + brs.map(function(bn){ return '<option' + (bn === st.branch ? ' selected' : '') + '>' + esc(bn) + '</option>'; }).join('') + '</select>';
+    h += '<textarea id="gb-msg" placeholder="提交信息（留空自动生成）…" style="width:100%;box-sizing:border-box;height:54px;background:rgba(0,0,0,.25);border:1px solid rgba(168,200,232,.25);border-radius:8px;color:inherit;padding:8px;font:inherit;resize:none"></textarea>';
+    h += '<label style="display:flex;gap:6px;align-items:center;margin:6px 0"><input type="checkbox" id="gb-un" checked>包含未暂存</label>';
+    h += '<button id="gb-ok" class="gb-btn" style="width:100%;justify-content:center;height:30px;border-radius:8px;border-color:rgba(76,141,255,.55);background:rgba(76,141,255,.22)">⌘↵ 提交' + (st.dirty ? '（' + st.dirty + '）' : '') + '</button>';
+    h += '<div style="display:flex;gap:8px;margin-top:8px"><button id="gb-okp" class="gb-btn" style="flex:1;justify-content:center">提交并推送</button><button id="gb-pu" class="gb-btn" style="flex:1;justify-content:center">仅推送</button></div>';
+    h += '<div id="gb-r" style="margin-top:6px;opacity:.7;font-size:11.5px;min-height:14px"></div></div>';
+
+    pop.innerHTML = h;
+    document.body.appendChild(pop);
+
+    // 图谱分支下拉：切分支即重绘图谱
+    var gsel = pop.querySelector('#gb-gbr');
+    if (gsel) gsel.onchange = function(){ st.gbr = this.value; renderGraph(st.gbr); };
+
+    // 指定页签打开（分支切换成功后跳图谱用）
+    if (preferTab) { var t0 = pop.querySelector('.gb-tab[data-t="' + preferTab + '"]'); if (t0 && t0.onclick) t0.onclick.call(t0); }
+
+    // 页签切换
+    pop.querySelectorAll('.gb-tab').forEach(function(t) {
+      t.onclick = function() {
+        pop.querySelectorAll('.gb-tab').forEach(function(x){ x.style.borderBottomColor = 'transparent'; x.style.color = '#a5b3da'; });
+        t.style.borderBottomColor = '#4c8dff'; t.style.color = '';
+        pop.querySelectorAll('[data-p]').forEach(function(p){ p.style.display = p.getAttribute('data-p') === t.getAttribute('data-t') ? '' : 'none'; });
+      };
+    });
+
+    // 分支行
+    var rows = pop.querySelector('#gb-rows');
+    var renderRows = function(q) {
+      rows.innerHTML = '';
+      (q ? brs.filter(function(b){ return b.toLowerCase().indexOf(q.toLowerCase()) > -1; }) : brs).forEach(function(bn) {
+        var d = document.createElement('div');
+        d.className = 'gb-row' + (bn === st.branch ? ' gb-cur' : '');
+        d.textContent = (bn === st.branch ? '● ' : '○ ') + bn;
+        if (bn !== st.branch) {
+          d.title = "点击切换到 " + bn;
+          d.onclick = async function(){
+            d.style.opacity = ".5";
+            try {
+              var sr = await fetch("/api/dsh-git-commit/switch", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cwd: st.cwd, branch: bn }) });
+              var sj = await J(sr);
+              if (sj && sj.ok) {
+                st.branch = bn; st.gbr = bn; refresh();
+                renderRows(inp ? inp.value : '');
+                if (gsel) gsel.value = bn;
+                var tg = pop.querySelector('.gb-tab[data-t="g"]');
+                if (tg && tg.onclick) tg.onclick.call(tg);
+                renderGraph(bn);
+              }
+              else { d.style.opacity = "1"; d.title = (sj && sj.error) || "切换失败"; }
+            } catch (e) { d.style.opacity = "1"; d.title = e.message; }
+          };
+        }
+        rows.appendChild(d);
+      });
+    };
+    renderRows('');
+    var inp = pop.querySelector('input');
+    if (inp) inp.oninput = function(){ renderRows(this.value); };
+
+    // 提交
+    var doCommit = async function(push) {
+      var rr = pop.querySelector('#gb-r');
+      rr.textContent = '⏳…';
+      try {
+        var cr = await fetch('/api/dsh-git-commit/commit', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cwd: st.cwd, message: pop.querySelector('#gb-msg').value.trim(), includeUnstaged: pop.querySelector('#gb-un').checked, targetBranch: pop.querySelector('#gb-br').value }) });
+        var cj = await J(cr);
+        if (cj.ok && push) {
+          var pr6 = await fetch('/api/dsh-git-commit/push', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cwd: st.cwd }) });
+          rr.textContent = pr6.ok ? '✓ 已提交并推送' : '✗ 已提交，推送失败(HTTP ' + pr6.status + ')';
+        }
+        else if (cj.ok) rr.textContent = '✓ 已提交';
+        else rr.textContent = '✗ ' + (cj.error || '失败');
+      } catch (e) { rr.textContent = '✗ ' + e.message; }
+      refresh();
+    };
+    pop.querySelector('#gb-ok').onclick = function(){ doCommit(false); };
+    pop.querySelector('#gb-okp').onclick = function(){ doCommit(true); };
+    pop.querySelector('#gb-pu').onclick = async function() {
+      pop.querySelector('#gb-r').textContent = '⏳ 推送中…';
+      try { var pr = await fetch('/api/dsh-git-commit/push', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cwd: st.cwd }) }); pop.querySelector('#gb-r').textContent = pr.ok ? '✓ 已推送' : '✗ 推送失败'; } catch (e) { pop.querySelector('#gb-r').textContent = '✗ 推送失败: ' + e.message; }
+    };
+  };
+
+  // ===== 按钮（挂进会话名称那一行的 tablist：排在最后一个标签后，与标签同排同款，无外框） =====
+  // 发现逻辑对齐 dsh-web-ui-all stampSemanticParts：conversation pane → header → 直接子 [role=tablist]
+  var findTablist = function(){
+    var tl = document.querySelector('[data-dsh-responsive-part="session-tablist"]');
+    if (tl) return tl;
+    // rc.2 fallback: the session tablist carrying the Conversation/Track tabs
+    var tls = document.querySelectorAll('[role=tablist]');
+    for (var ti = 0; ti < tls.length; ti++) {
+      if (/轨迹|对话|Timeline|Chat/.test(tls[ti].textContent || '')) return tls[ti];
+    }
+    var conv = document.querySelector('[data-pane="conversation"]');
+    if (!conv) return null;
+    var slot = conv.querySelector('[data-slot="conversation.session.header"]');
+    var hd = slot ? slot.querySelector(':scope > header') : null;
+    if (!hd) {
+      var sp = conv.querySelector('[data-conversation-scroll]');
+      var sib = sp ? sp.previousElementSibling : null;
+      if (sib && sib.tagName === 'HEADER' && sib.parentElement === sp.parentElement) hd = sib;
+    }
+    return hd ? hd.querySelector(':scope > [role="tablist"]') : null;
+  };
+  var findTabRow = function() {
+    // 找第一行放标签的容器（nav/crumbs/tablist 的父级，或直接是容器本身）
+    var navs = document.querySelectorAll('nav,[role=tablist],[class*="crumbs"]');
+    for (var i = 0; i < navs.length; i++) {
+      var r = navs[i].getBoundingClientRect();
+      if (r.y >= 0 && r.y < 120 && r.width > 100) {
+        // 返回这个容器（标签直接放在里面）
+        return navs[i];
+      }
+    }
+    // 兜底：找有文字标签的第一行 flex 容器
+    var spans = document.querySelectorAll('span,div');
+    for (var j = 0; j < spans.length; j++) {
+      var sr = spans[j].getBoundingClientRect();
+      if (sr.y >= 0 && sr.y < 120 && sr.width > 200 && sr.height > 15 && sr.height < 40) {
+        if (spans[j].children.length >= 1 && (spans[j].children[0].textContent || '').trim()) {
+          return spans[j];
+        }
+      }
+    }
+    return null;
+  };
+  var ensure = function(){
+    var bar = document.getElementById(ID);
+    if (!bar) {
+      bar = document.createElement('span'); bar.id = ID;
+      var btn = document.createElement('button');
+      btn.id = ID + '-btn';
+      btn.type = 'button';
+      btn.style.cssText = 'display:inline-flex;align-items:center;gap:2px;padding:0 4px;border:none;background:transparent;cursor:pointer;white-space:nowrap;font-size:inherit;line-height:inherit;color:inherit;font-family:inherit;font-weight:inherit;';
+      btn.innerHTML = '<span id="' + ID + '-bl">⎇ …</span><span style="opacity:.5;font-size:.8em">▾</span>';
+      btn.onclick = openPop;
+      bar.appendChild(btn);
+    }
+    if (bar.parentElement !== document.body) document.body.appendChild(bar);
+    // P46 2026-08-30：锚「轨迹」所在 tab 行——语义 tablist 优先（findTablist，
+    // 与 dsh-web-ui-all stampSemanticParts 同源），findTabRow 兜底。旧版扫
+    // y<36 首行文字元素：自定义标题栏(32px)把 tab 行压到 y≈48 后永远锚不
+    // 中，bar 漂离轨迹。现取行内可见子元素的实测最右缘，钉其后同排同高。
+    var row = findTablist() || findTabRow();
+    if (!row) { bar.style.visibility = 'hidden'; return; }
+    var cands = row.querySelectorAll('[role=tab],[role=tablist]>*');
+    var last = null;
+    for (var i = 0; i < cands.length; i++) {
+      if (cands[i].closest('#' + ID)) continue;
+      var r = cands[i].getBoundingClientRect();
+      if (r.width <= 0 || r.height < 8 || r.height > 44) continue;
+      if (!last || r.right > last.right) last = { right: r.right, y: r.y, h: r.height, el: cands[i] };
+    }
+    if (!last) { bar.style.visibility = 'hidden'; return; }
+    var left = Math.round(last.right + 6);
+    var top = Math.round(last.y);
+    var h = Math.round(last.h);
+    // 写样式：z-index:1（可见但低于弹层）
+    bar.style.cssText = 'position:fixed;left:' + left + 'px;top:' + top + 'px;height:' + h + 'px;display:inline-flex;align-items:center;flex:0 0 auto;margin:0;z-index:1;';
+    // 字体
+    var ref = last.el;
+    // 找标签内最深的纯文字元素（叶子节点）
+    var leaves = ref.querySelectorAll('*');
+    for (var li = 0; li < leaves.length; li++) {
+      if (leaves[li].textContent.trim() && !leaves[li].children.length) { ref = leaves[li]; break; }
+    }
+    var ls = getComputedStyle(ref);
+    bar.style.color = ls.color;
+    bar.style.fontSize = ls.fontSize;
+    bar.style.fontFamily = ls.fontFamily;
+    bar.style.fontWeight = ls.fontWeight;
+    var bEl = bar.querySelector('button');
+      if (bEl) {
+        bEl.style.fontSize = ls.fontSize;
+        bEl.style.lineHeight = ls.lineHeight;
+        bEl.style.color = ls.color;
+        bEl.style.fontFamily = ls.fontFamily;
+        bEl.style.fontWeight = ls.fontWeight;
+      }
+      var sEl = bar.querySelector('#' + ID + '-bl');
+      if (sEl) { sEl.style.fontSize = ls.fontSize; sEl.style.lineHeight = ls.lineHeight; }
+      var aEl = bar.querySelector('span:last-child');
+      if (aEl) { aEl.style.fontSize = ls.fontSize; aEl.style.lineHeight = ls.lineHeight; }
+  };
+/* patch(gitbar-tab-mount) 2026-08-31: 旧 fixed 几何链停用——ensure 把 bar 钉到发送按钮附近且与
+     tablist 直挂方案互相抢夺 bar; refresh 也停用(与 launcher 的标签刷新双写打架)。全部由文件尾 launcher 独占。 */
+})();
+
+
+/* patch(p42-restart-cancel-refresh) 2026-08-28 */
+(function(){
+  var clearing = false;
+  var clearCacheReload = function(){
+    if (clearing) return;
+    clearing = true;
+    var hard = function(){ try { fetch('/', { cache: 'reload' }); } catch (e) {} setTimeout(function(){ location.reload(); }, 60); };
+    var n = 0, need = 0, fin = function(){ n++; if (n >= need) hard(); };
+    try { if (window.caches && caches.keys) { need++; caches.keys().then(function(ks){ need += ks.length; if (!ks.length) fin(); ks.forEach(function(k){ caches.delete(k).then(fin, fin); }); }, fin); } } catch (e) {}
+    try { if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) { need++; navigator.serviceWorker.getRegistrations().then(function(rs){ need += rs.length; if (!rs.length) fin(); rs.forEach(function(r){ r.unregister().then(fin, fin); }); }, fin); } } catch (e) {}
+    if (need === 0) hard();
+    setTimeout(function(){ try { location.reload(); } catch (e) {} }, 2500);
+  };
+  window.__p42ClearReload = clearCacheReload;
+  window.addEventListener('keydown', function(e){ if ((e.metaKey || e.ctrlKey) && (e.key === 'r' || e.key === 'R')) { e.preventDefault(); e.stopPropagation(); clearCacheReload(); } }, true);
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    for (var i = 0; i < 6 && t && t !== document; i++, t = t.parentElement) {
+      if (t.tagName === 'BUTTON' || (t.getAttribute && t.getAttribute('role') === 'button')) {
+        var txt = (t.textContent || '').trim() || (t.title || '').trim();
+        if (txt === '取消' || txt === 'Cancel') {
+          var dlg = t.closest('[role="dialog"], dialog, [class*="dialog" i], [class*="modal" i], [class*="overlay" i], [class*="restart" i]');
+          if (dlg && /重启|restart|确认退出|确定要退出|Confirm exit|want to exit/i.test(dlg.textContent || '')) clearCacheReload();
+        }
+        return;
+      }
+    }
+  }, true);
+})();
+
+/* bust 1787885941157 */
+
+/* bust 1787886107198 */
+
+/* bust 1787886241594 */
+
+/* bust 1787921882802 */
+
+/* bust 1787923012493 */
+
+/* bust 1787923060610 */
+
+/* bust 1787925319713 */
+
+/* bust 1787926295365 */
+
+/* bust 1787926555327 */
+
+/* bust 1787926661727 */
+
+/* bust 1787926849288 */
+
+/* bust 1787927187246 */
+
+/* bust 1787927313427 */
+
+/* bust 1787927707838 */
+
+/* bust 1787927796437 */
+
+/* bust 1787927905380 */
+
+/* bust 1787928500188 */
+
+/* bust 1787928600148 */
+
+/* patch(gitbar-tab-mount) 2026-08-31: 直挂「轨迹」tablist（文档流同排），绕开 ensure() 的 fixed 几何链 */
+(function(){
+  var ID = 'dsh-gitbar';
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(m){ return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]; }); }
+  function findTl(){
+    var tls = document.querySelectorAll('[role=tablist]');
+    for (var i = 0; i < tls.length; i++) {
+      var r = tls[i].getBoundingClientRect();
+      if (r.width > 100 && /轨迹|Timeline/.test(tls[i].textContent || '')) return tls[i];
+    }
+    return null;
+  }
+  function listSessions(){
+    return fetch('/api/session.list', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'client-request', rpcId: 'gbm-' + Date.now(), method: 'session.list', payload: {} }) })
+      .then(function(r){ return r.text().then(function (t) { try { return JSON.parse(t); } catch (e) { return null; } }); })
+      .then(function(j){ return (j && j.result && j.result.value && j.result.value.items) || []; });
+  }
+  // selId: DOM aria-selected treeitem -> React fiber -> node.id（与 gitbar-v2 同源语义）
+  function selId() {
+    var sel = document.querySelector('[role="treeitem"][aria-selected="true"], [role="treeitem"][data-selected]');
+    if (!sel) return null;
+    for (var k in sel) { if (k.indexOf('__reactFiber') === 0) {
+      var f = sel[k];
+      for (var i = 0; i < 8 && f; i++) {
+        var p = f.memoizedProps;
+        if (p && p.node && p.node.id) return String(p.node.id);
+        f = f.return;
+      }
+    }}
+    return null;
+  }
+  function pickCwd(items) {
+    var sid = selId();
+    if (sid) { for (var s = 0; s < items.length; s++) if (String(items[s].sessionId) === sid && items[s].cwd) return items[s].cwd; }
+    for (var k = 0; k < items.length; k++) if (items[k].running && items[k].cwd) return items[k].cwd;
+    for (var m = 0; m < items.length; m++) if (items[m].cwd) return items[m].cwd;
+    return null;
+  }
+  function mount(){
+    var tl = findTl();
+    if (!tl) return;
+    var bar = document.getElementById(ID);
+    if (bar && bar.parentElement === tl) return;
+    if (!bar) {
+      bar = document.createElement('span'); bar.id = ID;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.innerHTML = '<span id="' + ID + '-bl">⎇ …</span><span style="opacity:.5;font-size:.8em"> ▾</span>';
+      btn.style.cssText = 'display:inline-flex;align-items:center;gap:2px;padding:2px 8px;border:none;background:transparent;color:inherit;font:inherit;cursor:pointer';
+      btn.onclick = function(ev){
+        ev.stopPropagation();
+        var pop = document.getElementById(ID + '-mountpop');
+        if (pop) { pop.remove(); return; }
+        pop = document.createElement('div');
+        pop.id = ID + '-mountpop';
+        pop.style.cssText = 'position:fixed;z-index:2147483002;background:var(--dsw-alias-bg-layer-2,#1b2330);color:inherit;border:1px solid rgba(120,160,220,.35);border-radius:8px;padding:10px;min-width:220px;max-height:60vh;overflow:auto;font-size:12px';
+        pop.textContent = '加载中…';
+        var r = btn.getBoundingClientRect();
+        pop.style.left = Math.max(8, Math.round(r.left)) + 'px';
+        pop.style.top = Math.round(r.bottom + 6) + 'px';
+        document.body.appendChild(pop);
+        listSessions().then(function(items){
+          var cwd = pickCwd(items);
+          if (!cwd) { pop.textContent = '未定位到工作区'; return; }
+          return fetch('/api/dsh-git-commit/branches?cwd=' + encodeURIComponent(cwd)).then(function(r3){ return r3.json(); }).then(function(bj){
+            if (!bj || !bj.ok) { pop.textContent = '分支获取失败'; return; }
+            var h = '<div style="opacity:.6;margin-bottom:6px">' + esc(cwd.slice(-40)) + '</div>';
+            (bj.branches || []).slice(0, 40).forEach(function(b2){
+              var cur = b2 === bj.current;
+              h += '<div class="gbm-row" data-b="' + esc(b2) + '" style="padding:3px 8px;border-radius:5px;cursor:pointer' + (cur ? ';background:rgba(76,141,255,.22)' : '') + '">' + (cur ? '● ' : '○ ') + esc(b2) + '</div>';
+            });
+            pop.innerHTML = h;
+            pop.querySelectorAll('.gbm-row').forEach(function(row){
+              row.onclick = function(){
+                var b3 = row.getAttribute('data-b');
+                row.style.opacity = '.5';
+                fetch('/api/dsh-git-commit/switch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cwd: cwd, branch: b3 }) })
+                  .then(function(r4){ return r4.json(); })
+                  .then(function(sj){
+                    row.style.opacity = '1';
+                    row.title = sj && sj.ok ? '已切换' : ((sj && sj.error) || '切换失败');
+                    if (sj && sj.ok) { pop.remove(); refreshLabel(); }
+                  });
+              };
+            });
+          });
+        }).catch(function(e2){ pop.textContent = '错误: ' + e2.message; });
+        setTimeout(function(){ document.addEventListener('click', function(){ var p = document.getElementById(ID + '-mountpop'); if (p) p.remove(); }, { once: true }); }, 50);
+      };
+      bar.appendChild(btn);
+    }
+    bar.style.cssText = 'display:inline-flex;align-items:center;align-self:center;vertical-align:middle;margin-left:10px;position:static!important;left:auto!important;top:auto!important;visibility:visible!important;opacity:1!important;z-index:auto!important;pointer-events:auto';
+    // 文字中心线对齐: 模仿「轨迹」tab 的行高/上下 padding/字号，让文字视觉中线重合
+    try {
+      var refTab = tl.querySelector('[role=tab]');
+      if (refTab) {
+        var cs = getComputedStyle(refTab);
+        var btnEl = bar.querySelector('button');
+        bar.style.height = refTab.getBoundingClientRect().height + 'px';
+        if (btnEl) {
+          btnEl.style.paddingTop = cs.paddingTop;
+          btnEl.style.paddingBottom = cs.paddingBottom;
+          btnEl.style.lineHeight = cs.lineHeight;
+          btnEl.style.fontSize = cs.fontSize;
+        }
+      }
+    } catch (e3) {}
+    tl.appendChild(bar);
+    refreshLabel();
+  }
+  var lastSid = null;
+  var rlAt = 0;
+  function refreshLabel(){
+    var now = Date.now();
+    if (now - rlAt < 2000) return;
+    rlAt = now;
+    var bl = document.getElementById(ID + '-bl');
+    if (!bl) return;
+    listSessions().then(function(items){
+      var sid = selId();
+      var cwd = pickCwd(items);
+      if (sid !== lastSid) { lastSid = sid; if (cwd) bl.title = 'workspace: ' + cwd.slice(-48); }
+      if (!cwd) { bl.textContent = '⎇'; return; }
+      fetch('/api/dsh-git-commit/status?cwd=' + encodeURIComponent(cwd))
+        .then(function(r2){ return r2.json(); })
+        .then(function(sj){ if (sj && sj.ok && sj.status) { var s = sj.status; var n = (s.untracked || 0) + ((s.staged && s.staged.n) || 0) + ((s.unstaged && s.unstaged.n) || 0); bl.textContent = '⎇ ' + (s.branch || '') + (n > 0 ? ' ±' + n : ''); } })
+        .catch(function(){});
+    }).catch(function(){});
+  }
+  mount();
+  setInterval(mount, 2500);
+  setInterval(refreshLabel, 8000);
+  // 会话树选中变化 -> 即时同步 git 列表（轮询仅兜底）
+  try {
+    var mo = new MutationObserver(function () { refreshLabel(); });
+    var hookTree = function () {
+      var tree = document.querySelector('[role="tree"]');
+      if (!tree) return false;
+      mo.observe(tree, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-selected', 'data-selected', 'class'] });
+      return true;
+    };
+    if (!hookTree()) { var ht = setInterval(function () { if (hookTree()) clearInterval(ht); }, 3000); }
+  } catch (e) {}
+})();
+
+/* bust 1788142963863 */
+
+/* bust 1788279275000 */
+
+/* bust 1788309599000 */
+
+/* bust 1788624038000 */
+
+/* bust 1788881574236000 */

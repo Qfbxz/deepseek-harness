@@ -1,0 +1,138 @@
+/* gitbar tablist 直挂启动器（待命件）
+ * 背景: client.mjs 的 ensure() 用 fixed 几何链钉位, rc.2 布局(y≈48/头部分层)下多道硬窗(y<36/x<1100)
+ * 与两段叠压的相似逻辑使其失效。本启动器绕开全部历史包袱: 直接 appendChild 进「轨迹」tablist,
+ * 文档流同排天然免钉位。接入方式: 在 client.mjs 末尾追加一行:
+ *   document.head.appendChild(Object.assign(document.createElement('script'), { src: '/plugins/dsh-git-commit/mount-launcher.js' }));
+ * 或直接把本文件内容粘贴到 client.mjs 末尾。
+ */
+(function () {
+  var ID = 'dsh-gitbar';
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (m) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[m]; }); }
+  function findTl() {
+    var tls = document.querySelectorAll('[role=tablist]');
+    for (var i = 0; i < tls.length; i++) {
+      var r = tls[i].getBoundingClientRect();
+      if (r.width > 100 && /轨迹|Timeline/.test(tls[i].textContent || '')) return tls[i];
+    }
+    return null;
+  }
+  // selId: DOM aria-selected treeitem -> React fiber -> node.id（与 gitbar-v2 同源语义）
+  function selId() {
+    var sel = document.querySelector('[role="treeitem"][aria-selected="true"], [role="treeitem"][data-selected]');
+    if (!sel) return null;
+    for (var k in sel) { if (k.indexOf('__reactFiber') === 0) {
+      var f = sel[k];
+      for (var i = 0; i < 8 && f; i++) {
+        var p = f.memoizedProps;
+        if (p && p.node && p.node.id) return String(p.node.id);
+        f = f.return;
+      }
+    }}
+    return null;
+  }
+  function pickCwd(items) {
+    var sid = selId();
+    if (sid) { for (var s = 0; s < items.length; s++) if (String(items[s].sessionId) === sid && items[s].cwd) { try { localStorage.setItem('dsh-gitbar-last-cwd', items[s].cwd); } catch (e) {} return items[s].cwd; } }
+    for (var k = 0; k < items.length; k++) if (items[k].running && items[k].cwd) return items[k].cwd;
+    for (var m = 0; m < items.length; m++) if (items[m].cwd) { try { localStorage.setItem('dsh-gitbar-last-cwd', items[m].cwd); } catch (e) {} return items[m].cwd; }
+    try { var _cd = localStorage.getItem('dsh-gitbar-last-cwd'); if (_cd) return _cd; } catch (e) {}
+    return '/Users/boergege/compile/优秀仓库参考/DeepSeek-Harness';
+  }
+  function listSessions() {
+    return fetch('/api/session.list', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'client-request', rpcId: 'gbm-' + Date.now(), method: 'session.list', payload: {} }) })
+      .then(function (r) { return r.text().then(function (t) { try { return JSON.parse(t); } catch (e) { return null; } }); })
+      .then(function (j) { return (j && j.result && j.result.value && j.result.value.items) || []; });
+  }
+  function mount() {
+    var tl = findTl();
+    if (!tl) return;
+    var bar = document.getElementById(ID);
+    if (bar && bar.parentElement === tl) return;
+    if (!bar) {
+      bar = document.createElement('span'); bar.id = ID;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.innerHTML = '<span id="' + ID + '-bl">⎇ …</span><span style="opacity:.5;font-size:.8em"> ▾</span>';
+      btn.style.cssText = 'display:inline-flex;align-items:center;gap:2px;padding:2px 8px;border:none;background:transparent;color:inherit;font:inherit;cursor:pointer';
+      btn.onclick = function (ev) {
+        ev.stopPropagation();
+        var pop = document.getElementById(ID + '-mountpop');
+        if (pop) { pop.remove(); return; }
+        pop = document.createElement('div');
+        pop.id = ID + '-mountpop';
+        pop.style.cssText = 'position:fixed;z-index:2147483002;background:var(--dsw-alias-bg-layer-2,#1b2330);color:inherit;border:1px solid rgba(120,160,220,.35);border-radius:8px;padding:10px;min-width:220px;max-height:60vh;overflow:auto;font-size:12px';
+        pop.textContent = '加载中…';
+        var r = btn.getBoundingClientRect();
+        pop.style.left = Math.max(8, Math.round(r.left)) + 'px';
+        pop.style.top = Math.round(r.bottom + 6) + 'px';
+        document.body.appendChild(pop);
+        listSessions().then(function (items) {
+if (!items.length) { fetch('/api/dsh-git-commit/session-cwd').then(function (r) { return r.json(); }).then(function (j) { if (j && j.ok && j.cwd) { try { localStorage.setItem('dsh-gitbar-last-cwd', j.cwd); } catch (e) {} } }).catch(function () {}); }
+                var cwd = pickCwd(items);
+          if (!cwd) { pop.textContent = '未定位到工作区'; return; }
+          return fetch('/api/dsh-git-commit/branches?cwd=' + encodeURIComponent(cwd)).then(function (r3) { return r3.json(); }).then(function (bj) {
+            if (!bj || !bj.ok) { pop.textContent = '分支获取失败'; return; }
+            var h = '<div style="opacity:.6;margin-bottom:6px">' + esc(cwd.slice(-40)) + '</div>';
+            (bj.branches || []).slice(0, 40).forEach(function (b2) {
+              var cur = b2 === bj.current;
+              h += '<div class="gbm-row" data-b="' + esc(b2) + '" style="padding:3px 8px;border-radius:5px;cursor:pointer' + (cur ? ';background:rgba(76,141,255,.22)' : '') + '">' + (cur ? '● ' : '○ ') + esc(b2) + '</div>';
+            });
+            pop.innerHTML = h;
+            pop.querySelectorAll('.gbm-row').forEach(function (row) {
+              row.onclick = function () {
+                var b3 = row.getAttribute('data-b');
+                row.style.opacity = '.5';
+                fetch('/api/dsh-git-commit/switch', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cwd: cwd, branch: b3 }) })
+                  .then(function (r4) { return r4.json(); })
+                  .then(function (sj) {
+                    row.style.opacity = '1';
+                    row.title = sj && sj.ok ? '已切换' : ((sj && sj.error) || '切换失败');
+                    if (sj && sj.ok) { pop.remove(); refreshLabel(); }
+                  });
+              };
+            });
+          });
+        }).catch(function (e2) { pop.textContent = '错误: ' + e2.message; });
+        setTimeout(function () { document.addEventListener('click', function close() { var p = document.getElementById(ID + '-mountpop'); if (p) p.remove(); }, { once: true }); }, 50);
+      };
+      bar.appendChild(btn);
+    }
+    bar.style.cssText = 'display:inline-flex;align-items:center;margin-left:10px;position:static!important;left:auto!important;top:auto!important;visibility:visible!important;opacity:1!important;z-index:auto!important;pointer-events:auto';
+    tl.appendChild(bar);
+    refreshLabel();
+  }
+  var lastSid = null;
+  var rlAt = 0;
+  function refreshLabel() {
+    var now = Date.now();
+    if (now - rlAt < 2000) return;
+    rlAt = now;
+    var bl = document.getElementById(ID + '-bl');
+    if (!bl) return;
+    listSessions().then(function (items) {
+if (!items.length) { fetch('/api/dsh-git-commit/session-cwd').then(function (r) { return r.json(); }).then(function (j) { if (j && j.ok && j.cwd) { try { localStorage.setItem('dsh-gitbar-last-cwd', j.cwd); } catch (e) {} } }).catch(function () {}); }
+            var sid = selId();
+      var cwd = pickCwd(items);
+      if (sid !== lastSid) { lastSid = sid; if (cwd) bl.title = 'workspace: ' + cwd.slice(-48); }
+      if (!cwd) { bl.textContent = '⎇'; return; }
+      fetch('/api/dsh-git-commit/status?cwd=' + encodeURIComponent(cwd))
+        .then(function (r2) { return r2.json(); })
+        .then(function (sj) { if (sj && sj.ok && sj.status) bl.textContent = '⎇ ' + (sj.status.branch || '') + (sj.status.dirty ? ' ±' + sj.status.dirty : ''); })
+        .catch(function () {});
+    }).catch(function () {});
+  }
+  mount();
+  setInterval(mount, 2500);
+  setInterval(refreshLabel, 8000);
+  // 会话树选中变化 -> 即时同步 git 列表（轮询仅兜底）
+  try {
+    var mo = new MutationObserver(function () { refreshLabel(); });
+    var hookTree = function () {
+      var tree = document.querySelector('[role="tree"]');
+      if (!tree) return false;
+      mo.observe(tree, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-selected', 'data-selected', 'class'] });
+      return true;
+    };
+    if (!hookTree()) { var ht = setInterval(function () { if (hookTree()) clearInterval(ht); }, 3000); }
+  } catch (e) {}
+})();

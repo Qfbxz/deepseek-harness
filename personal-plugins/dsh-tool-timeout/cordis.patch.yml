@@ -1,0 +1,8 @@
+- insert:
+    - id: dsh-tool-timeout
+      name: dsh-tool-timeout
+      config:
+        enabled: true
+        runCodeTimeoutMs: 180000
+        bashTimeoutMs: 0
+        defaultTimeoutMs: 0

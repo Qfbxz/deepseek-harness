@@ -1,0 +1,6 @@
+# dsh-bestharness-guard bundle patch. Config authority is the host settings
+# service (namespace `bestharness-guard`); no config block lives here —
+# schema-typed defaults live in index.mjs and the GUI settings card.
+- insert:
+    - id: dsh-bestharness-guard
+      name: dsh-bestharness-guard

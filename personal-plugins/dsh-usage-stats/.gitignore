@@ -1,0 +1,4 @@
+# vendored snapshot: github.com/Ychris12138/dsh-usage-stats @ v0.1.2 (commit f7b0a36fb30fa5ea16b0af24e3663a43b997b7c9)
+# 上层 .gitignore 的 lib/ 会吞掉本包运行本体，此处按更深层优先规则否定
+!lib/
+node_modules/
