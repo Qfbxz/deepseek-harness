@@ -16,7 +16,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-const EXOTIC = /^(git\+|git:|github:|gitlab:|bitbucket:|https?://|.*\.tgz(\?|#|$))/i;
+const EXOTIC = /^(git\+|git:|github:|gitlab:|bitbucket:|https?:\/\/|.*\.tgz(\?|#|$))/i;
 
 test('穷举：dependencies 无 exotic specifier（blockExoticSubdeps 合规）', () => {
   const entries = Object.entries(pkg.dependencies || {});
@@ -29,7 +29,7 @@ test('穷举：dependencies 无 exotic specifier（blockExoticSubdeps 合规）'
 test('file: 依赖目标存在且 vendor 注记在案', async () => {
   for (const [name, spec] of Object.entries(pkg.dependencies || {})) {
     if (!spec.startsWith('file:')) continue;
-    const target = fileURLToPath(new URL(spec.slice(5) + '/package.json', 'file://' + process.cwd() + '/../'));
+    const target = resolve(process.cwd(), spec.slice(5), 'package.json');
     assert.ok(existsSync(target), `${name} 的 file: 目标不存在：${target}`);
   }
   // vendor 溯源注记（dsh-usage-stats/.gitignore 首行）

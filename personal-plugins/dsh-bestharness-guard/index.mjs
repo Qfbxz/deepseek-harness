@@ -22,7 +22,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import * as DshSettings from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 
 export const name = 'dsh-bestharness-guard'
@@ -31,28 +31,29 @@ export const inject = ['settings']
 // ----------------------------------------------------------------------
 // 设置 schema（GUI 设置卡自动渲染；schemastery 强校验，非法值 fail-loud）
 // ----------------------------------------------------------------------
-export const GUARD_SETTINGS = settingsNamespace('bestharness-guard')
+const settingsNamespace = DshSettings.settingsNamespace
+export const GUARD_SETTINGS = settingsNamespace ? settingsNamespace('bestharness-guard') : null
 
 export const Config = z.object({
   doom: z.object({
-    enabled: z.boolean().default(true),
-    gentleAt: z.number().default(3).min(2),
-    detailedAt: z.number().default(5).min(3),
-    stopHintAt: z.number().default(8).min(4),
-    forceStopAt: z.number().default(12).min(6),
-    include: z.array(z.string()).default([]),
-    exclude: z.array(z.string()).default([]),
-    argumentsPreviewChars: z.number().default(500).min(50),
+    enabled: z.boolean().default(true).volatile(),
+    gentleAt: z.number().default(3).min(2).volatile(),
+    detailedAt: z.number().default(5).min(3).volatile(),
+    stopHintAt: z.number().default(8).min(4).volatile(),
+    forceStopAt: z.number().default(12).min(6).volatile(),
+    include: z.array(z.string()).default([]).volatile(),
+    exclude: z.array(z.string()).default([]).volatile(),
+    argumentsPreviewChars: z.number().default(500).min(50).volatile(),
   }).default({}),
   budget: z.object({
-    enabled: z.boolean().default(false),
-    turnTokens: z.number().default(200000).min(10000),
-    completionThreshold: z.number().default(0.9).min(0.5).max(0.99),
-    diminishingDelta: z.number().default(500).min(50),
+    enabled: z.boolean().default(false).volatile(),
+    turnTokens: z.number().default(200000).min(10000).volatile(),
+    completionThreshold: z.number().default(0.9).min(0.5).max(0.99).volatile(),
+    diminishingDelta: z.number().default(500).min(50).volatile(),
   }).default({}),
   summary: z.object({
-    enabled: z.boolean().default(false),
-    minChars: z.number().default(200).min(50),
+    enabled: z.boolean().default(false).volatile(),
+    minChars: z.number().default(200).min(50).volatile(),
   }).default({}),
 })
 
@@ -138,19 +139,35 @@ function notice(text, summary) {
 // ----------------------------------------------------------------------
 // apply
 // ----------------------------------------------------------------------
-export function apply(ctx) {
-  let cfg = structuredClone(DEFAULTS)
+export function apply(ctx, config = {}) {
+  // volatile 叶子在 loader config 参里是分层占位({} 或 {base,user})——剥成标量
+  const peel = (v) => {
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) return v
+    if ('user' in v || 'base' in v) return v.user !== undefined ? v.user : v.base
+    return undefined
+  }
+  const peelSection = (raw, fallback) => {
+    const out = { ...fallback }
+    if (raw && typeof raw === 'object' && !('user' in raw || 'base' in raw)) {
+      for (const k of Object.keys(fallback)) { const v = peel(raw[k]); if (v !== undefined) out[k] = v }
+    }
+    return out
+  }
+  const mergeConfig = (v) => ({
+    doom: peelSection(v?.doom, DEFAULTS.doom),
+    budget: peelSection(v?.budget, DEFAULTS.budget),
+    summary: peelSection(v?.summary, DEFAULTS.summary),
+  })
 
-  // 设置服务 = 唯一数据源：注册 scope，行为读 scope，GUI 卡同 scope
+  // 0.1.7+：loader 按 Config schema 从 profile cordis.yml 装配 config，行为直读；
+  // 旧 settings.register/watch API 尚在的版本则注册 GUI 卡并保持热同步。
+  let cfg = mergeConfig(config)
+
   ctx.inject(['settings'], (sctx) => {
+    if (typeof sctx.settings.register !== 'function') return // 0.1.7+: Config schema 自动进设置系统
     const scope = sctx.settings.register(GUARD_SETTINGS, Config, { base: DEFAULTS })
     const sync = () => {
-      const v = scope.get()
-      cfg = {
-        doom: { ...DEFAULTS.doom, ...(v.doom ?? {}) },
-        budget: { ...DEFAULTS.budget, ...(v.budget ?? {}) },
-        summary: { ...DEFAULTS.summary, ...(v.summary ?? {}) },
-      }
+      cfg = mergeConfig(scope.get())
     }
     sync()
     ctx.effect(() => scope.watch(sync), 'bestharness-guard: settings sync')

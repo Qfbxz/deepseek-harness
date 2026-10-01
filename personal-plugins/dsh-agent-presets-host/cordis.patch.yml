@@ -1,0 +1,4 @@
+# Bundle patch：host 半边锚点
+- insert:
+    - id: agent-presets-host
+      name: dsh-agent-presets-host

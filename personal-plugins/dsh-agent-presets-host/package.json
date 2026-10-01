@@ -1,0 +1,9 @@
+{
+  "name": "dsh-agent-presets-host",
+  "version": "1.0.0",
+  "description": "用户 preset 发现层宿主：实例化复数包 AgentPresets 服务(roots 含 ~/.dsh/.agent-presets)，让石油项目智能体/vibe-math 等回归模式选择器。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": { ".": "./index.mjs", "./package.json": "./package.json" },
+  "dsh": { "manifestVersion": 1, "bundle": { "patch": "./cordis.patch.yml" } }
+}

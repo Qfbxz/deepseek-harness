@@ -715,7 +715,8 @@ async function buildRows() {
 					// size to the uncapped goal bar and overflow the viewport
 					row.style.cssText = "display:flex;align-items:center;gap:10px;flex:0 0 auto;min-width:0;";
 				}
-				host.insertBefore(row, card);
+				try { if (				host) host.insertBefore(row, card); }
+				catch (eDomRace) { /* DOM 被并发搬动(侧栏重建竞态)——弃本次,下一轮重试 */ }
 			}
 			// 全宽通则：composerStack 的所有 dock 条目（任务横条、排队消息、goal
 			// 条，穿过 display:contents 包装取真实 flex 项）逐像素对齐输入卡——
@@ -984,7 +985,8 @@ async function buildRows() {
 				dot = document.createElement("span");
 				dot.id = "dshc-health-dot";
 				dot.style.cssText = "width:7px;height:7px;border-radius:50%;flex:none;";
-				host.insertBefore(dot, host.firstChild);
+				try { if (				host) host.insertBefore(dot, host.firstChild); }
+				catch (eDomRace) { /* DOM 被并发搬动(侧栏重建竞态)——弃本次,下一轮重试 */ }
 			}
 			modelRingsEl = document.createElement("span");
 			modelRingsEl.id = "dshc-model-rings";

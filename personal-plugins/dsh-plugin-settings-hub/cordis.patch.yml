@@ -1,0 +1,5 @@
+# Bundle patch: 把 dsh-plugin-settings-hub 插入 profile 插件名册。
+# 「插件配置」分区宿主：聚合三卡全局注册表 + 内置博查配置卡。
+- insert:
+    - id: plugin-settings-hub
+      name: 'dsh-plugin-settings-hub'

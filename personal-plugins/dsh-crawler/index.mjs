@@ -11,7 +11,7 @@
  * removes every crawler_* tool from the session without a restart.
  */
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import * as DshSettings from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
@@ -37,16 +37,19 @@ const CONFIG_KEYS = ['enabled', 'engine', 'headless', 'profileDir', 'outdir', 'm
 export const inject = ['tools']
 export const name = 'dsh-crawler'
 
-/** Settings namespace surfaced in the GUI 设置 page (schema-driven form). */
-export const PAWL_SETTINGS = settingsNamespace('pawl')
+/** Settings namespace surfaced in the GUI 设置 page (schema-driven form).
+ * 0.1.7 起 dsh-settings 移除 settingsNamespace/register（GUI 卡改由 Config schema
+ * + profile cordis.yml 装配）；旧 API 存在时仍走手工注册，否则降级为文件自管。 */
+const settingsNamespace = DshSettings.settingsNamespace
+export const PAWL_SETTINGS = settingsNamespace ? settingsNamespace('pawl') : null
 const SettingsSchema = z.object({
-  enabled: z.boolean().default(true),
-  engine: z.string().default('auto'),
-  headless: z.boolean().default(true),
-  autoClick: z.boolean().default(true),
-  minDelayMs: z.number().step(500).min(0).default(1500),
-  outdir: z.string().default(''),
-  profileDir: z.string().default(''),
+  enabled: z.boolean().default(true).volatile(),
+  engine: z.string().default('auto').volatile(),
+  headless: z.boolean().default(true).volatile(),
+  autoClick: z.boolean().default(true).volatile(),
+  minDelayMs: z.number().step(500).min(0).default(1500).volatile(),
+  outdir: z.string().default('').volatile(),
+  profileDir: z.string().default('').volatile(),
 })
 // 2026-08-18: export as cordis Config so the GUI settings page renders the
 // pawl card (schema existed but was never exported — no settings page appeared).
@@ -318,6 +321,7 @@ export function apply(ctx, config = {}) {
   // 卡保存 -> scope.watch -> 写文件并即时生效；工具/接口改文件 -> 回推 scope（卡片不显示旧值）。
   let settingsScope = null
   ctx.inject(['settings'], (sctx) => {
+    if (typeof sctx.settings.register !== 'function') return // 0.1.7+: 无手工注册，GUI 卡走 Config schema
     let fileBase = {}
     try { fileBase = JSON.parse(readFileSync(CONFIG_FILE, 'utf8')) } catch {}
     const base = {}

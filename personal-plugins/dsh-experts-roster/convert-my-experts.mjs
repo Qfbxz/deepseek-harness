@@ -39,7 +39,7 @@ const CURATED = {
   'frontend-dev': ['前端开发工程师', '页面与组件开发，兼全链路国际化（vue-i18n/resx/键值架构/术语一致）。', 'Frontend engineer: pages and components, plus end-to-end i18n.', '🎨', 'pink'],
   'code-reviewer': ['代码审查员', '合入前全面审查：正确性、安全、性能、架构合规、测试覆盖，兼静态安全审计。', 'Code reviewer: correctness, security, performance, architecture compliance audits.', '🔍', 'orange'],
   'plan-reviewer': ['方案审核专家', '实现前审核方案：边界条件、性能隐患、安全漏洞、架构冲突，输出分级报告。', 'Plan reviewer: pre-implementation design audits with graded reports.', '🧭', 'yellow'],
-  'product-manager': ['产品经理', '需求转 PRD：功能清单、用户故事、验收标准；兼全项目文档治理。', 'Product manager: PRDs with acceptance criteria, plus documentation governance.', '📋', 'green'],
+  'product-manager': ['产品经理（Pro）', '需求转 PRD：功能清单、用户故事、验收标准；兼全项目文档治理。', 'Product manager: PRDs with acceptance criteria, plus documentation governance.', '📋', 'green'],
   'qa': ['质量保障工程师', 'E2E 测试、视觉回归、发布把关与 CI/CD 流水线搭建。', 'QA engineer: E2E testing, visual regression, release gates, CI/CD.', '🧪', 'red'],
   'tester': ['测试工程师', '单元与集成测试：算法正确性、类型安全、国际化与单位制一致性。', 'Test engineer: unit and integration tests across logic, types, i18n, units.', '✅', 'cyan'],
   'software-doc-writer': ['软件文档工程师', '按 GB/T 8567 编写验收级交付文档：概设/详设/操作手册/自评报告。', 'Software documentation writer: GB/T 8567 delivery documents.', '📝', 'yellow'],

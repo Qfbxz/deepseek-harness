@@ -1,0 +1,4 @@
+# Bundle patch：host 半边 insert（0.2.0 client 装载以 dsh.bundle 声明为锚）
+- insert:
+    - id: compat-slots
+      name: dsh-compat-slots

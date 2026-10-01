@@ -10,6 +10,133 @@ window.__ModuleLoader__.load({
   id: "dsh-bestharness-guard",
   factory: function (require) {
     var module = { exports: {} };
+    // ===== inline-heal（2026-10-01）：webUiSettings 服务缺失时的 bridge 兜底 =====
+    // 蒸馏自 web-all 0.4.4 BridgeScopeController（/api/dsh-web-ui-settings 同源路由）。
+    // 本卡因此零外部服务依赖：官方 webUiSettings 可用时优先官方，否则直连 bridge。
+    var PREFIX = "/api/dsh-plugin-settings-hub";
+
+    // ---- bridge fetch（同源 loopback；网络错误一律收敛为 ok:false 信封，绝不抛进激活链） ----
+    function isBridgeResult(value) {
+      if (typeof value !== "object" || value === null) return false;
+      if (typeof value.ok !== "boolean") return false;
+      if (value.ok) return typeof value.value === "object" && value.value !== null;
+      return typeof value.code === "string" && typeof value.message === "string";
+    }
+    async function post(path, body) {
+      try {
+        var response = await fetch(PREFIX + path, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body)
+        });
+        if (!response.ok) return { ok: false, code: "internal", message: "bridge HTTP " + response.status };
+        var parsed = await response.json();
+        if (!isBridgeResult(parsed)) return { ok: false, code: "internal", message: "bridge malformed response" };
+        return parsed;
+      } catch {
+        return { ok: false, code: "internal", message: "settings bridge unreachable" };
+      }
+    }
+
+    // ---- 极简快照仓（subscribe / getSnapshot / update→notify，契约对齐 dsh-client-store） ----
+    function createStore(initial) {
+      var snapshot = initial;
+      var listeners = [];
+      return {
+        getSnapshot: function () { return snapshot; },
+        subscribe: function (listener) {
+          listeners.push(listener);
+          return function () {
+            listeners = listeners.filter(function (l) { return l !== listener; });
+          };
+        },
+        update: function (mutate) {
+          var draft = {};
+          for (var k in snapshot) draft[k] = snapshot[k];
+          mutate(draft);
+          snapshot = draft;
+          for (var i = 0; i < listeners.length; i++) {
+            try { listeners[i](); } catch (e) { console.error("[webuisettings-heal] listener", e); }
+          }
+        }
+      };
+    }
+
+    // ---- 兼容 scope：对外即 webUiSettings.bind() 的返回值 ----
+    // 协议（蒸馏自 web-all 0.4.4 BridgeScopeController，消费面以三卡为准）：
+    //   subscribe(fn) / getSnapshot() / load() / set(field, value) / unset(field)
+    //   mutateBatch(fields, expectedRevision) / get() / watch(fn)
+    function makeScope(namespace) {
+      var store = createStore({ status: "loading", value: undefined, user: undefined, base: undefined, revision: undefined, writable: true });
+      var tail = Promise.resolve();
+      var disposed = false;
+      var entryId;
+
+      function enqueue(operation) {
+        if (disposed) return Promise.resolve(undefined);
+        var task = tail.then(function () { return disposed ? undefined : operation(); });
+        tail = task.catch(function () {});
+        return task;
+      }
+      function accept(value, view, writable) {
+        entryId = view.entryId;
+        store.update(function (draft) {
+          draft.revision = view.revision;
+          draft.base = view.base;
+          draft.user = view.user;
+          if (writable !== undefined) draft.writable = writable;
+          draft.status = "ready";
+          draft.value = value;
+        });
+      }
+      function read() {
+        return enqueue(async function () {
+          var result = await post("/describe", {});
+          if (disposed) return;
+          if (!result.ok) { store.update(function (d) { d.status = "unavailable"; }); return; }
+          var view = (result.value.namespaces || []).find(function (c) { return c.ns === namespace; });
+          if (view === undefined) {
+            entryId = undefined;
+            store.update(function (d) { d.status = "unavailable"; d.writable = result.value.writable; });
+            return;
+          }
+          accept(view.value, view, result.value.writable);
+        });
+      }
+      function writeOps(ops) {
+        return enqueue(async function () {
+          var revision = store.getSnapshot().revision;
+          var payload = { ns: namespace, ops: ops };
+          if (revision !== undefined) payload.expectedRevision = revision;
+          var result = await post("/mutate", payload);
+          if (disposed) return { ok: false, fields: [] };
+          if (!result.ok) { await read(); return { ok: false, fields: [], code: result.code, message: result.message }; }
+          accept(result.value.value, result.value, undefined);
+          return { ok: true, fields: ops.map(function (op) { return { field: op.path.join("."), op: op.op, landed: true }; }) };
+        });
+      }
+      var scope = {
+        getSnapshot: function () { return store.getSnapshot(); },
+        subscribe: function (fn) { return store.subscribe(fn); },
+        watch: function (fn) { return store.subscribe(fn); },
+        get: function () { return store.getSnapshot().value; },
+        load: function () { return read(); },
+        set: function (field, value) { return writeOps([{ op: "set", path: [field], value: value }]).then(function (r) { return r.ok; }); },
+        unset: function (field) { return writeOps([{ op: "unset", path: [field] }]).then(function (r) { return r.ok; }); },
+        mutate: function (fields) { return writeOps(fields.map(function (f) { return "value" in f ? { op: f.op, path: f.path || [f.field], value: f.value } : { op: f.op, path: f.path || [f.field] }; })).then(function (r) { return r.ok; }); },
+        mutateBatch: function (fields, expectedRevision) { return writeOps(fields.map(function (f) { return "value" in f ? { op: f.op, path: f.path || [f.field], value: f.value } : { op: f.op, path: f.path || [f.field] }; })); },
+        entryId: function () { return entryId; },
+        dispose: async function () { disposed = true; await tail; }
+      };
+      read(); // 初始装载，卡激活后即有数据
+      return scope;
+    }
+
+    function healBindScope(ctx, ns) {
+      // 2026-10-02: 家族 binder 只认 linxin666 别名表——第三方 ns 必 unavailable,直连 settings-hub 桥
+      return makeScope(ns);
+    }
+
     var React = require("react");
     var useState = React.useState;
     var createSnapshotStore = require("@deepseek-ai/dsh-client-store").createSnapshotStore;
@@ -370,6 +497,15 @@ window.__ModuleLoader__.load({
 
     function BestharnessGuardCard(props) {
       var state = props.useBestharnessGuardCard(function (s) { return s; });
+      if (!state || typeof state !== "object") state = { writable: false };
+      if (typeof FIELDS !== "undefined" && FIELDS && FIELDS.length) {
+        state = Object.assign({}, state);
+        for (var fi = 0; fi < FIELDS.length; fi++) {
+          var fk2 = FIELDS[fi].spec ? FIELDS[fi].spec.field : FIELDS[fi].field;
+          if (!fk2) continue;
+          if (!state[fk2] || typeof state[fk2] !== "object") state[fk2] = { text: "", overridden: false, invalid: false };
+        }
+      }
       var t = props.t;
       var children = [];
       for (var i = 0; i < SECTIONS.length; i++) {
@@ -429,17 +565,34 @@ window.__ModuleLoader__.load({
       "summary.minChars": "Minimum summary chars", "summary.minCharsHint": "Shorter summaries trigger the instruction. >=50."
     };
 
-    // ---- 接线 ----
-    var inject = ["slots", "locale", "settingsScope"];
+    // ---- 接线 ----（2026-10-01 settingsScope→webUiSettings，与 crawler-settings/ring-settings fork 同代）
+    var inject = ["slots", "locale"];
     function apply(ctx) {
       ctx.effect(function () { return ctx.locale.register(NS, { zh: zh, en: en }); }, "bestharness-guard: dictionaries");
-      var scope = ctx.settingsScope.bind({ namespace: SETTINGS_NS });
+      var scope = healBindScope(ctx, SETTINGS_NS);
       var controller = new Controller(scope);
-      ctx.slots.inject("settings.plugin.item", function () {
-        return ctx.slots.register(
-          { name: "settings.plugin.item", id: SETTINGS_NS, key: SETTINGS_NS, locale: NS, inject: function () { return controller.inject(); } },
-          BestharnessGuardCard);
-      });
+      // 2026-10-02: 立即发布到全局注册表（settings-hub 分区消费，不依赖死座位）
+      (window.__compatCards = window.__compatCards || {})["bestharness-guard"] = BestharnessGuardCard;
+      (window.__compatCardsInject = window.__compatCardsInject || {})["bestharness-guard"] = function () { return controller.inject(); };
+      // 2026-10-01: slots.inject 挂钩可能不认垫片 _registerFactory 私有声明的座位——
+      // 改轮询 spec 就绪后直接 register(带 try/catch 防撞已注册)
+      var tryReg = function () {
+        try {
+          if (ctx.slots.spec("settings.plugin.item") === void 0) return false;
+          ctx.slots.register(
+            { name: "settings.plugin.item", id: SETTINGS_NS, key: SETTINGS_NS, locale: NS, inject: function () { return controller.inject(); } },
+            BestharnessGuardCard);
+          console.info("[bestharness-guard] 卡已注册到 settings.plugin.item");
+          // 全局注册表(slots 渲染层绕行):垫片 CompatSection 直接 React 组装
+          (window.__compatCards = window.__compatCards || {})["bestharness-guard"] = BestharnessGuardCard;
+          (window.__compatCardsInject = window.__compatCardsInject || {})["bestharness-guard"] = function () { return controller.inject(); };
+          return true;
+        } catch (e) { if (/already/.test(e.message)) return true; console.warn("[bestharness-guard] 注册失败:", e.message); return false; }
+      };
+      if (!tryReg()) {
+        var regTimer = setInterval(function () { if (tryReg()) clearInterval(regTimer); }, 500);
+        setTimeout(function () { clearInterval(regTimer); }, 30000);
+      }
     }
 
     module.exports.inject = inject;

@@ -2,7 +2,7 @@
 # Host half (exports ".") runs agent tools + loopback config API; the dsh.client
 # declaration loads the browser half (exports "./client") — sidebar 爬虫 card.
 - insert:
-    - id: dsh-crawler
+    - id: pawl
       name: dsh-crawler
       config:
         enabled: true

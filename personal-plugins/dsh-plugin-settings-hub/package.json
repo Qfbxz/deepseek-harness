@@ -1,0 +1,24 @@
+{
+  "name": "dsh-plugin-settings-hub",
+  "version": "1.0.0",
+  "description": "「插件配置」设置分区宿主。聚合三卡全局注册表（爬虫/上下文环/守卫）+ 内置博查搜索配置卡。照 vision-router 2.3.0 的稳定注册法（ctx.effect + slots.inject generator）挂 settings.section 分区，不依赖 plugins.bundle.config / settings.plugin.item 等断供座位。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

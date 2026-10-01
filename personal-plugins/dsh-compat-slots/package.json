@@ -1,0 +1,26 @@
+{
+  "name": "dsh-compat-slots",
+  "version": "1.0.0",
+  "description": "0.2.0-rc.2 插槽兼容垫片：声明 alpha 代座位 + 聚合分区壳，救活停在旧座位的第三方插件卡（web-all 家族/chat-import/fork 三卡）。self-heal 体系 client 前哨。",
+  "type": "module",
+  "main": "index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./client": "./client.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  }
+}

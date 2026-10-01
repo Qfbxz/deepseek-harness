@@ -7,17 +7,18 @@
  * write the same scope; nothing is persisted in this plugin any more.
  * @module dsh-local/context-ring
  */
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import * as DshSettings from '@deepseek-ai/dsh-settings'
+const settingsNamespace = DshSettings.settingsNamespace
 import z from '@deepseek-ai/schemastery'
 
 export const inject = ['webServer']
 export const name = 'dsh-context-ring'
-export const RING_SETTINGS = settingsNamespace('context-ring')
+export const RING_SETTINGS = settingsNamespace ? settingsNamespace('context-ring') : null
 const SettingsSchema = z.object({
-  warnAt: z.number().step(5).min(0).max(100).default(50),
-  dangerAt: z.number().step(5).min(0).max(100).default(80),
-  warnColor: z.string().default('#f59e0b'),
-  dangerColor: z.string().default('#ef4444'),
+  warnAt: z.number().step(5).min(0).max(100).default(50).volatile(),
+  dangerAt: z.number().step(5).min(0).max(100).default(80).volatile(),
+  warnColor: z.string().default('#f59e0b').volatile(),
+  dangerColor: z.string().default('#ef4444').volatile(),
 })
 export const Config = SettingsSchema
 
@@ -30,12 +31,26 @@ function loopback(req) {
   return true
 }
 
-export function apply(ctx) {
-  let current = { ...DEFAULTS }
+export function apply(ctx, config = {}) {
+  // volatile 字段在 apply 的 config 参里是分层占位({} 或 {base,user})——剥成标量
+  const peel = (v) => {
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) return v
+    if ('user' in v || 'base' in v) return v.user !== undefined ? v.user : v.base
+    return undefined
+  }
+  const seeded = {}
+  for (const k of KEYS) { const v = peel(config && config[k]); if (v !== undefined) seeded[k] = v }
+  let current = { ...DEFAULTS, ...seeded }
   let scope = null
+  let settingsSvc = null
 
   // 设置服务 = 唯一数据源：GUI 设置卡与调色板 POST 都写 scope，行为读 scope
   ctx.inject(['settings'], (sctx) => {
+    settingsSvc = sctx.settings
+    if (!(RING_SETTINGS && sctx.settings && typeof sctx.settings.register === 'function')) {
+      // 0.2.0: settingsNamespace 已删——config 由 loader 按 Config schema 装配,写走 mutate
+      return
+    }
     scope = sctx.settings.register(RING_SETTINGS, SettingsSchema, { base: DEFAULTS })
     const sync = () => { current = { ...DEFAULTS, ...scope.get() } }
     sync()
@@ -59,7 +74,14 @@ export function apply(ctx) {
             const next = { ...current, ...patch }
             if (!(Number(next.warnAt) >= 0 && Number(next.warnAt) <= 100) || !(Number(next.dangerAt) >= 0 && Number(next.dangerAt) <= 100)) return send(400, { ok: false, error: 'thresholds must be 0-100' })
             if (!/^#[0-9a-fA-F]{6}$/.test(String(next.warnColor)) || !/^#[0-9a-fA-F]{6}$/.test(String(next.dangerColor))) return send(400, { ok: false, error: 'colors must be #rrggbb' })
-            if (scope === null) return send(503, { ok: false, error: 'settings not ready' })
+            if (scope === null) {
+              if (settingsSvc && typeof settingsSvc.mutate === 'function') {
+                await settingsSvc.mutate('context-ring', Object.entries(patch).map(([k, v]) => ({ op: 'set', path: [k], value: v })))
+                current = { ...current, ...patch }
+                return send(200, { ok: true, config: current })
+              }
+              return send(503, { ok: false, error: 'settings not ready' })
+            }
             await scope.update(patch)
             current = { ...current, ...patch }
             return send(200, { ok: true, config: current })

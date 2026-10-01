@@ -20,6 +20,6 @@
   },
   "dependencies": {
     "@linxin666/dsh-client-ui-skin-qq98": "^0.1.16",
-    "dsh-usage-stats": "github:Ychris12138/dsh-usage-stats#v0.1.2"
+    "dsh-usage-stats": "file:../dsh-usage-stats"
   }
 }

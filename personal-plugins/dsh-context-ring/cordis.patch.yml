@@ -2,5 +2,5 @@
 # service (namespace `context-ring`); no config block lives here any more —
 # a YAML-typed config block once crashed boot when values were quoted.
 - insert:
-    - id: dsh-context-ring
+    - id: context-ring
       name: dsh-context-ring
