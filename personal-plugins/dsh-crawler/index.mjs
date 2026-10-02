@@ -343,6 +343,9 @@ export function apply(ctx, config = {}) {
   }
 
   const sync = () => {
+    // 2026-10-02: loadConfig 的 late 异步回调可能在纤维已失活后开火(关停/重挂竞态)——
+    // 无守卫时 INACTIVE_EFFECT 直接"fatal load failure"炸死整个宿主装载
+    try {
     if (disposeTools !== undefined) { disposeTools(); disposeTools = undefined }
     const cfg = cache
     if (cfg === undefined) return
@@ -353,6 +356,7 @@ export function apply(ctx, config = {}) {
         .map((t) => ctx.tools.register(t))
       return () => { for (const d of disposers) d() }
     }, 'dsh-crawler: tools')
+    } catch (eInactive) { /* 纤维失活(会话关停/组合重挂竞态)——放弃本次工具重注册 */ }
   }
 
   loadConfig().then((stored) => {
