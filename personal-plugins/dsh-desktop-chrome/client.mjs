@@ -59,9 +59,15 @@ window.__ModuleLoader__.load({
  * the wide sidebar (web-all's row+wrap then degrades to column-wrap and the
  * usage block overflows the 280px sidebarCol), and web-all parks the footer
  * entries on order 1 with flex-basis 100%, one per row. */
-[data-dsh-frame]:not([data-sidebar-collapsed]) [class*="footArea"] { flex-direction: row !important; gap: 8px !important; }
+[data-dsh-frame]:not([data-sidebar-collapsed]) [class*="footArea"] { flex-direction: row !important; gap: 8px !important; justify-content: space-between !important; }
 [data-dsh-frame]:not([data-sidebar-collapsed]) button[aria-label="导入会话"] { order: 19 !important; flex: 0 1 auto !important; min-width: 0 !important; }
 [data-dsh-frame]:not([data-sidebar-collapsed]) [class*="footerActions"] > [data-slot="sidebar.footer.action"] > div:not([class]) { order: 20 !important; flex: 0 1 auto !important; min-width: 0 !important; }
+/* 2026-10-02 晚(二): 四钮等距一行终版。四入口是 footArea(row+wrap) 的直接
+ * flex 项、与其他行混排——不能对入口本身 flex:1(会被拉进用量行挤成 9px 条)。
+ * 改用 footArea 的 justify-content:space-between:wrap 按行生效,用量/账号行
+ * 满宽无剩余不受影响,只有按钮行(四钮+~84px 剩余)被铺满整行。
+ * 导入会话(padding:0 圆钮自然宽 18px)钉 36px 与其余图标钮同宽。 */
+[data-dsh-frame]:not([data-sidebar-collapsed]) [class*="footArea"] button[aria-label="导入会话"] { width: 36px !important; min-width: 36px !important; }
 [data-dsh-frame]:not([data-sidebar-collapsed]) .usg_layer:not(.usg_rail) { margin: 0 !important; width: 100% !important; }
 /* 2026-10-02: even vertical rhythm across the three footer rows — the usage
  * row's leftover margin-top:2px (line below re-asserts it) and the settings
@@ -72,7 +78,8 @@ window.__ModuleLoader__.load({
 /* 2026-10-02: 用量第一行（用量环+百分比+重置时刻）被 usage 插件按整行两端
  * 对齐铺开，48% 贴左缘、重置时刻被推到最右，中间空一大段——改为靠左排 +
  * 固定 6px 间距；子元素 margin-left:auto 的推右手法一并中和。 */
-[data-dsh-frame]:not([data-sidebar-collapsed]) #dshc-usage .dshc-row { justify-content: flex-start !important; gap: 6px !important; }
+[data-dsh-frame]:not([data-sidebar-collapsed]) #dshc-usage .dshc-row { justify-content: flex-start !important; gap: 12px !important; }
+[data-dsh-frame]:not([data-sidebar-collapsed]) #dshc-usage { font-size: 12px !important; }
 [data-dsh-frame]:not([data-sidebar-collapsed]) #dshc-usage .dshc-row > * { margin-left: 0 !important; }
 .usg_layer:not(.usg_rail) { height: 36px; flex: 1 1 100%; min-width: 0; margin: 2px 0 0 6px; }
 /* dsh-chat-import's sidebar trigger ships width:100% inline — shrink it to
