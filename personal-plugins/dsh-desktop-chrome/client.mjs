@@ -52,6 +52,17 @@ window.__ModuleLoader__.load({
 /* footer row: let entries wrap so the usage badge always gets a full row
  * instead of being squeezed to 0px by full-width footer slot entries */
 .hHd-Xa_footerActions { flex-wrap: wrap; row-gap: 4px; }
+/* 2026-10-02 (user-spec): the four sidebar footer buttons — 会话ID / 远程访问 /
+ * 导入会话 / 记忆 — share the bottom row with an even 8px gap; the usage badge
+ * keeps its own full-width row above them. Two shell facts make this need
+ * !important: the rail-mode flex-direction:column stays inline on footArea in
+ * the wide sidebar (web-all's row+wrap then degrades to column-wrap and the
+ * usage block overflows the 280px sidebarCol), and web-all parks the footer
+ * entries on order 1 with flex-basis 100%, one per row. */
+[data-dsh-frame]:not([data-sidebar-collapsed]) [class*="footArea"] { flex-direction: row !important; gap: 8px !important; }
+[data-dsh-frame]:not([data-sidebar-collapsed]) button[aria-label="导入会话"] { order: 19 !important; flex: 0 1 auto !important; min-width: 0 !important; }
+[data-dsh-frame]:not([data-sidebar-collapsed]) [class*="footerActions"] > [data-slot="sidebar.footer.action"] > div:not([class]) { order: 20 !important; flex: 0 1 auto !important; min-width: 0 !important; }
+[data-dsh-frame]:not([data-sidebar-collapsed]) .usg_layer:not(.usg_rail) { margin-left: 0 !important; margin-right: 0 !important; width: 100% !important; }
 .usg_layer:not(.usg_rail) { height: 36px; flex: 1 1 100%; min-width: 0; margin: 2px 0 0 6px; }
 /* dsh-chat-import's sidebar trigger ships width:100% inline — shrink it to
  * its content so it stops evicting every other footer entry */
