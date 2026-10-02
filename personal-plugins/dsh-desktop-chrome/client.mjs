@@ -62,7 +62,18 @@ window.__ModuleLoader__.load({
 [data-dsh-frame]:not([data-sidebar-collapsed]) [class*="footArea"] { flex-direction: row !important; gap: 8px !important; }
 [data-dsh-frame]:not([data-sidebar-collapsed]) button[aria-label="导入会话"] { order: 19 !important; flex: 0 1 auto !important; min-width: 0 !important; }
 [data-dsh-frame]:not([data-sidebar-collapsed]) [class*="footerActions"] > [data-slot="sidebar.footer.action"] > div:not([class]) { order: 20 !important; flex: 0 1 auto !important; min-width: 0 !important; }
-[data-dsh-frame]:not([data-sidebar-collapsed]) .usg_layer:not(.usg_rail) { margin-left: 0 !important; margin-right: 0 !important; width: 100% !important; }
+[data-dsh-frame]:not([data-sidebar-collapsed]) .usg_layer:not(.usg_rail) { margin: 0 !important; width: 100% !important; }
+/* 2026-10-02: even vertical rhythm across the three footer rows — the usage
+ * row's leftover margin-top:2px (line below re-asserts it) and the settings
+ * block's own margins made the row gaps 4px/8px+; zero the child margins and
+ * let footArea's uniform 8px gap do all the spacing. */
+[data-dsh-frame]:not([data-sidebar-collapsed]) [class*="settingsArea"] { margin: 0 !important; }
+[data-dsh-frame]:not([data-sidebar-collapsed]) [class*="settingsArea"] [class*="triggerRow"] { margin: 0 !important; }
+/* 2026-10-02: 用量第一行（用量环+百分比+重置时刻）被 usage 插件按整行两端
+ * 对齐铺开，48% 贴左缘、重置时刻被推到最右，中间空一大段——改为靠左排 +
+ * 固定 6px 间距；子元素 margin-left:auto 的推右手法一并中和。 */
+[data-dsh-frame]:not([data-sidebar-collapsed]) #dshc-usage .dshc-row { justify-content: flex-start !important; gap: 6px !important; }
+[data-dsh-frame]:not([data-sidebar-collapsed]) #dshc-usage .dshc-row > * { margin-left: 0 !important; }
 .usg_layer:not(.usg_rail) { height: 36px; flex: 1 1 100%; min-width: 0; margin: 2px 0 0 6px; }
 /* dsh-chat-import's sidebar trigger ships width:100% inline — shrink it to
  * its content so it stops evicting every other footer entry */
