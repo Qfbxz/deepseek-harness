@@ -188,7 +188,6 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 
 		const WIDGET_ID = "dshc-usage";
 		const REFRESH_MS = 30 * 1000;
-		let widgetFirstFetchDone = false;
 
 		function fmtCompact(n) {
 			if (!Number.isFinite(n)) return "—";
@@ -250,6 +249,34 @@ button[aria-label^="上下文已用"] svg { flex:none !important; }
 			} catch { return null; }
 		}
 
+		// patch 2026-10-02: 带超时的取数——冷启动慢源不再拖死整个徽章。
+		function fetchJsonT(path, ms) {
+			return Promise.race([
+				fetchJson(path),
+				new Promise((_, rej) => setTimeout(() => rej(new Error("timeout " + path)), ms)),
+			]);
+		}
+
+		// 徽章 account 取数：首次带 refresh=1 直取上游（10s 超时），失败/超时
+		// 立即回退服务端缓存再试一次——上游冷 TLS 只损失新鲜度，不损失显示。
+		let widgetFirstFetchDone = false;
+		async function fetchWidgetAccount(target) {
+			if (target === null) return null;
+			const force = !widgetFirstFetchDone ? "&refresh=1" : "";
+			widgetFirstFetchDone = true;
+			try {
+				const res = await fetchJsonT("/api/usage-stats/account?provider=" + encodeURIComponent(target) + force, 10000);
+				if (res.ok === true) return res.account;
+			} catch { }
+			if (force !== "") {
+				try {
+					const res = await fetchJsonT("/api/usage-stats/account?provider=" + encodeURIComponent(target), 5000);
+					if (res.ok === true) return res.account;
+				} catch { }
+			}
+			return null;
+		}
+
 // PATCH: today tokens from usage-pro (event-captured, accurate); legacy fallback.
 async function fetchProTodayTokens() {
   try {
@@ -262,42 +289,29 @@ async function fetchProTodayTokens() {
   return null;
 }
 
-async function buildRows() {
-			// PATCH 2026-08-22(e): frostfin 会话 —— 徽章直接显示 kimi 配额窗口,不走 token 账本。
-			// 字段对齐 frostfin parseKimiUsage: {id:'fiveHour'|'week'|'month', percent, limit, remaining?, resetsAt?}。
-			const frostfin = await fetchFrostfinStatus();
-			if (frostfin !== null && Array.isArray(frostfin.balance) && frostfin.balance.length > 0) {
-				const row1q = [];
-				const labelOf = (id) => id === 'fiveHour' ? '5h 窗口' : id === 'week' ? '周配额' : id === 'month' ? '月配额' : String(id);
-				for (const w of frostfin.balance) {
-					if (!Number.isFinite(w.percent)) continue;
-					const uc = w.percent >= 95 ? '#e85443' : w.percent >= 80 ? '#e8a543' : '#7fb2e5';
-					const tip = 'Kimi ' + labelOf(w.id) + (w.resetsAt ? '，重置于 ' + fmtReset(w.resetsAt) : '');
-					row1q.push('<span class="dshc-cell" title="' + tip + '">' + ringSvg(w.percent, uc) + w.percent.toFixed(0) + '%</span>');
-				}
-				const model = frostfin.model !== undefined && frostfin.model !== '' ? String(frostfin.model) : 'kimi';
-				return { row1: row1q.join(''), row2: 'Kimi · ' + model };
-			}
+async function buildRowsShared() {
+			// patch 2026-10-02: 冷启动治理——共享取数一次、两行各自渲染。
+			// providers 走 /dash-api（board 富化，models 表非空；rc.2 官方路由
+			// models 恒空，裸模型名永远反查不到供应商——row1 空白的根因），
+			// 失败回退官方路由。全部带超时：慢源降级留 "…"，30s 周期重试补齐。
+			const frostfin = await fetchFrostfinStatus().catch(() => null);
+			const [usageRes, rollup, providersDash] = await Promise.all([
+				fetchJsonT("/api/usage-stats/usage", 15000).catch(() => null),
+				fetchJsonT("/dash-api/usage?range=today", 10000).catch(() => null),
+				fetchJsonT("/dash-api/providers", 8000).catch(() => null),
+			]);
+			let providersRes = providersDash && providersDash.ok === true ? providersDash : null;
+			if (providersRes === null) providersRes = await fetchJsonT("/api/usage-stats/providers", 8000).catch(() => ({ ok: false, providers: [] }));
+			if (usageRes === null || usageRes.ok !== true) usageRes = { ok: false, days: [] };
 
 			const modelName = currentModelName();
-			const [usageRes, providersRes, todayRollup] = await Promise.all([
-				fetchJson("/api/usage-stats/usage"),
-				fetchJson("/api/usage-stats/providers"),
-				// 2026-08-22 命中率统一源：与看板曲线/三环同走 rollup 账本（今日桶聚合，同公式同阈值）
-				fetchJson("/dash-api/usage?range=today").catch(() => null),
-			]);
-			if (usageRes.ok !== true) throw new Error("usage route");
-			const now = new Date(); const todayKey = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0"); // PATCH: local-day key (UTC key showed YESTERDAY 00:00-08:00 CST)
+			const now = new Date(); const todayKey = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + String(now.getDate()).padStart(2, "0");
 			const days = usageRes.days ?? [];
 			const day = days.find((d) => d.date === todayKey) ?? null;
-			// Days arrive oldest-first; the most recent day resolves the current
-			// model's provider when today has no usage yet.
 			const recent = day ?? days[days.length - 1] ?? null;
 
 			// Current model only: match the display name against the per-model ids
-			// ("<provider>/<model>") recorded in the usage log. A brand-new model
-			// (no history yet) falls back to its family — "glm-5.3" → any "glm-*"
-			// — to still resolve the provider.
+			// recorded in the usage log; a brand-new model falls back to family.
 			const family = modelName !== null ? modelName.split("-")[0] : null;
 			const findEntry = (d, allowFamily) => {
 				if (d === null || modelName === null) return null;
@@ -310,46 +324,34 @@ async function buildRows() {
 			};
 			const entry = findEntry(day, true) ?? findEntry(recent, true);
 
-			// 2026-08-22 修复：rc.8 usage 是裸模型名（无 provider/ 前缀），
-			// 旧 split("/")[0] 解析出 "glm-5.3" 这种假 providerId 永远匹配
-			// 不上 providers 列表；且 target/account 此前从未声明——ESM 严格
-			//模式下赋值即 ReferenceError，buildRows 整体抛出，row1/row2 全灭
-			//（用量按钮只剩图标/占位的根因）。映射改走 providers[].models
-			// 权威表：精确等值 → 家族前缀命中 id/displayName → 家族前缀命中
-			// models[]（与 usage-all 侧同链）。解析失败 target=null → row1 走
-			// 空账户分支，row2 用当日总和。
+			// 供应商解析：models 权威表 → 账本 entry 前缀 → 家族。rc.2 usage 是
+			// 裸模型名（无 provider/ 前缀），entry 前缀只在带前缀账本生效。
 			let target = null;
-			let account = null;
 			if (providersRes.ok === true) {
 				const providers = providersRes.providers ?? [];
-				// 2026-08-22：显示名带空格/变体后缀（"MiniMax M3 1M" vs id "MiniMax-M3"）
-				// ——家族按空格+连字符切首词，匹配两侧归一化（去空格/连字符/下划线）。
-				const norm = (s) => String(s).toLowerCase().replace(/[（(【\[][^）)】\]]*[）)】\]]/g, "").replace(/[\s_-]+/g, "");
+				const norm = (s2) => String(s2).toLowerCase().replace(/[（(【\[][^）)】\]]*[）)】\]]/g, "").replace(/[\s_-]+/g, "");
 				const family2 = modelName !== null ? modelName.split(/[\s-]+/)[0] : null;
 				const nameNorm = modelName !== null ? norm(modelName) : null;
+				const entryProvider = entry !== null && entry.model !== undefined ? String(entry.model).split("/")[0] : null;
 				const matched = (nameNorm !== null ? providers.find((p) => (p.models ?? []).some((m) => typeof m === "string" && norm(m) === nameNorm)) : undefined)
+					?? (entryProvider !== null ? providers.find((p) => { const pl = p.id.toLowerCase(); const el = entryProvider.toLowerCase(); return pl === el || el.startsWith(pl) || el.endsWith(pl) || pl.startsWith(el); }) : undefined)
 					?? (family2 !== null ? providers.find((p) => (p.id + " " + (p.displayName ?? "")).toLowerCase().includes(family2)) : undefined)
 					?? (family2 !== null ? providers.find((p) => (p.models ?? []).some((m) => typeof m === "string" && norm(m).startsWith(norm(family2)))) : undefined);
 				if (matched !== undefined) target = matched.id;
 			}
-			if (target !== null) {
-				// 2026-08-22 用户指令：配额等数据打开就更新——widget 每次页面加载的
-				// 首次拉取带 refresh=1 直取上游；后续 30s 周期刷新走服务端缓存。
-				const force = !widgetFirstFetchDone ? "&refresh=1" : "";
-				widgetFirstFetchDone = true;
-				const res = await fetchJson("/api/usage-stats/account?provider=" + encodeURIComponent(target) + force);
-				if (res.ok === true) account = res.account;
-			}
+			return { frostfin, rollup, providersRes, target, entry };
+		}
 
+		async function buildRow1(shared) {
+			// patch 2026-10-02 定稿：第一行 = 用量%环 + 重置时刻（订阅 plan）/
+			// 余额（balance plan）；命中率不上徽章（看板曲线仍是真源）。
+			const account = await fetchWidgetAccount(shared.target);
 			const row1 = [];
 			if (account !== null) {
 				let sessionWindow = (account.windows ?? []).find((w) => w.kind === "session") ?? null;
-				// PATCH 2026-08-21: minimax providers don't surface a session
-				// window in account.windows, but the model has a 5h rolling
-				// quota — derive a resetsAt so the user sees a real countdown
-				// instead of a missing cell. Anchor persists in localStorage
-				// so the window stays stable across reloads.
-				if (sessionWindow === null && providerId !== null && /minimax/i.test(providerId)) {
+				// minimix 模型无 session 窗口——按 5h 滚动锚点推一档 resetsAt，
+				// 免得倒计时整格消失。锚点存 localStorage 保持跨刷新稳定。
+				if (sessionWindow === null && shared.target !== null && /minimax/i.test(shared.target)) {
 					const fiveHourMs = 5 * 60 * 60 * 1000;
 					const last = Number(localStorage.getItem("dshc.minimax.lastReset"));
 					const anchor = Number.isFinite(last) ? last : Date.now();
@@ -358,52 +360,36 @@ async function buildRows() {
 					if (!Number.isFinite(last)) try { localStorage.setItem("dshc.minimax.lastReset", String(anchor)); } catch {}
 				}
 				if (sessionWindow !== null) {
-					// 2026-08-21 定稿 row1：用量%环 + 重置倒计时（订阅 plan）。
 					const usedPct = Number.isFinite(sessionWindow.usedPercent) ? sessionWindow.usedPercent : null;
 					if (usedPct !== null) {
 						const uc = usedPct >= 95 ? "#e85443" : usedPct >= 80 ? "#e8a543" : "#7fb2e5";
 						row1.push('<span class="dshc-cell" title="5h 窗口用量">' + ringSvg(usedPct, uc) + usedPct.toFixed(0) + "%" + '</span>');
 					}
-					// 2026-08-22 定稿：徽章重置显示具体时刻（HH:mm），倒计时只保留在模型行三环的第二环
 					const resetDate = sessionWindow.resetsAt ? new Date(sessionWindow.resetsAt) : null;
 					const rt = resetDate !== null && !Number.isNaN(resetDate.getTime()) ? String(resetDate.getHours()).padStart(2, "0") + ":" + String(resetDate.getMinutes()).padStart(2, "0") : "—";
 					row1.push('<span class="dshc-cell dshc-dim" title="窗口重置于 ' + rt + '">' + rt + '</span>');
 				}
-			}
-			// 命中率统一源：今日 rollup 桶聚合（与看板曲线/三环同公式同阈值）；样本不足同样隐藏，不回退旧端点。
-			// 2026-08-22 修复：此块原先嵌在 if(account!==null) 内部——账户解析失败时
-			// 命中率也跟着消失；移出为独立单元。
-			let hitRate = null;
-			if (todayRollup && Array.isArray(todayRollup.buckets)) {
-				let tIn = 0, tCr = 0, tCw = 0;
-				for (const bk of todayRollup.buckets) { tIn += bk.input || 0; tCr += bk.cacheRead || 0; tCw += bk.cacheWrite || 0; }
-				if (tIn + tCr + tCw >= 1000000) hitRate = (tCr / (tIn + tCr + tCw)) * 100;
-			}
-			if (hitRate !== null) {
-				row1.push('<span class="dshc-cell" title="缓存命中率">' + ringSvg(hitRate, "#7fb2e5") + Math.round(hitRate) + "%</span>");
-			}
-			if (account !== null) {
+				// patch 2026-10-02: 计费余量格拔除——140px 徽章宽下被挤成 0 宽（排版案），
+				// 第一行定稿=用量环+重置时刻两格；余量在弹层/看板仍是真源。
 				if (account.mode === "balance") {
 					const value = account.alert?.value;
 					if (Number.isFinite(value)) row1.push('<span class="dshc-cell" title="余额">¥' + value + "</span>");
-				} else {
-					const billing = (account.windows ?? []).find((w) => w.kind === "billing") ?? null;
-					if (billing !== null && Number.isFinite(billing.remaining)) {
-						row1.push('<span class="dshc-cell dshc-dim" title="计费周期余量">' + fmtCompact(billing.remaining) + "</span>");
-					}
 				}
 			}
-			// 2026-08-22 用户重申定稿 row2：**当前供应商各模型的今日 token 总和 +
-			// 该供应商费用**——不是全供应商累计（全局数字切模型不变，看起来像
-			// 没刷新）。数据源：看板 meta.models（账本真相、带分模型峰谷费用）
-			// 按 providers[].models 归属过滤求和；供应商解析失败才回退全局。
+			return row1.join("");
+		}
+
+		async function buildRow2(shared) {
+			// 定稿 row2：当前供应商各模型的今日 token 总和 + 该供应商费用。
+			// 数据源：看板 meta.models（账本真相、带分模型峰谷费用）按
+			// providers[].models 归属过滤求和；供应商解析失败才回退全局。
 			let row2Tokens = null;
 			let row2Cost = null;
-			if (target !== null && providersRes.ok === true) {
-				const provModels = new Set((providersRes.providers ?? []).find((p) => p.id === target)?.models?.map((m) => String(m).toLowerCase()) ?? []);
-				if (provModels.size > 0 && todayRollup && Array.isArray(todayRollup.meta?.models)) {
+			if (shared.target !== null && shared.providersRes.ok === true) {
+				const provModels = new Set((shared.providersRes.providers ?? []).find((p) => p.id === shared.target)?.models?.map((m) => String(m).toLowerCase()) ?? []);
+				if (provModels.size > 0 && shared.rollup && Array.isArray(shared.rollup.meta?.models)) {
 					let t = 0, c = 0;
-					for (const m of todayRollup.meta.models) {
+					for (const m of shared.rollup.meta.models) {
 						if (!provModels.has(String(m.id).toLowerCase())) continue;
 						t += (m.input || 0) + (m.output || 0) + (m.cache || 0);
 						c += m.cost || 0;
@@ -413,14 +399,14 @@ async function buildRows() {
 				}
 			}
 			if (row2Tokens === null) {
-				row2Tokens = await fetchProTodayTokens() ?? (entry !== null ? entry.tokens : null);
+				row2Tokens = await fetchProTodayTokens() ?? (shared.entry !== null ? shared.entry.tokens : null);
 				try {
-					const cr = await fetchJson("/dash-api/today-cost");
+					const cr = await fetchJsonT("/dash-api/today-cost", 5000).catch(() => null);
 					if (cr?.ok === true && Number.isFinite(cr.cost)) row2Cost = cr.cost;
 				} catch { }
 			}
-			const row2 = '今日 ' + (row2Tokens !== null && row2Tokens > 0 ? fmtCompact(row2Tokens) : "—") + (Number.isFinite(row2Cost) && row2Cost > 0 ? " · ¥" + Math.round(row2Cost) : "");
-			return { row1: row1.join(""), row2 };
+			if (row2Tokens === null && !Number.isFinite(row2Cost)) return null;
+			return '今日 ' + (row2Tokens !== null && row2Tokens > 0 ? fmtCompact(row2Tokens) : "—") + (Number.isFinite(row2Cost) && row2Cost > 0 ? " · ¥" + Math.round(row2Cost) : "");
 		}
 
 		/** Wrap each day bar in a fixed 36px track: the plugin sizes bars by an
@@ -1188,14 +1174,36 @@ async function buildRows() {
 		let refreshInFlight = false;
 		let refreshQueued = false;
 		let lastModel = null;
+		// patch 2026-10-02: 渐进渲染——两行各自独立落格，任一慢源只拖住自己的行。
+		function renderWidgetRow(sel, html) {
+			const widget = document.getElementById(WIDGET_ID);
+			if (widget === null) return;
+			const row = widget.querySelector(sel);
+			if (row !== null && row.innerHTML !== html) row.innerHTML = html;
+		}
 		async function refreshWidget() {
 			if (refreshInFlight) { refreshQueued = true; return; }
 			refreshInFlight = true;
 			try {
-				const rows = await buildRows();
-				const widget = document.getElementById(WIDGET_ID);
-				if (widget !== null) {
-					widget.innerHTML = '<div class="dshc-row">' + rows.row1 + '</div><div class="dshc-row2">' + rows.row2 + "</div>";
+				const shared = await buildRowsShared();
+				const f = shared.frostfin;
+				if (f !== null && Array.isArray(f.balance) && f.balance.length > 0) {
+					// kimi 会话：配额窗口直显，不走 token 账本。
+					const row1q = [];
+					const labelOf = (id) => id === 'fiveHour' ? '5h 窗口' : id === 'week' ? '周配额' : id === 'month' ? '月配额' : String(id);
+					for (const w of f.balance) {
+						if (!Number.isFinite(w.percent)) continue;
+						const uc = w.percent >= 95 ? '#e85443' : w.percent >= 80 ? '#e8a543' : '#7fb2e5';
+						const tip = 'Kimi ' + labelOf(w.id) + (w.resetsAt ? '，重置于 ' + fmtReset(w.resetsAt) : '');
+						row1q.push('<span class="dshc-cell" title="' + tip + '">' + ringSvg(w.percent, uc) + w.percent.toFixed(0) + '%</span>');
+					}
+					renderWidgetRow('.dshc-row', row1q.join(""));
+					renderWidgetRow('.dshc-row2', 'Kimi · ' + (f.model !== undefined && f.model !== '' ? String(f.model) : 'kimi'));
+				} else {
+					const ph = '<span class="dshc-dim" title="配额载入中…">…</span>';
+					const p1 = buildRow1(shared).then((html) => renderWidgetRow('.dshc-row', html !== "" ? html : ph)).catch(() => {});
+					const p2 = buildRow2(shared).then((html) => { if (html !== null) renderWidgetRow('.dshc-row2', html); }).catch(() => {});
+					await Promise.allSettled([p1, p2]);
 				}
 			} catch { /* keep the previous render */ }
 			finally {
@@ -1210,6 +1218,16 @@ async function buildRows() {
 			// Electron 桌面壳标记：body-scroll-guard v4 的豁免条件（UA 检测打类，
 			// 替代已消失的 retroTitlebar 元素）。
 			if (/Electron/i.test(navigator.userAgent)) document.documentElement.classList.add("dshc-electron");
+			// patch 2026-10-02: 侧栏死亡取证——未捕获异常栈落 localStorage，
+			// 复发时读取 dshc.lastErr* 即得真凶（React insertBefore 类死亡无现场栈）。
+			try {
+				window.addEventListener("error", function (ev) {
+					try { localStorage.setItem("dshc.lastErr", new Date().toISOString() + " " + String(ev.message).slice(0, 200) + " @ " + String(ev.filename).slice(-60) + ":" + ev.lineno); } catch {}
+				});
+				window.addEventListener("unhandledrejection", function (ev) {
+					try { localStorage.setItem("dshc.lastRej", new Date().toISOString() + " " + String(ev.reason && (ev.reason.stack || ev.reason.message) || ev.reason).slice(0, 400)); } catch {}
+				});
+			} catch {}
 			// One-time migration: better-sidebar's old default width (360) was
 			// wider than the official left sidebar; the new default floors at 280.
 			try {
