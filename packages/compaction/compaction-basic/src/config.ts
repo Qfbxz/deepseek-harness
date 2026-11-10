@@ -22,6 +22,9 @@ const DEFAULT_THRESHOLD_RATIO = 0.8
 /** Default verbatim-tail fraction for every routed model. */
 const DEFAULT_RETAIN_RATIO = 0.16
 
+/** Default failed-attempt streak that disables automatic compaction for a session. */
+const DEFAULT_MAX_CONSECUTIVE_FAILURES = 3
+
 /** Fields shared by top-level defaults and exact-target overrides. */
 const POLICY_CONFIG_KEYS = [
   'thresholdRatio',
@@ -38,6 +41,7 @@ const POLICY_CONFIG_KEYS = [
 const BASIC_COMPACT_CONFIG_KEYS: ReadonlySet<string> = new Set([
   ...POLICY_CONFIG_KEYS,
   'modelPolicies',
+  'maxConsecutiveFailures',
   'auto',
 ])
 
@@ -70,6 +74,12 @@ export function resolveConfig(config: BasicCompactionConfig = {}): ResolvedConfi
   if (config.auto !== undefined && typeof config.auto !== 'boolean') {
     throw new Error('BasicCompactionConfig: auto must be a boolean')
   }
+  if (config.maxConsecutiveFailures !== undefined) {
+    assertNonNegativeInteger(
+      'BasicCompactionConfig.maxConsecutiveFailures',
+      config.maxConsecutiveFailures,
+    )
+  }
 
   const thresholdRatio = config.thresholdRatio ?? DEFAULT_THRESHOLD_RATIO
   const retention = resolveRetention(config, { retainRatio: DEFAULT_RETAIN_RATIO })
@@ -91,6 +101,7 @@ export function resolveConfig(config: BasicCompactionConfig = {}): ResolvedConfi
     maxTokens: config.maxTokens ?? 8192,
     compactionRetries: config.compactionRetries ?? 1,
     maxOverflowRetries: config.maxOverflowRetries ?? 1,
+    maxConsecutiveFailures: config.maxConsecutiveFailures ?? DEFAULT_MAX_CONSECUTIVE_FAILURES,
     modelPolicies,
     auto: config.auto ?? true,
   })

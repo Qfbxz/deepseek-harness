@@ -38,6 +38,16 @@ export interface ModelCompactPolicyConfig extends CompactionPolicyConfig {
 export interface BasicCompactionConfig extends CompactionPolicyConfig {
   /** Exact provider/model overrides; duplicate targets fail plugin load. */
   modelPolicies?: ModelCompactPolicyConfig[]
+  /**
+   * Consecutive failed automatic compaction attempts after which automatic
+   * compaction stops for that session and the last failure is surfaced as an
+   * error (default `3`; `0` disables the breaker, so automatic compaction is
+   * attempted on every trigger regardless of earlier failures). Any successful
+   * compaction transaction on the session — including a manual `compactNow()` —
+   * clears the count and re-enables automatic compaction. Must be a
+   * non-negative integer; other values fail plugin load.
+   */
+  maxConsecutiveFailures?: number
   /** Enable automatic step-boundary pressure and overflow-recovery listeners. Defaults to `true`. */
   auto?: boolean
 }
@@ -60,6 +70,8 @@ interface ResolvedPolicyFields {
 /** Validated immutable config whose target-specific defaults remain unresolved. */
 export type ResolvedConfig = ResolvedPolicyFields & ResolvedRetention & {
   readonly modelPolicies: readonly Readonly<ModelCompactPolicyConfig>[]
+  /** Failure-streak limit of the automatic-compaction breaker; `0` disables it. */
+  readonly maxConsecutiveFailures: number
   readonly auto: boolean
 }
 

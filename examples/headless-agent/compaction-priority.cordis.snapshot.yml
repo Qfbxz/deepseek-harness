@@ -1,0 +1,34 @@
+# WP4 summarizer retention-priority replay: one automatic pressure compaction
+# succeeds, and the scripted summary echoes fragments of the live compaction
+# instruction back through `{{fromRequest:…}}` placeholders, so the recorded
+# checkpoint proves the assembled summarizer request carried the retention
+# priority ranking and its MUST KEEP / MERGE / REMOVE directives. Includes
+# cordis.yml directly, restates the compaction-basic row with a small routed
+# window so step-boundary pressure fires from the first request envelope, and
+# disables the key-requiring DeepSeek adapter in favor of the replay catalog.
+# `compactionRetries: 0` keeps one summary call per pressure attempt so the
+# replay script stays aligned when the request envelope alone holds pressure.
+- id: base
+  name: '@deepseek-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+    patches:
+      - id: llm-deepseek
+        name: '@deepseek-ai/dsh-llm-deepseek'
+        disabled: true
+      - id: compaction-basic
+        name: '@deepseek-ai/dsh-compaction-basic'
+        config:
+          thresholdRatio: 0.99
+          retainTokens: 20
+          maxTokens: 64
+          compactionRetries: 0
+      - insert:
+          - id: llm-replay
+            name: '@deepseek-ai/dsh-llm-replay'
+            config:
+              providers:
+                - id: deepseek-official
+                  models:
+                    - id: deepseek-v4-flash
+                      contextWindow: 400

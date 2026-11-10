@@ -1,0 +1,181 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_breaker_1",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP4 compaction failure breaker\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_breaker_1",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP4 compaction failure breaker\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "throw",
+    "chunks": [],
+    "message": "snapshot summarizer outage",
+    "code": "PROVIDER_DOWN"
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_breaker_2",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP4 compaction failure breaker\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_breaker_2",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP4 compaction failure breaker\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "throw",
+    "chunks": [],
+    "message": "snapshot summarizer outage",
+    "code": "PROVIDER_DOWN"
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_breaker_3",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP4 compaction failure breaker\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_breaker_3",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP4 compaction failure breaker\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "throw",
+    "chunks": [],
+    "message": "snapshot summarizer outage",
+    "code": "PROVIDER_DOWN"
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_breaker_4",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP4 compaction failure breaker\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_breaker_4",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP4 compaction failure breaker\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "text"
+      },
+      {
+        "type": "text-delta",
+        "index": 0,
+        "text": "BREAKER_STOPPED: automatic compaction failed three consecutive times and the breaker stopped further attempts, yet this turn completed normally."
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "text",
+          "text": "BREAKER_STOPPED: automatic compaction failed three consecutive times and the breaker stopped further attempts, yet this turn completed normally."
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "stop"
+        }
+      }
+    ]
+  }
+]

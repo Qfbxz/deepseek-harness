@@ -15,8 +15,9 @@
 - **不依赖模型的剪枝**：在压力或规范溢出符合条件后，可选的 [`ctx.toolResultPruner`](../compaction-tool-result-pruner/README.md) 服务会在选择范围之前改写超大工具结果。Compact-basic 通过 `ctx.tokenMeter` 重新测量；如果压力已回到安全范围，就跳过摘要，否则对已剪枝的表层进行摘要。低于压力的步骤检查绝不剪枝。
 - **保留**：压缩最旧的完整表层单元，同时保留近期尾部，并通过 [`dsh-compaction` 边界 helper](../compaction/README.md#tool-pairing-boundaries) 将切分点调整到工具调用／结果配对平衡的位置。轮次边界不会保护失控轮次内的旧步骤。尚未闭合且不可分的尾部会在闭合前拒绝压缩。当闭合的超大工具单元以文本型结果为可移除主体时，可选 pruner 可以修复它；不可分的非工具单元与不可剪枝的工具剩余部分不在范围内。
 - **收敛**：最多按 `compactionRetries` 重试头部检查点压缩；拒绝不能缩小源内容的摘要，如果重试仍无法回到阈值以下，则抛出异常。
-- **摘要**：直接 `llm/stream` 调用使用已配置的提供方／模型对与上限，回退到最新已记录请求目标，然后再回退到 agent（智能体）目标，而不运行仅用于 agent loop 的 `agent/request` 扩展点。该调用会逐字回放会话自身的系统提示词、工具与已遮蔽区域消息（包括图片引用），并将压缩指令作为最后一条 user 消息追加，从而复用提供方的热前缀 cache，而非使它失效。所选适配器必须解析或明确拒绝这些图片。它将 `GenerateOptions.purpose` 设为 `compaction`，适配器可将其作为请求归因转发（DeepSeek 适配器发送 `x-deepseek-harness-compact: 1`），但不会触碰模型可见的请求体。只有返回的文本会进入检查点；推理（reasoning）和工具调用都会被排除，以免泄露私有推理或产生遗留调用；图片输出会以 `UNSUPPORTED_CONTENT` 失败，而不是消失。
+- **摘要**：直接 `llm/stream` 调用使用已配置的提供方／模型对与上限，回退到最新已记录请求目标，然后再回退到 agent（智能体）目标，而不运行仅用于 agent loop 的 `agent/request` 扩展点。该调用会逐字回放会话自身的系统提示词、工具与已遮蔽区域消息（包括图片引用），并将压缩指令作为最后一条 user 消息追加，从而复用提供方的热前缀 cache，而非使它失效。该指令给出保留优先级排序——当前任务状态，其次错误与解法，其次文件与代码，其次用户消息，最后更早历史——并为每个检查点小节附上按该排序缩减用的 MUST KEEP／MERGE／REMOVE 指令。所选适配器必须解析或明确拒绝这些图片。它将 `GenerateOptions.purpose` 设为 `compaction`，适配器可将其作为请求归因转发（DeepSeek 适配器发送 `x-deepseek-harness-compact: 1`），但不会触碰模型可见的请求体。只有返回的文本会进入检查点；推理（reasoning）和工具调用都会被排除，以免泄露私有推理或产生遗留调用；图片输出会以 `UNSUPPORTED_CONTENT` 失败，而不是消失。
 - **框定**：替换 user 消息使用 `<compacted-summary>` 标签标记已建立的检查点上下文。原始摘要保留在 `compaction/summary` 事件上，后续自动周期会合并之前的检查点。
+- **失败熔断**：自动入口（`compactIfNeeded`，同时服务步骤压力与溢出恢复两条 listener 路径）按会话统计连续失败的尝试。第 N 次失败（达到 `maxConsecutiveFailures`）时，记录一条点名熔断器、次数、恢复路径与最后一次失败的错误日志；此后该会话的每次自动尝试都直接返回 `null`，不再发起尝试；会话保持可用，用户输入继续放行。目标配置错误与取消信号已获胜的失败不计入统计。该会话上任何一次成功的压缩事务——包括手动 `compactNow()`——都会清零计数并重新启用自动压缩。`maxConsecutiveFailures: 0` 完全关闭熔断。手动压缩从不经过熔断闸门：它始终尝试，且只有其成功才会触碰计数。
 - **生命周期**：所有入口点共享一个先记录标记的区域事务。它会验证范围与活动锁，同步追加 `compaction/start`，准备并等待摘要，重新验证，再追加 `compaction/summary` 和替换，最后恰好进行一次闭合尝试。自动调用和显式范围调用要求数字标识的开放轮次归属，并要求整个表层保持稳定；串行 `agent/pre-step` listener 会在派生请求之前检查压力，而规范提供方溢出则经由 `agent/request-error` 进入，并且只在表层取得持久进展后才允许重试。`compactNow()` 会预留空闲接纳，使用 `turn: null`，允许所选 span 之外追加仅追加上下文，flush 每次已闭合尝试，并在 `finally` 中释放接纳预留。
 - **溢出恢复**：提供方已确认的溢出不需容量元数据。它会绕过常规压力与保留，执行剪枝，再尝试一次最大平衡头部缩减，并留下最新不可分单元。只要 `surface.replaceGeneration` 前进，就允许重试，包括剪枝在后续摘要工作抛出异常前已落地的情况。如果没有替换、目标特定上限已耗尽、已取消，或遇到未知／非规范错误，则保留原始提供方失败。
 - **失败处理**：活动的未匹配 `compaction/start` 是持久锁。位于较新 `session/end-seed` 之前的未匹配标记，是先前生命周期留下的陈旧证据，不会阻塞；位于该边界之后的标记报告 `busy`。摘要和 span 变更失败会以错误闭合，并保持会话表层不变，但日志中仍保留该尝试。闭合失败会有意留下阻塞性的未匹配标记。压力检查中的运行故障会发出警告并继续；只有此前没有替换推进表层时，溢出恢复失败才保留原始提供方错误。完成清理与持久化后，取消仍具有最终决定权。
@@ -37,6 +38,7 @@
 | `maxTokens` | 否（默认 `8192`） | 摘要调用的提供方生成上限；可包含推理 token。 |
 | `compactionRetries` | 否（默认 `1`） | 压力仍高于阈值时，在首次尝试后进行的额外尝试次数。 |
 | `maxOverflowRetries` | 否（默认 `1`） | 规范上下文窗口溢出后的最大重试次数；`0` 只禁用恢复。 |
+| `maxConsecutiveFailures` | 否（默认 `3`） | 连续失败的自动尝试达到该值后，该会话的自动压缩停止，直到一次压缩成功；`0` 关闭熔断。 |
 | `modelPolicies` | 否（默认 `[]`） | 精确的 `{ provider, model, ...partialPolicy }` 覆盖；匹配使用两个字段，不依赖 `listModels()`。 |
 | `auto` | 否（默认 `true`） | 注册步骤边界压力与溢出恢复 listener。设为 `false` 则仅手动执行。 |
 
@@ -113,35 +115,51 @@ This is an automatically generated checkpoint condensing an earlier span of the 
 ```markdown
 You are now acting as a compaction engine for this AI coding assistant. Condense the conversation ABOVE into a structured checkpoint that lets another model resume the work with no loss of essential context.
 
+Retention priority: when the summary must shrink, keep higher-ranked content in preference to lower-ranked content:
+1. Current task state — ## Current Work, ## Next Step, ## Pending Jobs
+2. Errors and fixes — ## Errors and Fixes
+3. Files and code — ## Files and Code, ## Key Technical Concepts
+4. User messages — the original request and every correction in ## Primary Request and Intent
+5. Earlier history — ## Critical Context and older background
+
 Output EXACTLY the Markdown structure below: keep every section, in order. Use terse bullets, not prose paragraphs. Write "(none)" for an empty section — never drop a section.
 
 ## Primary Request and Intent
 - [the user's original and evolving goals; quote verbatim where the exact wording matters]
+- MUST KEEP: the original request and every later correction, verbatim. MERGE: evolved restatements into one intent line. REMOVE: superseded phrasing first, never the current intent.
 
 ## Key Technical Concepts
 - [technologies, frameworks, patterns, and conventions in play]
+- MUST KEEP: concepts the remaining work depends on. MERGE: near-duplicates into one bullet. REMOVE: concepts tied only to completed, resolved work.
 
 ## Files and Code
 - [exact path: why it matters, key changes or snippets]
+- MUST KEEP: exact paths the task still touches, with their key changes. MERGE: repeated edits of one file into one bullet. REMOVE: files whose work is finished and verified.
 
 ## Errors and Fixes
 - [error: how it was resolved, plus any related user feedback]
+- MUST KEEP: unresolved errors and likely-to-recur failures, with their fixes. MERGE: repeats of one failure into its latest form. REMOVE: one-off errors that are fixed and cannot recur.
 
 ## Pending Jobs
 - [explicitly requested work not yet completed]
+- MUST KEEP: every explicitly requested, unfinished job. MERGE: none. REMOVE: only jobs the user cancelled or marked complete.
 
 ## Current Work
 - [precisely what was in progress at this checkpoint]
+- MUST KEEP: exactly what was in progress at this checkpoint; this is the highest-priority section. MERGE: none. REMOVE: nothing.
 
 ## Next Step
 - [the single next action, directly in line with the most recent request, or "(none)"]
+- MUST KEEP: the single next action and the request it serves. MERGE: none. REMOVE: nothing.
 
 ## Critical Context
 - [decisions and their rationale, constraints, user preferences, open questions, data needed to continue]
+- MUST KEEP: decisions, constraints, preferences, and data still needed. MERGE: overlapping bullets. REMOVE: context already captured by a higher-priority section.
 
 Rules:
 - Write concise English engineering prose. Preserve exact file paths, commands, error strings, identifiers, numeric values, function signatures, and syntax fragments.
 - Capture user feedback and explicit instructions faithfully, especially corrections.
+- Apply the retention priority and the per-section MUST KEEP / MERGE / REMOVE rules whenever space runs short: never drop higher-ranked content to preserve lower-ranked content.
 - Do NOT mention this summarization request or that the context was compacted.
 - Output only the checkpoint text: do not call any tool or take any other action.
 - If the conversation already contains a <compacted-summary> block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.
@@ -161,4 +179,4 @@ Rules:
 - **溢出分类由适配器维护**：提供方措辞可能改变；两个 DeepSeek 适配器将当前可识别的上下文限制失败规范化为 `CONTEXT_WINDOW_EXCEEDED`。
 - **部分不可分单元与仅 envelope 溢出仍不在表层压缩范围内**：恢复无法缩减系统／工具／前缀、拆分不可分的非工具节点，或修复不可剪枝剩余部分仍超出窗口的工具单元。可选 pruner 可以缩减原本不可分工具对内的文本型工具结果主体。
 - **`compactRegion` 要求存在未结束的轮次**：在完全关闭的会话上手动调用会抛出异常（「no open turn」），而不是执行压缩。
-- **摘要失败会保留最新持久表层**：任何替换前，自动路径会记录警告，并携带完整超预算历史继续。如果剪枝已落地，后续摘要失败会从该持久剪枝表层继续。因达到 `maxTokens` 而发生的摘要截断（隐藏推理 token 可能会耗尽该额度）遵循同一规则。
+- **摘要失败会保留最新持久表层**：任何替换前，自动路径会记录警告，并携带完整超预算历史继续；连续失败达到 `maxConsecutiveFailures` 后，熔断会以一条错误日志停止后续自动尝试，而不是在每一步继续重试。如果剪枝已落地，后续摘要失败会从该持久剪枝表层继续。因达到 `maxTokens` 而发生的摘要截断（隐藏推理 token 可能会耗尽该额度）遵循同一规则。

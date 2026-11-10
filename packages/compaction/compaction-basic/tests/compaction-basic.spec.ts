@@ -280,8 +280,9 @@ async function compactIfNeeded(
   session: Session,
   trigger: 'pressure' | 'context-overflow' = 'pressure',
   model: string | undefined = MODEL,
+  signal: AbortSignal = SIGNAL,
 ): Promise<CompactionResult | null> {
-  return compact.compactIfNeeded(agent(session, model), trigger, SIGNAL)
+  return compact.compactIfNeeded(agent(session, model), trigger, signal)
 }
 
 describe('compact configuration and defaults', () => {
@@ -296,6 +297,7 @@ describe('compact configuration and defaults', () => {
       maxTokens: 8192,
       compactionRetries: 1,
       maxOverflowRetries: 1,
+      maxConsecutiveFailures: 3,
       modelPolicies: [],
       auto: true,
     })
@@ -415,6 +417,9 @@ describe('compact configuration and defaults', () => {
       [{ maxTokens: 0 }, /maxTokens/],
       [{ compactionRetries: -1 }, /compactionRetries/],
       [{ maxOverflowRetries: -1 }, /maxOverflowRetries/],
+      [{ maxConsecutiveFailures: -1 }, /maxConsecutiveFailures/],
+      [{ maxConsecutiveFailures: 1.5 }, /maxConsecutiveFailures/],
+      [{ maxConsecutiveFailures: '3' }, /maxConsecutiveFailures/],
       [{ auto: 'yes' }, /auto must be a boolean/],
       [{ summarizationProvider: 1 }, /summarizationProvider must be a string/],
       [{ summarizationModel: 1 }, /summarizationModel must be a string/],
@@ -1255,6 +1260,15 @@ describe('default one-shot summarizer', () => {
     expect(lastText).toContain('## Primary Request and Intent')
   })
 
+  it('pins the full compaction instruction with its retention priority and keep directives', async () => {
+    const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
+    await compact.runSummarize(promptInput('history'), agent(conversation(1), MODEL))
+    const instruction = adapter.lastOptions?.messages.at(-1)?.content[0]
+    expect(instruction?.type === 'text' ? instruction.text : '').toMatchFileSnapshot(
+      './snapshots/compaction-instruction.snapshot.txt',
+    )
+  })
+
   it('applies the routed model policy without changing the replayed prefix', async () => {
     const { ctx, compact } = await summarizerHarness(
       [{ type: 'text', text: 'unused default summary' }],
@@ -1876,5 +1890,258 @@ describe('automatic listener and loader composition', () => {
     await preStep(ctx, agent(session, MODEL))
     expect(session.events.some(event => event.type === 'compaction/start')).toBe(false)
     expect(await recover(ctx, agent(session, MODEL), overflow())).toBe(false)
+  })
+
+  it('breaker: pressure keeps flowing user input while attempts fail, then stops at the limit', async () => {
+    const ctx = createContext()
+    const errors: string[] = []
+    ctx.logger.error = ((message: string) => void errors.push(message)) as typeof ctx.logger.error
+    const compact = new TestCompactionEngine(ctx, {
+      thresholdRatio: 0.5,
+      retainTokens: 180,
+      maxConsecutiveFailures: 2,
+    })
+    compact.error = 'summarizer unavailable'
+    const session = conversation(4)
+
+    await expect(preStep(ctx, agent(session, MODEL))).resolves.toEqual({ kind: 'enter', messages: [] })
+    await expect(preStep(ctx, agent(session, MODEL))).resolves.toEqual({ kind: 'enter', messages: [] })
+    expect(session.events.filter(event => event.type === 'compaction/start')).toHaveLength(2)
+    expect(errors).toEqual([expect.stringContaining('compaction circuit breaker')])
+    expect(errors[0]).toContain('limit 2')
+    expect(errors[0]).toContain('summarizer unavailable')
+
+    await preStep(ctx, agent(session, MODEL))
+    expect(session.events.filter(event => event.type === 'compaction/start')).toHaveLength(2)
+    expect(compact.calls).toHaveLength(2)
+    expect(errors).toHaveLength(1)
+  })
+
+  it('breaker: counts overflow recovery toward the same streak and stops recovering', async () => {
+    const ctx = createContext()
+    const errors: string[] = []
+    ctx.logger.error = ((message: string) => void errors.push(message)) as typeof ctx.logger.error
+    const compact = new TestCompactionEngine(ctx, { maxConsecutiveFailures: 2 })
+    compact.error = new Error('summary unavailable')
+    const owner = agent(conversation(3), MODEL)
+
+    expect(await recover(ctx, owner, overflow('first overflow'))).toBe(false)
+    expect(await recover(ctx, owner, overflow('second overflow'))).toBe(false)
+    expect(compact.calls).toHaveLength(2)
+    expect(errors).toHaveLength(1)
+
+    expect(await recover(ctx, owner, overflow('third overflow'))).toBe(false)
+    expect(compact.calls).toHaveLength(2)
+    expect(errors).toHaveLength(1)
+    const generation = owner.session.surface.replaceGeneration
+    expect(generation).toBe(0)
+  })
+})
+
+describe('consecutive-failure breaker', () => {
+  function captureErrors(ctx: Context): string[] {
+    const errors: string[] = []
+    ctx.logger.error = ((message: string) => void errors.push(message)) as typeof ctx.logger.error
+    return errors
+  }
+
+  /** Closed turns followed by no open turn, so compactNow can claim idle admission. */
+  function closedConversation(turns = 3): Session {
+    const session = conversation(turns)
+    session.append('turn/end', { turn: turns + 1, reason: { kind: 'completed' } })
+    return session
+  }
+
+  /** A fake idle agent whose maintenance claim always succeeds. */
+  function idleAgent(session: Session): Agent {
+    return {
+      session,
+      options: { provider: MODEL, model: MODEL },
+      runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T> {
+        return task(new AbortController().signal)
+      },
+    } as unknown as Agent
+  }
+
+  /** Register the session store and detach its durability checkpoint. */
+  function withIdleStore(ctx: Context): void {
+    void new SessionStore(ctx)
+    vi.spyOn(ctx.sessions, 'flush').mockImplementation(() => Promise.resolve(false))
+  }
+
+  const failingConfig: BasicCompactionConfig = {
+    auto: false,
+    thresholdRatio: 0.5,
+    retainTokens: 0,
+  }
+
+  it('stops exactly at the Nth consecutive failure and surfaces the trip once', async () => {
+    const ctx = createContext()
+    const errors = captureErrors(ctx)
+    const compact = service({ ...failingConfig, maxConsecutiveFailures: 2 }, ctx)
+    compact.error = 'summarizer unavailable'
+    const session = conversation(4)
+
+    await expect(compactIfNeeded(compact, session)).rejects.toThrow('summarizer unavailable')
+    await expect(compactIfNeeded(compact, session)).rejects.toThrow('summarizer unavailable')
+    expect(compact.calls).toHaveLength(2)
+    expect(errors).toEqual([expect.stringContaining('compaction circuit breaker')])
+    expect(errors[0]).toContain('limit 2')
+    expect(errors[0]).toContain('summarizer unavailable')
+    expect(errors[0]).toContain('compactNow() still works')
+
+    await expect(compactIfNeeded(compact, session)).resolves.toBeNull()
+    expect(compact.calls).toHaveLength(2)
+    expect(errors).toHaveLength(1)
+  })
+
+  it('trips at the shipped default of 3 consecutive failures', async () => {
+    const ctx = createContext()
+    const errors = captureErrors(ctx)
+    const compact = service(failingConfig, ctx)
+    compact.error = 'summarizer unavailable'
+    const session = conversation(4)
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await expect(compactIfNeeded(compact, session)).rejects.toThrow('summarizer unavailable')
+    }
+    expect(compact.calls).toHaveLength(3)
+    expect(errors).toEqual([expect.stringContaining('limit 3')])
+
+    await expect(compactIfNeeded(compact, session)).resolves.toBeNull()
+    expect(compact.calls).toHaveLength(3)
+  })
+
+  it('clears the streak after a successful automatic compaction', async () => {
+    const ctx = createContext()
+    const errors = captureErrors(ctx)
+    const compact = service({ ...failingConfig, maxConsecutiveFailures: 1 }, ctx)
+    const session = conversation(4)
+
+    compact.error = 'transient'
+    await expect(compactIfNeeded(compact, session)).rejects.toThrow('transient')
+    await expect(compactIfNeeded(compact, session)).resolves.toBeNull()
+    expect(compact.calls).toHaveLength(1)
+    expect(errors).toEqual([expect.stringContaining('compaction circuit breaker')])
+
+    compact.error = undefined
+    const result = await compact.compactRegion(
+      session.surface.nodes[0]!,
+      session.surface.nodes[1]!,
+      agent(session, MODEL),
+      SIGNAL,
+    )
+    expect(result).not.toBeNull()
+    expect(await compactIfNeeded(compact, session)).not.toBeNull()
+    expect(compact.calls).toHaveLength(3)
+    expect(errors).toHaveLength(1)
+  })
+
+  it('manual compactNow bypasses the trip and its success re-enables automatic compaction', async () => {
+    const ctx = createContext()
+    withIdleStore(ctx)
+    const errors = captureErrors(ctx)
+    const compact = service({ ...failingConfig, maxConsecutiveFailures: 1 }, ctx)
+    const session = conversation(3)
+
+    compact.error = 'summarizer unavailable'
+    await expect(compactIfNeeded(compact, session)).rejects.toThrow('summarizer unavailable')
+    await expect(compactIfNeeded(compact, session)).resolves.toBeNull()
+    expect(errors).toEqual([expect.stringContaining('compaction circuit breaker')])
+
+    // Manual compaction claims idle admission, so the turn closes first; the
+    // manual path runs regardless of the trip, and its success clears the streak.
+    compact.error = undefined
+    compact.summary = [{ type: 'text', text: 'tiny' }]
+    session.append('turn/end', { turn: 4, reason: { kind: 'completed' } })
+    const manual = await compact.compactNow(idleAgent(session), SIGNAL)
+    expect(manual).not.toBeNull()
+
+    session.append('turn/start', { turn: 5 })
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'recovery '.repeat(400) }],
+      source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'tail '.repeat(60) }],
+      source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    expect(await compactIfNeeded(compact, session)).not.toBeNull()
+    expect(compact.calls).toHaveLength(3)
+    expect(errors).toHaveLength(1)
+  })
+
+  it('manual failures stay outside the streak', async () => {
+    const ctx = createContext()
+    withIdleStore(ctx)
+    const errors = captureErrors(ctx)
+    const compact = service({ ...failingConfig, maxConsecutiveFailures: 1 }, ctx)
+    const session = closedConversation(3)
+
+    compact.error = 'manual failure'
+    await expect(compact.compactNow(idleAgent(session), SIGNAL))
+      .rejects.toThrow(/could not produce a smaller summary/)
+    expect(errors).toHaveLength(0)
+    expect(compact.calls).toHaveLength(1)
+
+    session.append('turn/start', { turn: 5 })
+    await expect(compactIfNeeded(compact, session)).rejects.toThrow('manual failure')
+    expect(compact.calls).toHaveLength(2)
+    expect(errors).toEqual([expect.stringContaining('compaction circuit breaker')])
+    await expect(compactIfNeeded(compact, session)).resolves.toBeNull()
+    expect(compact.calls).toHaveLength(2)
+  })
+
+  it('maxConsecutiveFailures: 0 keeps attempting through every failure', async () => {
+    const ctx = createContext()
+    const errors = captureErrors(ctx)
+    const compact = service({ ...failingConfig, maxConsecutiveFailures: 0 }, ctx)
+    compact.error = 'summarizer unavailable'
+    const session = conversation(4)
+
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      await expect(compactIfNeeded(compact, session)).rejects.toThrow('summarizer unavailable')
+    }
+    expect(compact.calls).toHaveLength(4)
+    expect(errors).toHaveLength(0)
+  })
+
+  it('does not count a failure the cancellation signal already won', async () => {
+    const ctx = createContext()
+    const errors = captureErrors(ctx)
+    const compact = service({ ...failingConfig, maxConsecutiveFailures: 1 }, ctx)
+    compact.error = 'summary unavailable'
+    const session = conversation(4)
+    const controller = new AbortController()
+    compact.mutateDuringSummary = () => { controller.abort('cancelled during summary') }
+
+    await expect(compactIfNeeded(compact, session, 'pressure', MODEL, controller.signal))
+      .rejects.toThrow('summary unavailable')
+    expect(errors).toHaveLength(0)
+
+    await expect(compactIfNeeded(compact, session)).rejects.toThrow('summary unavailable')
+    expect(compact.calls).toHaveLength(2)
+    expect(errors).toEqual([expect.stringContaining('compaction circuit breaker')])
+    await expect(compactIfNeeded(compact, session)).resolves.toBeNull()
+    expect(compact.calls).toHaveLength(2)
+  })
+
+  it('does not count target-configuration failures', async () => {
+    const ctx = createContext()
+    const errors = captureErrors(ctx)
+    vi.spyOn(ctx.llm, 'resolveModelInfo').mockImplementation((provider, model) => Promise.resolve({
+      provider,
+      id: model,
+      name: model,
+    }))
+    const compact = service({ ...failingConfig, maxConsecutiveFailures: 1 }, ctx)
+    const session = conversation(4)
+
+    await expect(compactIfNeeded(compact, session))
+      .rejects.toThrow(/no context capacity/)
+    await expect(compactIfNeeded(compact, session))
+      .rejects.toThrow(/no context capacity/)
+    expect(compact.calls).toHaveLength(0)
+    expect(errors).toHaveLength(0)
   })
 })

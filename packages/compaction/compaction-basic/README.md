@@ -15,8 +15,9 @@ This backend owns the compaction policy:
 - **Model-free pruning** — after pressure or canonical overflow qualifies, the optional [`ctx.toolResultPruner`](../compaction-tool-result-pruner/README.md) service rewrites oversized tool results before range selection. Compact-basic remeasures through `ctx.tokenMeter`, skips summarization when pressure becomes safe, and otherwise summarizes the pruned surface. Below-pressure step checks never prune.
 - **Retention** — compact the oldest whole surface units while preserving a recent tail and balanced tool-call/result cuts through the [`dsh-compaction` boundary helpers](../compaction/README.md#tool-pairing-boundaries). Turn boundaries do not protect old steps inside a runaway turn. An open indivisible tail declines until it closes. The optional pruner can repair an oversized closed tool unit when its text-bearing result is the removable bulk; indivisible non-tool units and non-prunable tool remainders remain out of scope.
 - **Convergence** — retry head-checkpoint compaction up to `compactionRetries`; reject a summary that does not shrink its source, and throw if retries cannot return below threshold.
-- **Summarization** — a direct `llm/stream` call uses the configured provider/model pair and cap, falling back to the latest logged request target and then the agent target, without running the loop-only `agent/request` extension point. The call replays the conversation's own system prompt, tools, and shadowed-region messages verbatim, including image references, and appends the compaction instruction as the final user message, so it reuses the provider's warm prefix cache instead of invalidating it. The selected adapter must resolve or explicitly reject those images. It sets `GenerateOptions.purpose` to `compaction`, which adapters may forward as request attribution (the DeepSeek adapter sends `x-deepseek-harness-compact: 1`) without touching the model-visible body. Only returned text enters the checkpoint, excluding reasoning and tool calls that would leak private reasoning or create an orphaned call; image output fails with `UNSUPPORTED_CONTENT` rather than disappearing.
+- **Summarization** — a direct `llm/stream` call uses the configured provider/model pair and cap, falling back to the latest logged request target and then the agent target, without running the loop-only `agent/request` extension point. The call replays the conversation's own system prompt, tools, and shadowed-region messages verbatim, including image references, and appends the compaction instruction as the final user message, so it reuses the provider's warm prefix cache instead of invalidating it. The instruction ranks a retention priority — current task state, then errors and fixes, then files and code, then user messages, then earlier history — and gives every checkpoint section MUST KEEP / MERGE / REMOVE directives for shrinking under that ranking. The selected adapter must resolve or explicitly reject those images. It sets `GenerateOptions.purpose` to `compaction`, which adapters may forward as request attribution (the DeepSeek adapter sends `x-deepseek-harness-compact: 1`) without touching the model-visible body. Only returned text enters the checkpoint, excluding reasoning and tool calls that would leak private reasoning or create an orphaned call; image output fails with `UNSUPPORTED_CONTENT` rather than disappearing.
 - **Framing** — the replacement user message marks established checkpoint context with `<compacted-summary>` tags. The raw summary remains on the `compaction/summary` event, and later automatic cycles merge the prior checkpoint.
+- **Failure breaker** — the automatic entry point (`compactIfNeeded`, serving both the step-pressure and overflow-recovery listeners) counts consecutive failed attempts per session. The Nth failure, at `maxConsecutiveFailures`, logs an error naming the breaker, the count, the recovery path, and the last failure, and from then on every automatic attempt for that session returns `null` without attempting; the session stays usable and user input keeps flowing. Target-configuration errors and failures the cancellation signal already won stay outside the count. Any successful compaction transaction on the session — including a manual `compactNow()` — clears the count and re-enables automatic compaction. `maxConsecutiveFailures: 0` disables the breaker entirely. Manual compaction never passes through the gate: it always attempts, and only its success touches the count.
 - **Lifecycle** — all entry points share one bracket-first region transaction. It validates the range and live lock, appends `compaction/start` synchronously, prepares and awaits the summary, revalidates, appends `compaction/summary` plus the replacement, and makes exactly one closing attempt. Automatic and explicit-region calls require a numeric open-turn owner and whole-surface stability; the serial `agent/pre-step` listener checks pressure before request derivation, while canonical provider overflow enters through `agent/request-error` and authorizes retry only after durable surface progress. `compactNow()` reserves idle admission, uses `turn: null`, accepts append-only context outside its selected span, flushes every closed attempt, and releases admission in `finally`.
 - **Overflow recovery** — provider-confirmed overflow needs no capacity metadata: it bypasses normal pressure and retention, prunes, then attempts one maximal balanced head reduction while leaving the newest indivisible unit. Retry is authorized whenever `surface.replaceGeneration` advances, including when pruning lands before later summary work throws. No replacement, an exhausted target-specific cap, cancellation, or an unknown/noncanonical error preserves the original provider failure.
 - **Failure handling** — a live unmatched `compaction/start` is the durable lock. An unmatched marker before a newer `session/end-seed` is stale evidence from a prior lifecycle and does not block; one after that boundary reports `busy`. Summary and changed-span failures close with an error and leave the conversation surface untouched, though the attempt remains in the log. A failed close deliberately leaves a blocking orphan. Operational pressure failures warn and continue, while overflow-recovery failure preserves the original provider error only when no earlier replacement advanced the surface. Cancellation remains authoritative after cleanup and durability.
@@ -37,6 +38,7 @@ Every setting is optional. Top-level policy fields are defaults for every routed
 | `maxTokens` | no (default `8192`) | Provider generation cap for the summarization call; may include reasoning tokens. |
 | `compactionRetries` | no (default `1`) | Extra attempts after the first when pressure remains above threshold. |
 | `maxOverflowRetries` | no (default `1`) | Maximum retries after canonical context-window overflow; `0` disables recovery only. |
+| `maxConsecutiveFailures` | no (default `3`) | Failed automatic attempts after which automatic compaction stops for that session until a compaction succeeds; `0` disables the breaker. |
 | `modelPolicies` | no (default `[]`) | Exact `{ provider, model, ...partialPolicy }` overrides; matching uses both fields and does not depend on `listModels()`. |
 | `auto` | no (default `true`) | Register step-boundary pressure and overflow-recovery listeners. Set `false` for manual-only. |
 
@@ -113,35 +115,51 @@ The summarization model receives the conversation replayed verbatim — the same
 ```markdown
 You are now acting as a compaction engine for this AI coding assistant. Condense the conversation ABOVE into a structured checkpoint that lets another model resume the work with no loss of essential context.
 
+Retention priority: when the summary must shrink, keep higher-ranked content in preference to lower-ranked content:
+1. Current task state — ## Current Work, ## Next Step, ## Pending Jobs
+2. Errors and fixes — ## Errors and Fixes
+3. Files and code — ## Files and Code, ## Key Technical Concepts
+4. User messages — the original request and every correction in ## Primary Request and Intent
+5. Earlier history — ## Critical Context and older background
+
 Output EXACTLY the Markdown structure below: keep every section, in order. Use terse bullets, not prose paragraphs. Write "(none)" for an empty section — never drop a section.
 
 ## Primary Request and Intent
 - [the user's original and evolving goals; quote verbatim where the exact wording matters]
+- MUST KEEP: the original request and every later correction, verbatim. MERGE: evolved restatements into one intent line. REMOVE: superseded phrasing first, never the current intent.
 
 ## Key Technical Concepts
 - [technologies, frameworks, patterns, and conventions in play]
+- MUST KEEP: concepts the remaining work depends on. MERGE: near-duplicates into one bullet. REMOVE: concepts tied only to completed, resolved work.
 
 ## Files and Code
 - [exact path: why it matters, key changes or snippets]
+- MUST KEEP: exact paths the task still touches, with their key changes. MERGE: repeated edits of one file into one bullet. REMOVE: files whose work is finished and verified.
 
 ## Errors and Fixes
 - [error: how it was resolved, plus any related user feedback]
+- MUST KEEP: unresolved errors and likely-to-recur failures, with their fixes. MERGE: repeats of one failure into its latest form. REMOVE: one-off errors that are fixed and cannot recur.
 
 ## Pending Jobs
 - [explicitly requested work not yet completed]
+- MUST KEEP: every explicitly requested, unfinished job. MERGE: none. REMOVE: only jobs the user cancelled or marked complete.
 
 ## Current Work
 - [precisely what was in progress at this checkpoint]
+- MUST KEEP: exactly what was in progress at this checkpoint; this is the highest-priority section. MERGE: none. REMOVE: nothing.
 
 ## Next Step
 - [the single next action, directly in line with the most recent request, or "(none)"]
+- MUST KEEP: the single next action and the request it serves. MERGE: none. REMOVE: nothing.
 
 ## Critical Context
 - [decisions and their rationale, constraints, user preferences, open questions, data needed to continue]
+- MUST KEEP: decisions, constraints, preferences, and data still needed. MERGE: overlapping bullets. REMOVE: context already captured by a higher-priority section.
 
 Rules:
 - Write concise English engineering prose. Preserve exact file paths, commands, error strings, identifiers, numeric values, function signatures, and syntax fragments.
 - Capture user feedback and explicit instructions faithfully, especially corrections.
+- Apply the retention priority and the per-section MUST KEEP / MERGE / REMOVE rules whenever space runs short: never drop higher-ranked content to preserve lower-ranked content.
 - Do NOT mention this summarization request or that the context was compacted.
 - Output only the checkpoint text: do not call any tool or take any other action.
 - If the conversation already contains a <compacted-summary> block, it is a PRIOR checkpoint. Do not copy it forward verbatim: preserve still-true facts, drop stale ones, and merge newer information into a single consolidated summary under the same structure.
@@ -161,4 +179,4 @@ The replayed system prompt, tools, and shadowed-region messages match the conver
 - **Overflow classification is adapter-maintained** — provider wording can change; both DeepSeek adapters normalize currently recognized context-limit failures to `CONTEXT_WINDOW_EXCEEDED`.
 - **Some indivisible-unit and envelope-only overflow remains outside surface compaction** — recovery cannot shrink system/tools/prefix, split an indivisible non-tool node, or repair a tool unit whose non-prunable remainder still exceeds the window. The optional pruner can shrink text-bearing tool-result bulk inside an otherwise indivisible pair.
 - **`compactRegion` requires an open turn** — a manual call on a fully-closed session throws ("no open turn") rather than compacting.
-- **Summarization failure preserves the latest durable surface** — before any replacement, the auto path logs a warning and proceeds with full over-budget history. If pruning already landed, a later summarization failure proceeds from that durable pruned surface. Summarization truncation at `maxTokens`, which hidden reasoning tokens can consume, follows the same rule.
+- **Summarization failure preserves the latest durable surface** — before any replacement, the auto path logs a warning and proceeds with full over-budget history, and after `maxConsecutiveFailures` consecutive failures the breaker stops further automatic attempts (with a logged error) rather than retrying on every step. If pruning already landed, a later summarization failure proceeds from that durable pruned surface. Summarization truncation at `maxTokens`, which hidden reasoning tokens can consume, follows the same rule.
