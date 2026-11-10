@@ -43,7 +43,7 @@ git worktree add /tmp/wp6-base d05842d98a   # then diff goldens between the two 
 
 - 每个启用的部署为每次请求支付约 1.5KB 系统提示词。窗口受限部署以 patch 关闭该段；词上限约束自撰替换文本，但不约束指导子节约定本身。
 - 快照重录面：20 个 ACP system-prompt golden 加 headless 与 JSON-RPC 场景 fixture 携带 WP6 行（标准组合各 1481 字节），并吸收了 f5617203e6 时代未刷新的既有陈旧——glob/grep 指导段与 bash description/subagent 持久化形状——golden 合计约 3KB。套件从基线 83 个失败（ACP 78、headless subagent-diagnostic/subagent-inheritance/headless-profile、JSON-RPC SDK、session-fixture-layout）降到零。
-- `subagent-parallel` 需要的是 fixture 改编而非刷新：其脚本化的父级在同一步发出两次相同委派，而 WP1 同 step 去重现在会用已记录结果直接复用第二次调用（改动前已在基线 worktree 上验证一致），因此该场景改为脚本化 ALPHA 与 BETA 两次委派，继续锻炼两个真实并行的子代理。
+- `subagent-parallel` 需要的是 fixture 改编而非刷新：其脚本化的父级在同一步发出两次相同委派，而 WP1 同 step 去重现在会用已记录结果直接复用第二次调用（改动前已在基线 worktree 上验证一致），因此该场景当时改为脚本化 ALPHA 与 BETA 两次委派，以继续锻炼两个真实并行的子代理。这一不同委派的改编重新暴露了并发 children 的回放绑定竞态；[孪生回放确定性 note](../testing/2026-11-10-subagent-parallel-twin-replay.md) 已将其替换为逐字节相同的孪生委派加一个禁用该 guard 的场景 overlay。
 - `subagent-diagnostic` 需要一行 harness 修正：父日志查找匹配的裸子串也出现在子日志的 `parentSession` 字段里，现改为匹配会话头 id。
 - `subagent-child-question-rejection` 不再共享 `text-turn` 的 system-prompt golden：其组合插入 `tool-ask-user`，父级提示词现携带 ask-user 段，该场景改为拥有自己的 golden。
 - 约定顺序区间新增 `10` 方法论槽位；[提示词归属 note](../architecture/2026-07-05-prompt-variables-and-tool-guidance-ownership.md) 记录该区间事实且其余不变——每工具语义仍在 description，跨调用习惯仍在段中。`SessionEventMap` 不变：该段是提示词家具，不是日志事件。

@@ -2,6 +2,6 @@
   "steps": [
     { "op": "initialize" },
     { "op": "newSession" },
-    { "op": "prompt", "text": "Use the subagent tool TWICE in the SAME assistant message (two parallel tool calls in one response): the first delegates 'Reply with exactly the word ALPHA and nothing else.' with description 'Say the word ALPHA', the second delegates 'Reply with exactly the word BETA and nothing else.' with description 'Say the word BETA'. After both subagents return, reply with the single word PARENT_DONE and stop. Do not use the bash tool." }
+    { "op": "prompt", "text": "Use the subagent tool TWICE in the SAME assistant message (two parallel tool calls in one response): both calls are byte-identical twins — description 'Say the word BETA', prompt 'Reply with exactly the word BETA and nothing else.', run_in_background false. The composition under test disables the same-step duplicate reuse guard, so both twin delegations spawn a live child. After both subagents return, reply with the single word PARENT_DONE and stop. Do not use the bash tool." }
   ]
 }

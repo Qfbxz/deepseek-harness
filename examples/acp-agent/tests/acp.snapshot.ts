@@ -64,6 +64,9 @@ const SESSION_TITLE_CONFIG = fileURLToPath(new URL('../session-title.cordis.yml'
 const SUBAGENT_REPORT_CONFIG = fileURLToPath(
   new URL('../subagent-report.cordis.yml', import.meta.url),
 )
+const SUBAGENT_PARALLEL_CONFIG = fileURLToPath(
+  new URL('../subagent-parallel.cordis.yml', import.meta.url),
+)
 const SUBAGENT_DURABILITY_FAILURE_CONFIG = fileURLToPath(
   new URL('../subagent-durability-failure.cordis.yml', import.meta.url),
 )
@@ -455,12 +458,20 @@ const SCENARIOS: Scenario[] = [
   // parent's tool result must retain that assistant output and stop reason.
   { name: 'subagent-max-tokens-partial', hasModelTurn: true, recorded: false },
   { name: 'subagent-multi', hasModelTurn: true, recorded: true },
-  // Authored keyless replay: one assistant message carries two subagent calls
-  // and the parent log pins call/call/result/result instead of the serial
-  // interleaving. The twin delegations must stay identical: replay binds child
+  // Authored keyless replay: one assistant message carries two byte-identical
+  // twin subagent calls and the parent log pins call/call/result/result instead
+  // of the serial interleaving. The overlay disables the repeat-tool-reminder
+  // guard because its same-step duplicate reuse would serve the second twin
+  // from the first call's recorded result — with the guard off, both twins
+  // spawn a live child. The twins must stay identical: replay binds child
   // scripts and harvest order nondeterministically across concurrent children
   // (XXX(concurrent-subagents) in dsh-llm-replay).
-  { name: 'subagent-parallel', hasModelTurn: true, recorded: false },
+  {
+    name: 'subagent-parallel',
+    hasModelTurn: true,
+    recorded: false,
+    configPath: SUBAGENT_PARALLEL_CONFIG,
+  },
   { name: 'subagent-fork-in-process', hasModelTurn: true, recorded: true },
   { name: 'subagent-mixed', hasModelTurn: true, recorded: true },
   // Authored continuable-subagent transcript: a background delegation returns
