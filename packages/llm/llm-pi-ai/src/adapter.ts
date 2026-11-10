@@ -40,6 +40,7 @@ import {
 } from '@deepseek-ai/dsh-llm'
 import type {
   GenerateOptions,
+  LlmCountTokensRequest,
   LlmModelInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
@@ -49,8 +50,9 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
+import { countEndpointPlan, requestCount } from './count-tokens.ts'
 import type { ResolvedPiAiProviderProfile } from './config.ts'
-import { toPiContext } from './context.ts'
+import { toPiContext, toPiCountContext } from './context.ts'
 import { toStreamChunks } from './stream.ts'
 
 /** One resolution's frozen view: the profiles and the collection built from them. */
@@ -276,6 +278,61 @@ export class PiAiAdapter extends LlmAdapter {
         ...reasoningInfo(resolvedModel, defaultLevel),
       }
     })
+  }
+
+  /**
+   * Count the complete request envelope — system, tools, and messages — under
+   * the model endpoint's own tokenizer, through the count operation its wire
+   * protocol carries (`anthropic-messages` and `openai-completions`; other
+   * protocols have no count endpoint here). The conversion mirrors the stream
+   * request's prompt, so the count prices what a real request would carry. One
+   * round trip, no retry: every failure — an unmapped protocol, a missing or
+   * erroring endpoint, an unreadable answer — throws `LlmError`
+   * `COUNT_UNAVAILABLE` naming the cause, which the caller reports once and
+   * prices around with the character estimator; an aborted signal rethrows
+   * like a stream call's.
+   */
+  override async countTokens(
+    provider: string,
+    model: string,
+    request: LlmCountTokensRequest,
+    signal?: AbortSignal,
+  ): Promise<number> {
+    const snapshot = this.current()
+    const profile = this.profileOf(snapshot, provider)
+    const resolved = this.modelOf(snapshot, provider, model)
+    if (signal?.aborted) throw new LlmError('pi-ai token count aborted by caller', 'ABORTED')
+    // The credential freezes with the snapshot, exactly as a stream call's does.
+    const apiKey = await this.config.resolveApiKey(provider, profile)
+    const containsImage = request.messages.some(message => contentHasImage(message.content))
+    const attachments = containsImage ? this.config.resolveAttachments?.() : undefined
+    const onReplayDegrade = (reason: string): void => {
+      this.config.onReplayDegrade?.({ provider, model, reason })
+    }
+    const context = attachments === undefined
+      ? toPiCountContext(request, undefined, onReplayDegrade)
+      : await toPiCountContext(request, attachments, onReplayDegrade, profile.maxRequestImageBytes)
+    const plan = countEndpointPlan(resolved, requestHeaders(profile.headers), apiKey, context)
+    if (plan === undefined) {
+      throw new LlmError(
+        `pi-ai provider "${provider}" model "${model}" speaks "${resolved.api}",`
+        + ' which has no count endpoint this adapter maps',
+        'COUNT_UNAVAILABLE',
+      )
+    }
+    let attempt
+    try {
+      attempt = await requestCount(plan, signal, profile.timeoutMs)
+    } catch (error: unknown) {
+      throw new LlmError('pi-ai token count aborted by caller', 'ABORTED', { cause: error })
+    }
+    if ('reason' in attempt) {
+      throw new LlmError(
+        `pi-ai count endpoint for provider "${provider}" model "${model}" failed: ${attempt.reason}`,
+        'COUNT_UNAVAILABLE',
+      )
+    }
+    return attempt.tokens
   }
 
   async * stream(options: GenerateOptions): AsyncIterable<StreamChunk> {

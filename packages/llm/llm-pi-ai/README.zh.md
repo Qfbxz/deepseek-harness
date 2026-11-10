@@ -137,6 +137,12 @@ pi-ai 依据提供方 id 与 baseURL 决定每个请求的形状：系统提示�
 
 多数列表只公布 id；`context_window`/`context_length` 与 `max_output_tokens`/`max_tokens` 在网关提供时会被读取，没有可用 id 的条目会被跳过而不是让整份列表失败，其余仍由采纳方补齐。回复在四兆字节上限下读取，且上限落在实际收到的字节上——端点是用户自己填的 URL，因此会先看声明长度，但绝不把它当作边界。端点不可达、凭据被拒、响应非 JSON、以及响应没有 `data` 数组，都会以 `DISCOVERY_FAILED` 失败，消息点名端点；仅当 401 或 403 时才点名凭据。读取响应体期间被取消会呈现为 `ABORTED`，与请求发出之前被取消一致。
 
+## Token 计数
+
+适配器声明了 LLM seam 的可选 `countTokens()` 能力，并将其映射到两种协议各自携带的计数操作，端点与流式请求同源：`anthropic-messages` 通过 `POST {baseURL}/v1/messages/count_tokens` 计数，`openai-completions` 通过 `POST {baseURL}/chat/completions/count_tokens` 计数。两者都接受协议原生的 prompt 信封，并在提供方自己的分词器下回答 `{"input_tokens": N}`，因此 `ctx.llm.countTokens()` 返回的是完整请求信封的提供方精确计价，而不是字符估算。其余协议的模型在这里没有计数端点，对它们的计数在任何网络 I/O 之前即以 `COUNT_UNAVAILABLE` 失败。
+
+计数针对的是流式请求会真正携带的内容：同一套历史转换、同一套凭据解析、同一套标头合并，以及决定 prompt 形态的 compat 开关——OpenAI 侧的 `supportsDeveloperRole`、`requiresAssistantAfterToolResult`、`requiresThinkingAsText`、`requiresToolResultName`，Anthropic 侧的 `allowEmptySignature`。一次计数就是一次 POST，不做重试。任何失败——未映射的协议、传输错误、超时、非 2xx 状态、响应缺少非负整数 `input_tokens`——都会抛出点明原因的 `LlmError('COUNT_UNAVAILABLE')`，由调用方警告一次并回退到它的字符估算；被取消的 signal 会像流式请求一样以 `ABORTED` 重新抛出。profile 的 `timeoutMs` 与调用方 signal 一起约束计数请求；携带图片的信封与流式请求完全一致地解析持久附件服务。
+
 ## 提供方／模型路由与回放
 
 每次解析产出一份**不可变**快照——profiles 加上一个持有各路由所建 `Provider` 的 `createModels()` 集合——每个操作都在自己第一个 `await` 之前整体捕获一份快照。配置变化会构造**新**集合，而不是改动正在被使用的那个：`Models.streamSimple()` 是惰性的，它在流首次被消费时才解析 provider，而那已在 credential await 之后，因此改动共享集合会让一个在旧配置下开始的请求在新配置下结束，或者撞上一个已不存在的 provider。这正是 seam 的每步调用冻结（`llm.prepareCall()`）能贯通到底的原因——回复途中切换模型会在下一步生效，绝不会影响在途的那一步。请求经 `Models.streamSimple()` 抵达提供方。保持 catalog 协议不变的 catalog 路由会**复用**已安装提供方，只替换其模型列表，因为该提供方持有本包无法重建的 API 实现——Bedrock 经由独立入口加载其 Smithy 模块——从零件重建会静默收窄可用提供方的范围。其余路由都由 `createProvider()` 基于 `supportedProtocols()` 背后的协议表构造，表中条目正是 pi-ai 自己的提供方工厂所用的同一批 factory。
@@ -210,4 +216,5 @@ pi-ai 事件会变为 harness 推理、文本、工具调用、usage 与 finish 
 - **不支持 `GenerateOptions.stop`**：pi-ai 的通用流选项无法保证所有提供方都支持 stop sequence，因此适配器会拒绝该字段。
 - **历史中的 `system` 消息使用 pi-ai 通用上下文转换**：提供方特定位置由 pi-ai 决定，而非由 harness 拥有的协议覆盖决定。
 - **无法获取提供方 HTTP 状态**：pi-ai 错误事件不会在所有提供方上公开稳定 HTTP 状态；失败只公开稳定 harness 错误 code。
+- **计数针对的是规范 prompt，而非每一个请求专属字段**：计数请求体携带上文列出的 compat 开关，但不含采样参数、cache-control 标记、chat template kwargs 与延迟工具引用；回放 thinking 的转换也遵循流式转换在模型 compat 下的默认渲染。若某网关的 chat 模板会把上述字段渲染进被计价的 prompt，它报告的计数可能与它对完整请求自身渲染的计价略有出入；这个数字仍是端点分词器对转换后 prompt 的计价，而这正是字符估算被替换的对象。
 - **重试策略由提供方持有，而不是 SDK 重试**：每个提供方 profile 都可以提供嵌套的 `retryPolicy`；省略时解析为 normal 模式并重试五次，`dsh-llm-retry` 会在 agent 的失败步骤扩展点上执行有效路由策略。pi-ai SDK 重试仍保持禁用，因此持久化的 agent 步骤与 `llm/retry` 事件记录每次可见尝试，直接 `ctx.llm.stream()` 调用仍只尝试一次。
