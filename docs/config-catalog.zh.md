@@ -2808,12 +2808,25 @@ export interface Config {
    * budget belongs to the child runtime or its own deployment.
    */
   maxDepth?: number | 'provider-managed'
+  /**
+   * Minimum accepted length of a `completed` foreground child report, counted
+   * in Unicode code points (default `200`). A shorter report costs bounded
+   * continuation round-trips in the child's own conversation, keeping the
+   * longest result. Runs without a published local child (out-of-process
+   * providers) cannot continue and return the report unchanged.
+   */
+  minReportChars?: number
+  /**
+   * Continuation round-trips the report floor may spend per delegation
+   * (default `1`; `0` disables the floor entirely).
+   */
+  floorContinuationAttempts?: number
 }
 ```
 
-依赖：[`AgentOptions`](subsystems/core.md)
+依赖： [`AgentOptions`](subsystems/core.md)
 
-来源：[`packages/subagent/tool-subagent/src/index.ts:29`](../packages/subagent/tool-subagent/src/index.ts)
+来源: [`packages/subagent/tool-subagent/src/index.ts:43`](../packages/subagent/tool-subagent/src/index.ts)
 
 <a id="deepseek-aidsh-tool-subagent-report"></a>
 

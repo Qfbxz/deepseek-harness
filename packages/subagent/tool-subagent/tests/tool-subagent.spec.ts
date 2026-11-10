@@ -1080,7 +1080,16 @@ describe('dsh-tool-subagent continuable background mode', () => {
     for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
   })
 
-  /** Boot the real continuable stack without any model-facing follow-up adapter. */
+  /**
+   * Boot the real continuable stack without any model-facing follow-up adapter.
+   * The mock answer deliberately clears the report floor (200 code points), so
+   * the foreground arm exercises the plain delegation path without a floor
+   * continuation consuming a scripted entry.
+   */
+  const CONTINUABLE_ANSWER = 'The delegated research completed. The spawned child executed its own turn on the '
+    + 'configured provider, collected its final answer through the one-shot foreground path, and returned it to the '
+    + 'delegating parent without leaking intermediate steps. This reply intentionally exceeds the report floor so '
+    + 'the tool returns it unchanged.'
   async function continuableSetup() {
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
@@ -1094,7 +1103,7 @@ describe('dsh-tool-subagent continuable background mode', () => {
     await ctx.plugin(ToolTasks, {})
     await ctx.plugin(tool, { provider: 'spawn', backgroundMode: 'continuable' })
     ctx.llm.registerAdapter(['mock'], new MockAdapter([
-      textResponse('continuable answer'),
+      textResponse(CONTINUABLE_ANSWER),
     ]))
     const parent = ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
     return { ctx, parent }
@@ -1168,7 +1177,7 @@ describe('dsh-tool-subagent continuable background mode', () => {
     expect(result.isError).toBe(false)
     if (result.isError) throw new Error('expected foreground subagent success')
     expect(result.value).toMatchObject({ kind: 'foreground' })
-    expect(text(result)).toBe('continuable answer')
+    expect(text(result)).toBe(CONTINUABLE_ANSWER)
     expect(ctx.jobs.list(parent)).toEqual([])
   })
 
