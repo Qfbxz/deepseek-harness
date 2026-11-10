@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/proposed/feature/2026-11-08-cross-harness-parity-program.md
+2026-11-08-cross-harness-parity-program.md: 9d42b359f9f58a1dfc2b2732b2ea0afe5a1a5d99
+2026-11-08-cross-harness-parity-program.zh.md: 44c3706598b2ecf33b6ecce20338b089d4f77b86
