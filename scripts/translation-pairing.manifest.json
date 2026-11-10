@@ -7,6 +7,9 @@
     "docs/cordis-api/inherited.md",
     "docs/i18n/style-samples.md",
     "docs/i18n/terminology.md",
-    "docs/i18n/translation-prompt.md"
+    "docs/i18n/translation-prompt.md",
+    "docs/research/AGENT_HARNESS_COMPARISON.md",
+    "docs/research/EXECUTION_GOAL_AND_ACCEPTANCE.md",
+    "docs/research/HARNESS_IMPROVEMENT_ROADMAP.md"
   ]
 }
