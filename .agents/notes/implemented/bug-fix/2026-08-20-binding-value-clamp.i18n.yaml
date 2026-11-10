@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-20-binding-value-clamp.md
+2026-08-20-binding-value-clamp.md: e8dba31fe02cef39ffb93441401debe0c2def3bd
+2026-08-20-binding-value-clamp.zh.md: 6d405f1c09db40eb530cd55895f74003cfcf1601

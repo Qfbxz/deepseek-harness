@@ -1,5 +1,7 @@
 # dsh-desktop-shell
 
+English | [中文](README.zh.md)
+
 Minimal Electron shell for the official DeepSeek Harness Web Host — built as the
 "clean" alternative to the fork's `@deepseek-ai/dsh-desktop` (`apps/desktop/`,
 673 MB, vendored runtime + community plugins).

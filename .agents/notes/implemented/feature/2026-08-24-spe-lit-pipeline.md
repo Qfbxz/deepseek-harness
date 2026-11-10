@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-08-24-spe-lit-pipeline.zh.md)
+
 ## Problem
 
 Literature search for SPE/IADC-class petroleum sources required ad-hoc tool chains each session: sources were misclassified (scihub.net.cn is a paywall-nav fake, petrowiki indexes exist but WAF-blocks all automated正文), CF walls blocked headless browsers, and no agent knew the working route. DOI→PDF had no reproducible path.

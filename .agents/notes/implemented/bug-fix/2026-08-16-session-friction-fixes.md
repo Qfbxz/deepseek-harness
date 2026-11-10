@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-08-16-session-friction-fixes.zh.md)
+
 ## Problem
 
 An exported DPOS session recorded a full afternoon of recurring harness friction across 24 turns: 11 self-classified error families, several of which kept re-firing after cures. Four of them live in harness source: the most frequent model-authored failure was a missing or blank tool description (5+ recurrences; for bash it kept firing on nested `tools.bash({command})` calls inside run_code programs, killing the whole program); grep and read failures read as internal faults and prompted blind retries; and a program-body parse failure arrived as a bare `Expected ',', got '<eof>'` with zero context. The remaining families were already fixed at HEAD (the rc.6 bare `Symbol()` scheduler split), environment-side (the ~/.dsh profile hoist incident), or model-discipline-only (JS syntax slips inside inline programs — structural immunity there is the write-file-first convention, a user-space pattern, not harness code).

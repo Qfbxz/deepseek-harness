@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-08-26-turn-status-token-display.zh.md)
+
 ## Problem
 
 The turn status was the only token surface showing nothing, while StatsLine (session totals) and the turn footer (output-only tokens/s) each told half the story: during a running turn the user could not see what the model was consuming.

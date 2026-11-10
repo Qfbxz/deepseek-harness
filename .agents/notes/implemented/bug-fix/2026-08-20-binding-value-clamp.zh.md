@@ -2,6 +2,8 @@
 
 Status: implemented
 
+[English](2026-08-20-binding-value-clamp.md) | 中文
+
 ## Problem
 
 绑定调用返回超大载荷（50 KB bash stdout、巨型文件读取）时，原始 `result.value` 无界地流入 run 的完成值，撑爆外层输出账本后以不透明 abort 收场：模型只看到 run_code 失败、没有可用诊断，盲重试再次撞墙。dispatch bridge 对每个子调用都用原始值 settle，工具与账本之间没有任何尺寸约束。

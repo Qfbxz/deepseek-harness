@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-28-code-mode-binding-argument-diagnostics.md
-2026-08-28-code-mode-binding-argument-diagnostics.md: b4bc73ea84ac0e0361dd0e819dce50a37ed46f67
-2026-08-28-code-mode-binding-argument-diagnostics.zh.md: db0843a307d0dc18ea37fc1bb87c5584d78aeebf
+2026-08-28-code-mode-binding-argument-diagnostics.md: 95009debc7b75b416f7c23952a560aa6dcd563d3
+2026-08-28-code-mode-binding-argument-diagnostics.zh.md: 312ea844b1b0af90b0577217effee6275d2b8414

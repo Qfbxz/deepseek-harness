@@ -2,6 +2,8 @@
 
 Status: implemented
 
+[English](2026-08-20-sidebar-settings-action-seat.md) | 中文
+
 ## Problem
 
 侧边栏 footer 的所有动作按钮堆在设置按钮上方，实际一个全宽按钮占一行：占用者自带激进几何（内联 `width:100%`、`flex:1` 层，甚至有占用者给 shell 的 `footerActions` 容器内联写 `column`），256px 的栏里五个按钮花掉四行。语义上属于设置旁边的入口——auto-memory 的「记忆」——没有座位：`sidebar.settings` 是 `kind: 'single'`（ui-settings 独占），第二个注册者进不去。

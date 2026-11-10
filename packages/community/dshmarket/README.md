@@ -1,5 +1,7 @@
 # @deepseek-ai/dsh-market
 
+English | [中文](README.zh.md)
+
 Plugin market for the web profile: the host half mounts the `/dsh-market/*` HTTP routes (`registry`, `installed`, `status`, `logs`, `updates`, `update`, `setup-pnpm`, `uninstall`, `install`) on `ctx.webServer`, and the browser half declared under `dsh.client` renders the Settings → Plugin Market card against them.
 
 The catalog comes from the curated awesome-dsh-plugin registry — live fetch first, an in-memory cache for an hour, and the bundled `data/registry-snapshot.json` snapshot when offline. `install` accepts same-origin POSTs only and executes a shell command for sources present in the curated registry; an installed plugin mounts through a hot directory and goes live after a page refresh. `update` and `uninstall` enforce the same curated-source restriction, `setup-pnpm` offers the one-click pnpm setup when the component is missing, and `logs` exports a sanitized plain-text install log with home paths and credential shapes masked.

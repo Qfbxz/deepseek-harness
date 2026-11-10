@@ -10,6 +10,15 @@
     "docs/i18n/translation-prompt.md",
     "docs/research/AGENT_HARNESS_COMPARISON.md",
     "docs/research/EXECUTION_GOAL_AND_ACCEPTANCE.md",
-    "docs/research/HARNESS_IMPROVEMENT_ROADMAP.md"
+    "docs/research/HARNESS_IMPROVEMENT_ROADMAP.md",
+    "personal-plugins/README.md",
+    "personal-plugins/archive/dsh-usage-badge/README.md",
+    "personal-plugins/archive/dsh-usage-board/README.md",
+    "personal-plugins/dsh-bestharness-guard/README.md",
+    "personal-plugins/dsh-bestharness-ui/README.md",
+    "personal-plugins/dsh-crawler/README.md",
+    "personal-plugins/dsh-experts-roster/README.md",
+    "personal-plugins/dsh-usage-stats/README.md",
+    "runtime-patches/README.md"
   ]
 }
