@@ -1125,6 +1125,7 @@ describe('createTransport', () => {
       args: ['server.js'],
       env: {},
       cwd: '/tmp',
+      connectTimeoutMs: 30_000,
       toolCallTimeoutMs: 60_000,
       failOnStartupError: false,
     }
@@ -1140,6 +1141,7 @@ describe('createTransport', () => {
       serverName: 'srv',
       url: 'http://localhost:3000/mcp',
       headers: {},
+      connectTimeoutMs: 30_000,
       toolCallTimeoutMs: 60_000,
       failOnStartupError: false,
     }
@@ -1155,6 +1157,7 @@ describe('createTransport', () => {
       serverName: 'srv',
       url: 'http://localhost:3000/mcp',
       headers: { Authorization: 'Bearer token' },
+      connectTimeoutMs: 30_000,
       toolCallTimeoutMs: 60_000,
       failOnStartupError: false,
     }
@@ -1179,6 +1182,7 @@ describe('createTransport', () => {
         args: [],
         env: { EXTRA: 'injected' },
         cwd: '',
+        connectTimeoutMs: 30_000,
         toolCallTimeoutMs: 60_000,
         failOnStartupError: false,
       }
@@ -1205,6 +1209,7 @@ describe('createTransport', () => {
       args: [],
       env: { CUSTOM: 'value' },
       cwd: '',
+      connectTimeoutMs: 30_000,
       toolCallTimeoutMs: 60_000,
       failOnStartupError: false,
     }
