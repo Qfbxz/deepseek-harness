@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-10-wp8-approval-cache-prefix-rules.md
+2026-11-10-wp8-approval-cache-prefix-rules.md: 9b7060bc7ca5f5307508c9e17cc1d0a63ea7594a
+2026-11-10-wp8-approval-cache-prefix-rules.zh.md: 895e1d96c9ae5fc4e4652ca91554ec9ade38d67a

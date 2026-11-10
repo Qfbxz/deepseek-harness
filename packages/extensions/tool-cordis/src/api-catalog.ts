@@ -398,7 +398,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'approval',
     summary: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session.',
-    description: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session. It exposes deterministic policy changes to the model through the runtime-context snapshot and switch notices.',
+    description: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session. Within the `\'ask\'` policy it short-circuits the ask when a persisted prefix rule matches or when the same normalized request shape was already approved this session, so a repeated shape interrupts once. It exposes deterministic policy changes to the model through the runtime-context snapshot and switch notices.',
     methods: [
       {
         signature: 'setPolicy(agent: Agent, policy: ApprovalPolicy): void',
@@ -406,9 +406,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'agent', description: 'the live agent whose policy is changing.' }, { name: 'policy', description: 'the new effective policy.' }],
       },
       {
+        signature: 'persistPrefix(agent: Agent, toolName: string, tokens: readonly string[]): void',
+        description: 'Persist one command-prefix rule for the agent\'s session: later asks for `toolName` whose `command` argument begins with exactly `tokens` resolve `\'allowed-once\'` without consulting any answerer. Rules live in session memory only — they do not survive restart — and an exact duplicate persists as the same rule. The forbidden-shape refusal is unconditional: `rm`, heredoc, and general-interpreter shapes (see forbiddenPrefixReason) throw before any rule is stored, and the check is not configurable because it is a fixed safety invariant.',
+        parameters: [{ name: 'agent', description: 'the agent whose session the rule governs.' }, { name: 'toolName', description: 'the tool whose asks the rule may answer.' }, { name: 'tokens', description: 'the exact leading command tokens, each a non-empty string.' }],
+        throws: ['TypeError when `tokens` is empty or carries an empty/non-string token.', 'Error with the {@link forbiddenPrefixReason} text when the shape is forbidden.'],
+      },
+      {
         signature: 'async request(req: ApprovalRequest): Promise<ApprovalOutcome>',
-        description: 'Ask the composed answerers to decide one readonly same-process request. The service borrows the request, agent, session, and live signal directly. The request requires an open turn because the audit pair must be enclosed by the durable log\'s commit/replay boundary; an idle ask rejects before appending anything. The answerer phase always produces an outcome: an aborted signal yields `\'cancelled\'`, a missing or throwing answerer yields `\'unavailable\'` (fail closed), and a rogue non-vocabulary return value is normalized to `\'unavailable\'`. A failure that prevents either audit append from committing still rejects because returning an unlogged decision would violate the pair. Session contains post-commit observer failures, so an authoritative append cannot reject the request or suppress its matching audit event.',
-        parameters: [{ name: 'req', description: 'the pending decision (agent, tool identity, reason, signal).' }],
+        description: 'Ask the composed answerers to decide one readonly same-process request. The service borrows the request, agent, session, and live signal directly. The request requires an open turn because the audit pair must be enclosed by the durable log\'s commit/replay boundary; an idle ask rejects before appending anything. Under the `\'ask\'` policy, a matching persisted prefix rule or a shape already approved this session resolves `\'allowed-once\'` without dispatching any answerer; otherwise the answerer phase always produces an outcome: an aborted signal yields `\'cancelled\'`, a missing or throwing answerer yields `\'unavailable\'` (fail closed), and a rogue non-vocabulary return value is normalized to `\'unavailable\'`. A failure that prevents either audit append from committing still rejects because returning an unlogged decision would violate the pair. Session contains post-commit observer failures, so an authoritative append cannot reject the request or suppress its matching audit event.',
+        parameters: [{ name: 'req', description: 'the pending decision (agent, tool identity, arguments, reason, signal).' }],
         returns: 'the closed outcome; `\'allowed-once\'` is the only grant.',
         throws: ['when no turn is open or either audit event fails before the session append commit point.'],
       },
@@ -2777,11 +2783,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ApprovalRequest',
-    declaration: 'export interface ApprovalRequest {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: CallId;\n    readonly reason?: string;\n    readonly signal?: AbortSignal;\n}',
+    declaration: 'export interface ApprovalRequest {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: CallId;\n    readonly arguments?: unknown;\n    readonly reason?: string;\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'ApprovalService',
-    declaration: 'export class ApprovalService extends Service {\n    static Config: z<Config>;\n    constructor(ctx: Context, public config: Config);\n    setPolicy(agent: Agent, policy: ApprovalPolicy): void;\n    async request(req: ApprovalRequest): Promise<ApprovalOutcome>;\n    overrideOf(session: Session): ApprovalPolicy | undefined;\n}',
+    declaration: 'export class ApprovalService extends Service {\n    static Config: z<Config>;\n    constructor(ctx: Context, public config: Config);\n    setPolicy(agent: Agent, policy: ApprovalPolicy): void;\n    persistPrefix(agent: Agent, toolName: string, tokens: readonly string[]): void;\n    async request(req: ApprovalRequest): Promise<ApprovalOutcome>;\n    overrideOf(session: Session): ApprovalPolicy | undefined;\n}',
   },
   {
     name: 'AskUserQuestionAnswer',

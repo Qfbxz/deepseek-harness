@@ -1711,6 +1711,7 @@ export class ToolRuntime extends Service {
       agent: exec.agent,
       toolName: exec.name,
       callId: exec.callId,
+      arguments: exec.arguments,
       ...ask.reason !== undefined ? { reason: ask.reason } : {},
       signal: exec.signal,
     })

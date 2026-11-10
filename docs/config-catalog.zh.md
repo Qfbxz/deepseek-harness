@@ -3021,6 +3021,15 @@ export interface Config {
    * prompting (the deterministic CI/unattended stance).
    */
   readonly policy?: ApprovalPolicy
+  /**
+   * Session approval-cache capacity (default 512): the maximum distinct
+   * approved request shapes retained per session. When an ask's normalized
+   * shape was already approved this session, the service resolves
+   * `'allowed-once'` without consulting any answerer. `0` disables the cache
+   * (every ask re-prompts). The forbidden-shape refusal for prefix rules is
+   * NOT configurable — it is a fixed safety invariant.
+   */
+  readonly cacheMaxEntries?: number
 }
 
 /**
@@ -3036,7 +3045,7 @@ export interface Config {
 export type ApprovalPolicy = 'ask' | 'never'
 ```
 
-来源：[`packages/interaction/user-approval/src/index.ts:177`](../packages/interaction/user-approval/src/index.ts)
+来源：[`packages/interaction/user-approval/src/index.ts:341`](../packages/interaction/user-approval/src/index.ts)
 
 <a id="deepseek-aidsh-web"></a>
 
