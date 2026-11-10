@@ -48,6 +48,10 @@
   name: '@deepseek-ai/dsh-agent-spine-demo'
   config:
     includeHarnessIdentity: false
+    # The deployment-selected minimal prompt is the entire model-facing system
+    # prompt here; the methodology section is unrelated weight for this
+    # composition, so it stays off.
+    includeMethodology: false
     includeRuntimeContext: false
     persona: !!js process.env.DSH_SYSTEM_PROMPT ?? 'You are a helpful software engineer assistant.'
     workspaceContext: false

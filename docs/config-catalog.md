@@ -210,12 +210,13 @@ Source: [`packages/preset/agent-presets/src/preset.ts:52`](../packages/preset/ag
 /**
  * Bundle config: each field forwarded verbatim to the child that owns it —
  * `agents` to the agent loop (an app that pre-creates no agents, like the ACP
- * bridge, simply omits it), `includeHarnessIdentity`, `includeRuntimeContext`,
- * `persona`, and `toolOrder` to the system-prompt plugin (the fixed opener,
- * dynamic-context policy, deployment persona, and explicit model-facing tool
- * order), the `tools` object to the tool registry (its presentation `mode`),
- * `dshHome` to bash environment and local skill discovery, `sessionTitle` to
- * the fallback title service, `skills` to the
+ * bridge, simply omits it), `includeHarnessIdentity`, `includeMethodology`,
+ * `includeRuntimeContext`, `persona`, and `toolOrder` to the system-prompt
+ * plugin (the fixed opener, the methodology section, dynamic-context policy,
+ * deployment persona, and explicit model-facing tool order), the `tools`
+ * object to the tool registry (its presentation `mode`), `dshHome` to bash
+ * environment and local skill discovery, `sessionTitle` to the fallback title
+ * service, `skills` to the
  * skill registry/local provider/tool consumer, `workspaceContext` to the
  * agent-instructions loader, `jobs` to the process-local job provider, and
  * `toolBash`/`toolJobs` to the model-facing tool plugins this bundle owns.
@@ -235,8 +236,16 @@ export interface Config {
   agents?: AgentLoopConfig['agents']
   /** Agent-loop concurrency cap; `1` is serial. */
   maxParallelToolCalls?: AgentLoopConfig['maxParallelToolCalls']
+  /** Per-turn tool-call admission budget; `0` disables (see dsh-agent-loop's `Config`). */
+  maxToolCallsPerTurn?: AgentLoopConfig['maxToolCallsPerTurn']
   /** Whether the system prompt includes the fixed Harness identity (default true). */
   includeHarnessIdentity?: SystemPromptConfig['includeHarnessIdentity']
+  /** Whether the system prompt includes the harness methodology section (default true). */
+  includeMethodology?: SystemPromptConfig['includeMethodology']
+  /** Replacement text for the methodology section (see dsh-system-prompt's `Config`). */
+  methodology?: SystemPromptConfig['methodology']
+  /** Maximum accepted word count for the methodology section (see dsh-system-prompt's `Config`). */
+  methodologyMaxWords?: SystemPromptConfig['methodologyMaxWords']
   /** Whether model history includes dynamic runtime-context snapshots (default true). */
   includeRuntimeContext?: SystemPromptConfig['includeRuntimeContext']
   /** The deployment persona (see dsh-system-prompt's `Config`). */
@@ -268,31 +277,11 @@ export interface Config {
   /** Opt-in persisted same-session goal stack; set false or omit to leave it unmounted. */
   goals?: GoalConfig | false
 }
-
-/** Skill bundle config forwarded to the registry, local provider, and model-facing consumer. */
-export interface SkillConfig {
-  /** Mount the bundled local skill provider and model-facing skill tool (default true). */
-  enabled?: boolean
-  /** Registry-level discovery cache settings. */
-  registry?: SkillRegistryConfig
-  /** Local filesystem skill provider settings. */
-  filesystem?: SkillFileSystem.Config
-  /** Model-facing skill catalog and tool settings. */
-  tool?: toolSkill.Config
-}
-
-/** Persisted goal domain, model-tool policy, and same-session driver config. */
-export interface GoalConfig {
-  /** Goal-domain creation defaults. */
-  domain?: GoalDomainConfig
-  /** Model-facing goal-tool authority policy. */
-  tool?: toolGoal.Config
-}
 ```
 
 Depends on: [`AgentLoopConfig`](#deepseek-aidsh-agent-loop) · [`GoalDomainConfig`](#deepseek-aidsh-goal) · [`InvariantConfig`](#deepseek-aidsh-invariants) · [`JobsConfig`](#deepseek-aidsh-jobs-local) · [`SessionTitleConfig`](#deepseek-aidsh-session-title) · [`SkillFileSystem`](../packages/skill/skill-filesystem/src/index.ts) · [`SkillRegistryConfig`](#deepseek-aidsh-skill) · [`SystemPromptConfig`](#deepseek-aidsh-system-prompt) · [`toolBash`](../packages/shell/tool-bash/src/index.ts) · [`toolGoal`](../packages/goal/tool-goal/src/index.ts) · [`toolJobs`](../packages/jobs/tool-jobs/src/index.ts) · [`ToolsConfig`](#deepseek-aidsh-tools) · [`toolSkill`](../packages/skill/tool-skill/src/index.ts) · [`workspaceContext`](../packages/context/agent-instructions/src/index.ts)
 
-Source: [`packages/examples/agent-spine-demo/src/index.ts:92`](../packages/examples/agent-spine-demo/src/index.ts)
+Source: [`packages/examples/agent-spine-demo/src/index.ts:69`](../packages/examples/agent-spine-demo/src/index.ts)
 
 <a id="deepseek-aidsh-agent-tool-presentation"></a>
 
@@ -2368,6 +2357,13 @@ Source: [`packages/e2b/subprocess-e2b/src/index.ts:25`](../packages/e2b/subproce
 export interface Config {
   /** Include the fixed DeepSeek Harness identity before the deployment persona (default true). */
   includeHarnessIdentity?: boolean
+  /**
+   * Include the harness methodology section — explore before concluding, nested
+   * AGENTS.md checks, verify before claiming, `path:line` citations — after the
+   * persona (default true). Set false when a window-constrained deployment needs
+   * the bytes back.
+   */
+  includeMethodology?: boolean
   /** Include dynamic runtime-context snapshots in model history (default true). */
   includeRuntimeContext?: boolean
   /**
@@ -2375,6 +2371,19 @@ export interface Config {
    * `deployment:persona` shadows it; `{{variable}}` references are strict.
    */
   persona?: string
+  /**
+   * Replacement text for the methodology section, for deployments authoring
+   * their own rules. Omitted means the fixed harness text. Word-budgeted by
+   * {@link Config.methodologyMaxWords}.
+   */
+  methodology?: string
+  /**
+   * Maximum accepted word count for the methodology section (default 300).
+   * The resolved methodology text is counted at load: a count above the cap
+   * throws and the deployment fails to boot, so budget drift is a loud
+   * misconfiguration, not silent prompt growth.
+   */
+  methodologyMaxWords?: number
   /**
    * Model-facing tool names in order, with {@link TOOL_ORDER_REST} exactly once.
    * Invalid fields fail at load and unknown names fail at assembly; known names
@@ -2384,7 +2393,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/core/system-prompt/src/index.ts:186`](../packages/core/system-prompt/src/index.ts)
+Source: [`packages/core/system-prompt/src/index.ts:211`](../packages/core/system-prompt/src/index.ts)
 
 <a id="deepseek-aidsh-terminal-bash"></a>
 

@@ -6,9 +6,9 @@
 # disables the key-requiring DeepSeek adapter in favor of the keyless
 # counter-mock fixture, which claims the composition's own deepseek-official
 # route. The fixture counts at 2 chars/token (near the measured 2.09), so the
-# first reported count is 9896 and the post-compaction count 9420; the
-# 0.5 × 19000 = 9500 threshold sits between them, while the character estimate
-# (~5000) stays below it — only the reported count can trigger this compaction.
+# first reported count lands above and the post-compaction count below the
+# 0.5 × 20200 = 10100 threshold, while the character estimate (~5300) stays
+# below it — only the reported count can trigger this compaction.
 - id: token-counter-mock-llm
   name: './tests/fixtures/token-counter-mock-llm.ts'
 
@@ -26,3 +26,23 @@
           thresholdRatio: 0.5
           retainTokens: 20
           maxTokens: 64
+      # RESTATES the agent-spine row config — a patch replaces the whole config —
+      # with includeMethodology: false: the threshold choreography is
+      # calibrated to this composition's prompt weight, and the methodology
+      # section is unrelated weight here.
+      - id: agent-spine
+        name: '@deepseek-ai/dsh-agent-spine-demo'
+        config:
+          agents:
+            - id: main
+              provider: deepseek-official
+              model: deepseek-v4-flash
+              cwd: !!js process.cwd()
+          workspaceContext:
+            maxBytes: 65536
+          includeMethodology: false
+          persona: |
+            You are headless-agent, a coding assistant powered by the {{model}} model.
+
+            Verify your work by running the code or tests. Keep answers brief and
+            factual.

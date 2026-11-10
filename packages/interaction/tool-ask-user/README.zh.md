@@ -37,6 +37,26 @@
 
 只要定义和可见性保持不变，前缀即可稳定复用。插件生命周期变化或作用域限制可能会使从此 schema 起的缓存复用失效。
 
+### 系统提示词
+
+#### 模型看到的内容
+
+插件会提供 `tool:ask_user_question` 提示词段落（顺序 117），承载"只问无法自行推断的问题"的规则：
+
+##### 何时不应使用指导
+
+```markdown
+When not to use: resolve discoverable facts by inspection; ask_user_question is only for user-owned choices or input you cannot infer.
+```
+
+#### Token 影响
+
+插件启用期间，每个请求支付固定指导成本；即使限制隐藏了工具也一样。
+
+#### KV Cache 影响
+
+段落文本不变时前缀即可稳定复用。插件启用或卸载可能使本提示词段落的缓存复用失效。
+
 ### 工具调用历史与结果
 
 #### 模型看到的内容

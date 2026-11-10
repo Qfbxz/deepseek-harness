@@ -377,7 +377,8 @@ describe('dsh-tool-ralph', () => {
   it('registers scoped guidance and pure replay-safe generic presentation', async () => {
     const { ctx, fiber } = await setup()
     const section = (await ctx.systemPrompt.assemble()).sections.find(candidate => candidate.name === 'tool:ralph')
-    expect(section?.text).toContain('ONLY when the direct human explicitly asks')
+    expect(section?.text).toContain('only when the direct human explicitly asks')
+    expect(section?.text).toContain('When not to use: ordinary long-running objectives belong to same-session goal tools')
     expect(section?.text).toContain('worker reports, not independent evaluation')
     const tool = ctx.tools.get('ralph')!
     expect(tool.description).toContain('worker reports completion')

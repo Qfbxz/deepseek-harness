@@ -8,7 +8,7 @@ Requires a loaded executor Service Provider (e.g. `@deepseek-ai/dsh-bash-local`)
 
 The package root exposes only the Cordis plugin contract (`name`, `inject`, `Config`, `apply`); result rendering and background-process adaptation remain package-internal.
 
-The plugin also contributes the `tool:bash` prompt section (order 105): check the `[exit code: N]` marker on every result and investigate failures before moving on.
+The plugin also contributes the `tool:bash` prompt section (order 105): check the `[exit code: N]` marker on every result, investigate failures before moving on, and never answer a failure with a bare identical retry.
 
 ## Tools
 
@@ -65,7 +65,7 @@ Every request in this plugin's registration scope contains the bash guidance bel
 ##### Bash guidance
 
 ```markdown
-Check the [exit code: N] marker on every bash result; investigate failures before moving on.
+Check the [exit code: N] marker on every bash result; investigate failures before moving on. When not to use: a bare retry is not investigation — vary the command or read the failure.
 ```
 
 #### Token effect

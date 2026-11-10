@@ -1,5 +1,5 @@
 # WP5 token-counter control: the same scripted conversation and the same
-# 0.5 × 19000 = 9500 threshold as token-counter.cordis.snapshot.yml, but the
+# 0.5 × 20200 = 10100 threshold as token-counter.cordis.snapshot.yml, but the
 # adapter leaves `countTokens` undeclared, so the character estimate (~5000)
 # prices the threshold and declines to compact.
 - id: token-counter-absent-mock-llm

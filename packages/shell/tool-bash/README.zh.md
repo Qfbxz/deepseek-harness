@@ -8,7 +8,7 @@
 
 包根只公开 Cordis 插件约定（`name`、`inject`、`Config`、`apply`）；结果渲染和后台进程适配仍保留在包内部。
 
-插件还会提供 `tool:bash` 提示词段落（顺序 105）：检查每个结果中的 `[exit code: N]` 标记，发现失败时先调查原因再继续。
+插件还会提供 `tool:bash` 提示词段落（顺序 105）：检查每个结果中的 `[exit code: N]` 标记，发现失败时先调查原因再继续，并且不用原样重试来回应失败。
 
 ## 工具
 
@@ -65,7 +65,7 @@
 ##### Bash 指引
 
 ```markdown
-Check the [exit code: N] marker on every bash result; investigate failures before moving on.
+Check the [exit code: N] marker on every bash result; investigate failures before moving on. When not to use: a bare retry is not investigation — vary the command or read the failure.
 ```
 
 #### Token 影响

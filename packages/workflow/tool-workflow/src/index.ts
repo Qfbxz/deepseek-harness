@@ -212,7 +212,9 @@ export function apply(ctx: Context, config: Config): void {
   ctx.systemPrompt.section({
     name: `tool:${toolName}`,
     order: 115,
-    text: `Use the ${toolName} tool ONLY when the user explicitly asks for a workflow or for large multi-agent orchestration: you write a JavaScript script (the tool description documents the exact format) that fans work out across many subagents with phases and structured results. For one or two delegations, prefer plain subagent calls.`,
+    text: `Use the ${toolName} tool only when the user explicitly asks for a workflow or for large multi-agent orchestration. `
+      + 'When not to use: one or two delegations are plain subagent calls; serially dependent phases belong in your own loop. '
+      + 'You write a JavaScript script (the tool description documents the exact format) that fans work out across many subagents with phases and structured results.',
   })
   ctx.tools.register(defineTool({
     name: toolName,

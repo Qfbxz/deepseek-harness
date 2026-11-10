@@ -44,7 +44,7 @@
 ##### Ralph 指导
 
 ```markdown
-Use the ralph tool ONLY when the direct human explicitly asks for a Ralph loop or fresh-agent iterative execution. Each Ralph round starts a fresh child with no conversation seed and uses the shared workspace as durable memory. Completion and blockers are worker reports, not independent evaluation. Use same-session goal tools for ordinary long-running objectives, and plain subagents or workflowEngine for bounded delegation and fan-out.
+Use the ralph tool only when the direct human explicitly asks for a Ralph loop or fresh-agent iterative execution. Each Ralph round starts a fresh child with no conversation seed and uses the shared workspace as durable memory; completion and blockers are worker reports, not independent evaluation. When not to use: ordinary long-running objectives belong to same-session goal tools, and bounded delegation or fan-out belongs to plain subagents or workflows.
 ```
 
 #### Token 影响

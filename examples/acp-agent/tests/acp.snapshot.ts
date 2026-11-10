@@ -546,13 +546,14 @@ const SCENARIOS: Scenario[] = [
   // the real ask_user_question tool, the runtime-ownership guard rejects before
   // the tripwire provider, and the child carries the unresolved decision in its
   // final result so the parent can complete instead of waiting forever.
+  // This composition inserts tool-ask-user, so its parent system prompt carries
+  // the ask-user guidance section and cannot share text-turn's golden.
   {
     name: 'subagent-child-question-rejection',
     hasModelTurn: true,
     recorded: false,
     pinsHeader: true,
     headerClass: 'child-question',
-    systemPromptSource: 'text-turn',
     configPath: CHILD_QUESTION_CONFIG,
   },
   // The workflow tool: the model writes a one-child orchestration script; the

@@ -11,7 +11,7 @@ import {
 /** Provider route the WP5 token-counter scenarios route to: the base composition's own route, claimed while llm-deepseek is disabled. */
 export const TOKEN_COUNTER_PROVIDER = 'deepseek-official'
 /** Context capacity both scenario adapters report. */
-export const TOKEN_COUNTER_CONTEXT_WINDOW = 19_000
+export const TOKEN_COUNTER_CONTEXT_WINDOW = 20_200
 
 /** Scripted summary the fixture replays for the compaction call. */
 const SUMMARY_TEXT = 'COUNTER_CHECKPOINT: the request premise is preserved.'

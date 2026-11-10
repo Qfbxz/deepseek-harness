@@ -55,8 +55,9 @@ export interface PromptSection {
   readonly name: string
   /**
    * Sections are concatenated in ascending order. Convention: `-100` is the
-   * harness identity, `0` the deployment persona, tool guidance uses 100–199;
-   * other negative orders also render before the persona.
+   * harness identity, `0` the deployment persona, `10` the harness methodology
+   * section, tool guidance uses 100–199; other negative orders also render
+   * before the persona.
    */
   readonly order: number
   /**
@@ -130,6 +131,31 @@ export const PERSONA_SECTION = 'deployment:persona'
 /** Prompt order of the persona slot; the first section a model reads. */
 export const PERSONA_ORDER = 0
 
+/** Section name and prompt order of the methodology slot, after the persona and before tool guidance. */
+const METHODOLOGY_SECTION = 'harness:methodology'
+const METHODOLOGY_ORDER = 10
+
+/**
+ * Default methodology text: the four working rules the harness teaches every
+ * enabled deployment. Word-budgeted by {@link Config.methodologyMaxWords};
+ * deployments authoring their own text through {@link Config.methodology}
+ * carry the same budget.
+ */
+const METHODOLOGY_TEXT = 'Methodology. Explore before concluding: ground every answer in what searches '
+  + 'and reads actually returned, not in what you expect the code to contain. '
+  + 'Before you work in a subdirectory, read the AGENTS.md at its root and follow it. '
+  + 'Verify before claiming: run the check, test, or build that proves a statement, '
+  + 'and say what you did not run. Cite code as path:line so every claim points at its evidence.'
+
+/** Upper bound on {@link Config.methodologyMaxWords}; the schema enforces the same range. */
+const METHODOLOGY_MAX_WORDS_LIMIT = 10_000
+
+/** Count whitespace-delimited words; the empty (all-whitespace) text counts as zero. */
+function countWords(text: string): number {
+  const trimmed = text.trim()
+  return trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length
+}
+
 /** Valid variable names: how they are written between the braces. */
 const VARIABLE_NAME = /^[a-z][a-z0-9_]*$/
 
@@ -186,6 +212,13 @@ function compareToolNames(a: ToolSchema, b: ToolSchema): number {
 export interface Config {
   /** Include the fixed DeepSeek Harness identity before the deployment persona (default true). */
   includeHarnessIdentity?: boolean
+  /**
+   * Include the harness methodology section — explore before concluding, nested
+   * AGENTS.md checks, verify before claiming, `path:line` citations — after the
+   * persona (default true). Set false when a window-constrained deployment needs
+   * the bytes back.
+   */
+  includeMethodology?: boolean
   /** Include dynamic runtime-context snapshots in model history (default true). */
   includeRuntimeContext?: boolean
   /**
@@ -193,6 +226,19 @@ export interface Config {
    * `deployment:persona` shadows it; `{{variable}}` references are strict.
    */
   persona?: string
+  /**
+   * Replacement text for the methodology section, for deployments authoring
+   * their own rules. Omitted means the fixed harness text. Word-budgeted by
+   * {@link Config.methodologyMaxWords}.
+   */
+  methodology?: string
+  /**
+   * Maximum accepted word count for the methodology section (default 300).
+   * The resolved methodology text is counted at load: a count above the cap
+   * throws and the deployment fails to boot, so budget drift is a loud
+   * misconfiguration, not silent prompt growth.
+   */
+  methodologyMaxWords?: number
   /**
    * Model-facing tool names in order, with {@link TOOL_ORDER_REST} exactly once.
    * Invalid fields fail at load and unknown names fail at assembly; known names
@@ -338,8 +384,12 @@ class PromptLayer implements ScopeLayer {
 export class SystemPrompt extends Service {
   static Config: z<Config> = z.object({
     includeHarnessIdentity: z.boolean().default(true),
+    includeMethodology: z.boolean().default(true),
     includeRuntimeContext: z.boolean().default(true),
     persona: z.string().default(''),
+    // Preserve omission so the fixed harness methodology text is the default.
+    methodology: z.string().default(undefined as unknown as string),
+    methodologyMaxWords: z.number().step(1).min(1).max(METHODOLOGY_MAX_WORDS_LIMIT).default(300),
     // Preserve omission because an explicit empty order lacks the rest marker.
     toolOrder: z.array(z.string()).default(undefined as unknown as string[]),
   })
@@ -367,6 +417,21 @@ export class SystemPrompt extends Service {
       // The fallback narrows the optional input type; the schema already defaults it.
       text: config.persona ?? '',
     })
+    if (config.includeMethodology ?? true) {
+      const cap = config.methodologyMaxWords ?? 300
+      if (!Number.isSafeInteger(cap) || cap < 1 || cap > METHODOLOGY_MAX_WORDS_LIMIT) {
+        throw new Error(`methodologyMaxWords must be an integer from 1 to ${METHODOLOGY_MAX_WORDS_LIMIT}, got ${JSON.stringify(config.methodologyMaxWords)}`)
+      }
+      const text = config.methodology ?? METHODOLOGY_TEXT
+      const words = countWords(text)
+      if (words > cap) {
+        throw new Error(`methodology section is ${words} words, above the methodologyMaxWords cap ${cap}; trim the text or raise the cap deliberately in config`)
+      }
+      if (words === 0) {
+        throw new Error('methodology is enabled but its text is empty; set includeMethodology: false or author methodology text')
+      }
+      this.section({ name: METHODOLOGY_SECTION, order: METHODOLOGY_ORDER, text })
+    }
     if (!(config.includeRuntimeContext ?? true)) this.suppressRuntimeContext()
   }
 

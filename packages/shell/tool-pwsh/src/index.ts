@@ -246,7 +246,8 @@ export function apply(ctx: Context, config: Config = {}): void {
     name: 'tool:pwsh',
     order: 105,
     text: 'Non-zero exits are reported as `[exit code: N]` markers; investigate failures before moving on. '
-      + 'On Windows a killed process settles as `[exit code: 1]` without a signal marker; treat a bare exit 1 after an interruption as a termination, not a command failure.',
+      + 'On Windows a killed process settles as `[exit code: 1]` without a signal marker; treat a bare exit 1 after an interruption as a termination, not a command failure. '
+      + 'When not to use: a bare retry is not investigation — vary the command or read the failure.',
   })
 
   ctx.tools.register(defineTool({

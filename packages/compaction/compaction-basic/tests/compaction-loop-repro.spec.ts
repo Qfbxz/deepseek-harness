@@ -148,7 +148,9 @@ async function mountInvariants(ctx: Context): Promise<void> {
 
 async function harness(toolSteps: number): Promise<{ ctx: Context; compact: ReproCompactionEngine }> {
   const ctx = new Context()
-  await mountAgentLoopTestDependencies(ctx)
+  // The threshold choreography below is calibrated to this fixture's prompt
+  // weight; the methodology section is unrelated weight here, so it stays off.
+  await mountAgentLoopTestDependencies(ctx, { systemPrompt: { includeMethodology: false } })
   await mountInvariants(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(TokenMeter)

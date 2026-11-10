@@ -93,7 +93,9 @@ describe('descriptor-less cold child diagnostic snapshot', () => {
         const sessionsDir = join(runCwd, '.sessions')
         const files = (await readdir(sessionsDir, { recursive: true })).filter(file => file.endsWith('.jsonl'))
         const logs = await Promise.all(files.map(async file => readFile(join(sessionsDir, file), 'utf8')))
-        const parent = logs.find(content => content.includes('"subagent-diagnostic-parent"'))
+        // Match the session-head id, not a bare substring: the child log's
+        // `parentSession` field also contains the parent id.
+        const parent = logs.find(content => content.includes('"id":"subagent-diagnostic-parent"'))
         if (parent === undefined) throw new Error('missing persisted parent log')
 
         // THE model-visible fact: the descriptor-less child is reported, not

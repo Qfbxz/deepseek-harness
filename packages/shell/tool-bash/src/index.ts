@@ -258,7 +258,8 @@ export function apply(ctx: Context, config: Config = {}): void {
   ctx.systemPrompt.section({
     name: 'tool:bash',
     order: 105,
-    text: 'Check the [exit code: N] marker on every bash result; investigate failures before moving on.',
+    text: 'Check the [exit code: N] marker on every bash result; investigate failures before moving on. '
+      + 'When not to use: a bare retry is not investigation — vary the command or read the failure.',
   })
 
   ctx.tools.register(defineTool({

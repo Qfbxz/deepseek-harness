@@ -43,6 +43,7 @@ const SCENARIO_PROMPT = [
   'the retained tail keeps the todo_write call and its result verbatim while the long premise is summarized;',
   'the replacement checkpoint lands as one user message framed with compacted-summary tags;',
   'the final model call runs after the checkpoint replacement and answers in plain text.',
+  'Also record this padded calibration block so the summarized premise clearly outweighs the retained tail: calibration block one covers request-envelope accounting, calibration block two covers threshold margins, calibration block three covers post-compaction floors, calibration block four covers provider-declared counting, calibration block five covers estimate fallbacks, and calibration block six covers one-compaction convergence.',
   'Call todo_write once with the single-item task list, then finish the task with the exact words TOKEN_COUNTER_OK.',
 ].join(' ')
 
