@@ -417,6 +417,22 @@
         fetch: false
         searchTimeoutMs: 60000
 
+    # The MCP capability mounts dormant in every mode. The registry row carries
+    # the server fleet as its whole `config` and defaults to an empty registry,
+    # so no server process starts and no `mcp__*` tool joins the catalog until
+    # a later patch layer replaces `servers` (a patch replaces the row's whole
+    # config — there is no deep merge). Each entry is one complete
+    # `@deepseek-ai/dsh-mcp-client` config (see its README). The registry
+    # validates the shape at load: an entry that fails the mcp-client config
+    # schema, a duplicated serverName, or a child that rejects its startup with
+    # failOnStartupError fails the boot loudly instead of mounting a partial
+    # fleet. Per-server rows inserted directly (see examples/mcp-memory) remain
+    # another mounting path.
+    - id: mcp
+      name: '@deepseek-ai/dsh-mcp-client/registry'
+      config:
+        servers: []
+
     # ── rows every mode mounts, whose values each overlay may state ──────────────
 
     # The tool registry. Presentation mode is a deployment choice; omitting it here

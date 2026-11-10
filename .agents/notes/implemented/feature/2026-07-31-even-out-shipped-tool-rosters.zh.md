@@ -30,11 +30,11 @@ Status: implemented
 
 **LSP 三件套**留在外面是运维原因而非安全原因:`command` 在插件加载时从 `PATH` 解析,因此缺少语言服务器会让整次启动失败,而不只是失去一个工具。等到「缺失」退化为「跳过注册」之后,它就可以挂了。
 
-### MCP 是依赖,不是配置行
+### MCP 是依赖,不点名服务器
 
-`@deepseek-ai/dsh-mcp-client` 成为本 CLI（命令行界面）的运行时依赖,但在任何交付配置里都没有对应的行。该插件每个实例只挂载一台服务器,且 `command` 是必填,因此一个默认值必须点名一台第三方服务器,并在每次启动时把它作为子进程 spawn——不经 `ctx.shell`,因而也在 Web surface 所组合的沙箱策略之外。
+`@deepseek-ai/dsh-mcp-client` 是运行时依赖,而任何交付配置都不点名服务器。该插件每个实例只挂载一台服务器,且 `command` 是必填,因此一个默认值必须点名一台第三方服务器,并在每次启动时把它作为子进程 spawn——不经 `ctx.shell`,因而也在 Web surface 所组合的沙箱策略之外。
 
-真正能让 MCP 成为默认的那一层,恰恰是本仓库尚未拥有的:一个读取用户服务器清单、按条目逐台挂载客户端的桥接,形态与 [`dsh-hooks-claude-code`](../../../../packages/hooks/hooks-claude-code/README.md) 读取 Claude Code 的 `hooks.json` 完全相同。交付这个依赖意味着已安装的 `dsh` 今天就能从 `$DSH_HOME/config.yaml` 挂载服务器;CLI README 里给了那段 YAML。
+读取用户服务器清单、按条目逐台挂载客户端的桥接——与 [`dsh-hooks-claude-code`](../../../../packages/hooks/hooks-claude-code/README.md) 读取 Claude Code `hooks.json` 同型——就是基础 bundle 中休眠的[注册表行](2026-11-10-wp7-mcp-base-bundle.md):在某个 patch 层提供服务器清单之前它什么都不挂载,因此"不点名服务器、默认不 spawn"的规则依然成立。交付这个依赖也意味着已安装的 `dsh` 今天就能从 `$DSH_HOME/config.yaml` 挂载服务器;CLI README 里给了那段 YAML。
 
 ## 测试
 

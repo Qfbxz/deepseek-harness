@@ -31,6 +31,25 @@ One plugin instance per MCP server in `cordis.yml`:
 
 The model sees `mcp__github__create_issue`, `mcp__web__search`, … — the same server-qualified shape Claude Code and Codex use. HMR hot-swaps: editing the entry triggers disconnect + reconnect without process restart; an unchanged `serverName` reproduces identical tool names.
 
+## Registry entry
+
+`@deepseek-ai/dsh-mcp-client/registry` is the composition entry the base bundle mounts: one row carries the whole server fleet, so a deployment supplies its servers by replacing one config instead of inserting per-server rows.
+
+```yaml
+- id: mcp
+  name: '@deepseek-ai/dsh-mcp-client/registry'
+  config:
+    servers:
+      - serverName: github
+        transport: stdio
+        command: npx
+        args: ['-y', '@modelcontextprotocol/server-github']
+```
+
+Each `servers` entry is one complete `Config` (the table above) and activates as a child `mcp-client` instance with this plugin's full connection, discovery, and reconnect behavior. The default registry is empty: the shipped base profile mounts the row dormant — no server process starts and no `mcp__*` tool joins the catalog until a later patch layer replaces `servers` (a patch replaces the row's whole `config`; there is no deep merge).
+
+Misconfiguration fails loud at load: an entry that fails the Config schema, a duplicated `serverName` inside the registry, or a child whose startup fails under `failOnStartupError` rejects the row, so a broken composition never boots a partially mounted fleet. A connection failure with `failOnStartupError: false` stays the per-entry choice — that child logs and enters its reconnect loop while the rest of the composition boots. HMR reloads the registry row as one unit: editing it disconnects and remounts every server.
+
 ## Config
 
 | Field | Transport | Required | Description |

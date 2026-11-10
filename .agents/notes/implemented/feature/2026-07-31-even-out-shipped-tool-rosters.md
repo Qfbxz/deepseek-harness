@@ -30,11 +30,11 @@ Withholding it narrows the surface without removing the reach: `bash` is mounted
 
 **The LSP trio** stays out for an operational reason rather than a security one: `command` resolves from `PATH` at plugin load, so a missing language server fails the whole boot rather than one tool. It becomes mountable once absence degrades to a skipped registration.
 
-### MCP is a dependency, not a row
+### MCP is a dependency, not a named server
 
-`@deepseek-ai/dsh-mcp-client` becomes a runtime dependency of the CLI without a row in any shipped config. The plugin mounts exactly one server per instance and `command` is required, so a default would have to name a third-party server and spawn it as a child process on every launch — outside `ctx.shell`, and therefore outside the sandbox policy the Web surface composes.
+`@deepseek-ai/dsh-mcp-client` is a runtime dependency, and no shipped config names a server. The plugin mounts exactly one server per instance and `command` is required, so a default would have to name a third-party server and spawn it as a child process on every launch — outside `ctx.shell`, and therefore outside the sandbox policy the Web surface composes.
 
-The layer that would make MCP a default is the one this repository does not have yet: a bridge that reads a user's server list and mounts one client per entry, the same shape [`dsh-hooks-claude-code`](../../../../packages/hooks/hooks-claude-code/README.md) already has for a Claude Code `hooks.json`. Shipping the dependency means an installed `dsh` can mount servers from `$DSH_HOME/config.yaml` today; the CLI README carries the YAML.
+The bridge that reads a user's server list and mounts one client per entry — the shape [`dsh-hooks-claude-code`](../../../../packages/hooks/hooks-claude-code/README.md) has for a Claude Code `hooks.json` — is the base bundle's dormant [registry row](2026-11-10-wp7-mcp-base-bundle.md): it mounts nothing until a patch layer supplies the server list, so the no-named-server, no-default-spawn rule holds. Shipping the dependency also means an installed `dsh` can mount servers from `$DSH_HOME/config.yaml` today; the CLI README carries the YAML.
 
 ## Testing
 

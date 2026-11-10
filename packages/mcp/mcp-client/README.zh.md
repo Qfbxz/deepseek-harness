@@ -31,6 +31,25 @@ MCP 客户端桥接插件：连接外部 [Model Context Protocol](https://modelc
 
 模型会看到 `mcp__github__create_issue`、`mcp__web__search` 等工具，这与 Claude Code 和 Codex 使用的服务器限定形状相同。HMR（热模块替换）支持热替换：编辑配置项会触发断开 + 重新连接，无需重启进程；`serverName` 不变时会生成完全相同的工具名称。
 
+## 注册表入口
+
+`@deepseek-ai/dsh-mcp-client/registry` 是基础 bundle 挂载的组合入口：一行携带整个服务器清单，部署只需替换一份 config 即可提供其服务器，而不必逐行插入。
+
+```yaml
+- id: mcp
+  name: '@deepseek-ai/dsh-mcp-client/registry'
+  config:
+    servers:
+      - serverName: github
+        transport: stdio
+        command: npx
+        args: ['-y', '@modelcontextprotocol/server-github']
+```
+
+每个 `servers` 条目都是一份完整的 `Config`（见上表），并作为一个子 `mcp-client` 实例激活，具备本插件完整的连接、发现与重连行为。默认注册表为空：出厂的基础 profile 以休眠状态挂载该行——在后续 patch 层替换 `servers` 之前，不启动任何服务器进程，也没有任何 `mcp__*` 工具加入目录（patch 会替换目标行的整个 `config`；没有深度合并）。
+
+配置错误在加载期响亮失败：未通过 Config schema 校验的条目、注册表内重复的 `serverName`、或在 `failOnStartupError` 下启动失败的子项都会让该行报错拒绝，因此损坏的组合绝不会以部分挂载的服务器清单启动。`failOnStartupError: false` 时的连接失败仍是逐条目自己的选择——该子项记录日志并进入重连循环，组合的其余部分照常启动。HMR 以注册表行为单位整体重载：编辑该行会断开并重新挂载每台服务器。
+
 ## 配置
 
 | 字段 | 传输 | 必填 | 描述 |
