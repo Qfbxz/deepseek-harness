@@ -292,6 +292,26 @@ interface TokenUsage {
 
 <a id="blockassembler"></a>
 
+## 提供方 token 计数
+
+计数是与流式调用分离的可选适配器能力：提供方暴露 token 计数操作（例如 `count_tokens` 端点）的适配器实现 `countTokens`，没有该能力的适配器不声明它。`LlmRuntime.countTokens(provider, model, request, signal)` 转发到该路由的适配器，在能力缺失时返回 `undefined`——缺失是需要调用方定价处理的事实，而不是错误。运行时在此 wire 边界校验适配器返回的计数是非负安全整数，其他取值以 `INVALID_TOKEN_COUNT` 拒绝。该计数按提供方自己的 tokenizer 对完整请求——system、tools、messages——计价，可能与任何字符启发式相差很远。
+
+```ts type-equiv
+/**
+ * One token-count interrogation of an exact provider/model route: the request
+ * whose prompt tokens the provider would price. The count covers the complete
+ * request — system, tools, and messages — under the provider's own tokenizer.
+ */
+interface LlmCountTokensRequest {
+  /** Ordered conversation messages, exactly as a request would carry them. */
+  readonly messages: readonly Message[]
+  /** System prompt text, when the counted request carries one. */
+  readonly system?: string
+  /** Tool schemas, when the counted request carries them. */
+  readonly tools?: readonly ToolSchema[]
+}
+```
+
 ## `BlockAssembler`
 
 `BlockAssembler`（[`packages/llm/llm/src/assembler.ts`](../../packages/llm/llm/src/assembler.ts)）是唯一的共享实现，负责把 `StreamChunk` 流折叠回 `ContentBlock`、usage、结束原因与回放状态。循环在记录原始分片的同时，把同一批分片送入 assembler，再将组装后的 assistant 内容连同生成它的提供方和模型一起存储。需要组装结果、又不想重新实现 fold 的消费方使用它。
@@ -737,6 +757,27 @@ declare abstract class LlmAdapter {
     _signal?: AbortSignal,
   ): Promise<LlmResolvedModelInfo>;
   /**
+   * Count provider tokens for one exact request, when the provider exposes a
+   * token-count operation. Optional capability: an adapter whose provider
+   * offers no count endpoint leaves it undeclared, and `LlmRuntime.countTokens()`
+   * reports `undefined` so consumers keep the character estimator. The count
+   * prices the complete request — system, tools, and messages — under the
+   * provider's own tokenizer, which can diverge far from any character
+   * heuristic.
+   * @param provider - one provider route owned by this adapter.
+   * @param model - exact model id the count targets.
+   * @param request - the request whose prompt tokens are counted.
+   * @param signal - cancellation for this count; asynchronous implementations
+   *   must settle promptly after it aborts.
+   * @returns the non-negative provider-reported prompt token count.
+   */
+  countTokens?(
+    provider: string,
+    model: string,
+    request: LlmCountTokensRequest,
+    signal?: AbortSignal,
+  ): Promise<number>;
+  /**
    * Stream one model call as raw chunks. The only required method.
    * @param options - the fully-assembled request; implementations must honor `options.signal`.
    * @returns the chunk stream, obeying the adapter contract documented on `StreamChunk`.
@@ -825,6 +866,21 @@ async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, ): 
 providerRetryPolicy(provider: string): ResolvedRetryPolicy
 
 /**
+ * Count tokens for one request through the route's adapter, when the adapter
+ * declares the {@link LlmAdapter.countTokens} capability. Undeclared absence
+ * is a fact, not an error: callers keep the character estimator instead. The
+ * adapter-returned count is validated at this wire boundary.
+ * @param provider - registered provider route to interrogate.
+ * @param model - exact model id the count targets.
+ * @param request - the request whose prompt tokens are counted.
+ * @param signal - optional cancellation for adapter-owned asynchronous counting.
+ * @returns the provider-reported count, or `undefined` when the adapter does not declare the capability.
+ * @throws {LlmError} `NO_ADAPTER` when no adapter is registered for `provider`, or
+ *   `INVALID_TOKEN_COUNT` when the adapter returns a value that is not a non-negative safe integer.
+ */
+async countTokens( provider: string, model: string, request: LlmCountTokensRequest, signal?: AbortSignal, ): Promise<number | undefined>
+
+/**
  * Discover models advertised by one registered provider. Catalog membership
  * is advisory and never changes routing or request validation.
  * @param provider - registered provider route to inspect.
@@ -879,7 +935,7 @@ async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<Prepared
 stream(options: GenerateOptions): AsyncIterable<StreamChunk>
 ```
 
-Source: [`packages/llm/llm/src/index.ts:284`](../../packages/llm/llm/src/index.ts)
+Source: [`packages/llm/llm/src/index.ts:307`](../../packages/llm/llm/src/index.ts)
 
 <a id="llm-events"></a>
 
@@ -928,5 +984,5 @@ Waterfall around every streaming model call (retry, replay, routing). Bound to t
 'llm/stream'(this: LlmRuntime, options: GenerateOptions, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
 ```
 
-Source: [`packages/llm/llm/src/index.ts:64`](../../packages/llm/llm/src/index.ts)
+Source: [`packages/llm/llm/src/index.ts:65`](../../packages/llm/llm/src/index.ts)
 <!-- END GENERATED cordis-surface -->

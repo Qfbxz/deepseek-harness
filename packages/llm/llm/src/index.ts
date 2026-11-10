@@ -10,6 +10,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import type {
   GenerateOptions,
   LlmConfigurableProvider,
+  LlmCountTokensRequest,
   LlmDiscoveredModel,
   LlmFailure,
   LlmModelContext,
@@ -223,6 +224,28 @@ export abstract class LlmAdapter {
   ): Promise<LlmResolvedModelInfo> {
     return Promise.resolve({ provider, id: model, name: model })
   }
+
+  /**
+   * Count provider tokens for one exact request, when the provider exposes a
+   * token-count operation. Optional capability: an adapter whose provider
+   * offers no count endpoint leaves it undeclared, and `LlmRuntime.countTokens()`
+   * reports `undefined` so consumers keep the character estimator. The count
+   * prices the complete request — system, tools, and messages — under the
+   * provider's own tokenizer, which can diverge far from any character
+   * heuristic.
+   * @param provider - one provider route owned by this adapter.
+   * @param model - exact model id the count targets.
+   * @param request - the request whose prompt tokens are counted.
+   * @param signal - cancellation for this count; asynchronous implementations
+   *   must settle promptly after it aborts.
+   * @returns the non-negative provider-reported prompt token count.
+   */
+  countTokens?(
+    provider: string,
+    model: string,
+    request: LlmCountTokensRequest,
+    signal?: AbortSignal,
+  ): Promise<number>
 
   /**
    * Stream one model call as raw chunks. The only required method.
@@ -565,6 +588,37 @@ export class LlmRuntime extends Service {
    */
   providerRetryPolicy(provider: string): ResolvedRetryPolicy {
     return this.registration(provider).retryPolicy
+  }
+
+  /**
+   * Count tokens for one request through the route's adapter, when the adapter
+   * declares the {@link LlmAdapter.countTokens} capability. Undeclared absence
+   * is a fact, not an error: callers keep the character estimator instead. The
+   * adapter-returned count is validated at this wire boundary.
+   * @param provider - registered provider route to interrogate.
+   * @param model - exact model id the count targets.
+   * @param request - the request whose prompt tokens are counted.
+   * @param signal - optional cancellation for adapter-owned asynchronous counting.
+   * @returns the provider-reported count, or `undefined` when the adapter does not declare the capability.
+   * @throws {LlmError} `NO_ADAPTER` when no adapter is registered for `provider`, or
+   *   `INVALID_TOKEN_COUNT` when the adapter returns a value that is not a non-negative safe integer.
+   */
+  async countTokens(
+    provider: string,
+    model: string,
+    request: LlmCountTokensRequest,
+    signal?: AbortSignal,
+  ): Promise<number | undefined> {
+    const adapter = this.registration(provider).adapter
+    if (adapter.countTokens === undefined) return undefined
+    const tokens = await adapter.countTokens(provider, model, request, signal)
+    if (!Number.isSafeInteger(tokens) || tokens < 0) {
+      throw new LlmError(
+        `adapter returned an invalid token count for provider "${provider}" model "${model}"`,
+        'INVALID_TOKEN_COUNT',
+      )
+    }
+    return tokens
   }
 
   /** Detach typed adapter-owned modality metadata. */

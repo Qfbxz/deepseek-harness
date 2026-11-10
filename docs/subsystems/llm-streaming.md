@@ -286,6 +286,26 @@ interface TokenUsage {
 }
 ```
 
+## Provider token counting
+
+Counting is an optional adapter capability, declared separately from streaming: an adapter whose provider exposes a token-count operation (for example a `count_tokens` endpoint) implements `countTokens`, and adapters without one leave it undeclared. `LlmRuntime.countTokens(provider, model, request, signal)` forwards to the route's adapter and returns `undefined` when the capability is absent — absence is a fact callers price around, not an error. The runtime validates the adapter-returned count as a non-negative safe integer at this wire boundary and rejects other values with `INVALID_TOKEN_COUNT`. The count prices the complete request — system, tools, and messages — under the provider's own tokenizer, which can diverge far from any character heuristic.
+
+```ts type-equiv
+/**
+ * One token-count interrogation of an exact provider/model route: the request
+ * whose prompt tokens the provider would price. The count covers the complete
+ * request — system, tools, and messages — under the provider's own tokenizer.
+ */
+interface LlmCountTokensRequest {
+  /** Ordered conversation messages, exactly as a request would carry them. */
+  readonly messages: readonly Message[]
+  /** System prompt text, when the counted request carries one. */
+  readonly system?: string
+  /** Tool schemas, when the counted request carries them. */
+  readonly tools?: readonly ToolSchema[]
+}
+```
+
 ## `BlockAssembler`
 
 `BlockAssembler` ([`packages/llm/llm/src/assembler.ts`](../../packages/llm/llm/src/assembler.ts)) is the single shared implementation that folds a `StreamChunk` stream back into `ContentBlock`s, usage, finish reason, and replay state. The loop logs the raw chunks while feeding the same chunks through an assembler, then stores the assembled assistant content with the provider and model that produced it. A consumer that needs the assembled result without re-implementing the fold uses this.
@@ -731,6 +751,27 @@ declare abstract class LlmAdapter {
     _signal?: AbortSignal,
   ): Promise<LlmResolvedModelInfo>;
   /**
+   * Count provider tokens for one exact request, when the provider exposes a
+   * token-count operation. Optional capability: an adapter whose provider
+   * offers no count endpoint leaves it undeclared, and `LlmRuntime.countTokens()`
+   * reports `undefined` so consumers keep the character estimator. The count
+   * prices the complete request — system, tools, and messages — under the
+   * provider's own tokenizer, which can diverge far from any character
+   * heuristic.
+   * @param provider - one provider route owned by this adapter.
+   * @param model - exact model id the count targets.
+   * @param request - the request whose prompt tokens are counted.
+   * @param signal - cancellation for this count; asynchronous implementations
+   *   must settle promptly after it aborts.
+   * @returns the non-negative provider-reported prompt token count.
+   */
+  countTokens?(
+    provider: string,
+    model: string,
+    request: LlmCountTokensRequest,
+    signal?: AbortSignal,
+  ): Promise<number>;
+  /**
    * Stream one model call as raw chunks. The only required method.
    * @param options - the fully-assembled request; implementations must honor `options.signal`.
    * @returns the chunk stream, obeying the adapter contract documented on `StreamChunk`.
@@ -819,6 +860,21 @@ async discoverModels( settingsNs: string, request: LlmModelDiscoveryRequest, ): 
 providerRetryPolicy(provider: string): ResolvedRetryPolicy
 
 /**
+ * Count tokens for one request through the route's adapter, when the adapter
+ * declares the {@link LlmAdapter.countTokens} capability. Undeclared absence
+ * is a fact, not an error: callers keep the character estimator instead. The
+ * adapter-returned count is validated at this wire boundary.
+ * @param provider - registered provider route to interrogate.
+ * @param model - exact model id the count targets.
+ * @param request - the request whose prompt tokens are counted.
+ * @param signal - optional cancellation for adapter-owned asynchronous counting.
+ * @returns the provider-reported count, or `undefined` when the adapter does not declare the capability.
+ * @throws {LlmError} `NO_ADAPTER` when no adapter is registered for `provider`, or
+ *   `INVALID_TOKEN_COUNT` when the adapter returns a value that is not a non-negative safe integer.
+ */
+async countTokens( provider: string, model: string, request: LlmCountTokensRequest, signal?: AbortSignal, ): Promise<number | undefined>
+
+/**
  * Discover models advertised by one registered provider. Catalog membership
  * is advisory and never changes routing or request validation.
  * @param provider - registered provider route to inspect.
@@ -873,7 +929,7 @@ async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<Prepared
 stream(options: GenerateOptions): AsyncIterable<StreamChunk>
 ```
 
-Source: [`packages/llm/llm/src/index.ts:284`](../../packages/llm/llm/src/index.ts)
+Source: [`packages/llm/llm/src/index.ts:307`](../../packages/llm/llm/src/index.ts)
 
 <a id="llm-events"></a>
 
@@ -922,5 +978,5 @@ Waterfall around every streaming model call (retry, replay, routing). Bound to t
 'llm/stream'(this: LlmRuntime, options: GenerateOptions, next: () => AsyncIterable<StreamChunk>): AsyncIterable<StreamChunk>
 ```
 
-Source: [`packages/llm/llm/src/index.ts:64`](../../packages/llm/llm/src/index.ts)
+Source: [`packages/llm/llm/src/index.ts:65`](../../packages/llm/llm/src/index.ts)
 <!-- END GENERATED cordis-surface -->

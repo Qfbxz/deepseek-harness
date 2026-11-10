@@ -233,6 +233,46 @@ describe('TokenMeter pricing', () => {
     expect(overridden.nodes).toEqual(logged.nodes)
     expectSurfaceTotal(overridden)
   })
+
+  it('anchors directly on a reported count with no signed surface delta', () => {
+    const service = meter()
+    const session = Session.create(SessionId('reported'))
+    session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'question' }],
+      source: { kind: 'user' },
+    }), { surfaceOp: 'append' })
+    appendHeader(session, header('deepseek-v4-flash', { system: 'system' }))
+    const estimated = service.measure(session)
+
+    const reported = service.measure(session, undefined, 990)
+    expect(reported.baseline).toEqual({ kind: 'reported', tokens: 990 })
+    expect(reported.surfaceDeltaTokens).toBe(0)
+    expect(reported.totalTokens).toBe(990)
+    // Surface fields keep describing the current session independently of the
+    // reported anchor.
+    expect(reported.surfaceTokens).toBe(estimated.surfaceTokens)
+    expect(reported.nodes).toEqual(estimated.nodes)
+    expect(reported.logRevision).toBe(estimated.logRevision)
+    expect(Object.isFrozen(reported.baseline)).toBe(true)
+  })
+
+  it('lets a reported count override an anchored usage baseline', () => {
+    const service = meter()
+    const session = Session.create(SessionId('reported-over-usage'))
+    const USAGE: TokenUsage = { inputTokens: 20, outputTokens: 7 }
+    appendSuccessfulCall(session, header('deepseek-v4-flash', { system: 'system' }), {
+      providerText: 'provider answer',
+      usage: USAGE,
+    })
+    expect(service.measure(session).baseline).toMatchObject({ kind: 'usage', tokens: 27 })
+
+    const reported = service.measure(session, undefined, 12)
+    expect(reported.baseline).toEqual({ kind: 'reported', tokens: 12 })
+    expect(reported.totalTokens).toBe(12)
+    // Without the count, the usage anchor and its signed deltas return.
+    expect(service.measure(session).baseline).toMatchObject({ kind: 'usage', tokens: 27 })
+    expect(service.measure(session).surfaceDeltaTokens).toBe(0)
+  })
 })
 
 describe('replay anchors and surface folds', () => {

@@ -249,6 +249,20 @@ export interface LlmModelContext {
   contextWindow: number
 }
 
+/**
+ * One token-count interrogation of an exact provider/model route: the request
+ * whose prompt tokens the provider would price. The count covers the complete
+ * request — system, tools, and messages — under the provider's own tokenizer.
+ */
+export interface LlmCountTokensRequest {
+  /** Ordered conversation messages, exactly as a request would carry them. */
+  readonly messages: readonly Message[]
+  /** System prompt text, when the counted request carries one. */
+  readonly system?: string
+  /** Tool schemas, when the counted request carries them. */
+  readonly tools?: readonly ToolSchema[]
+}
+
 /** Display metadata for one adapter-owned reasoning effort. */
 export interface LlmReasoningEffortInfo {
   /** Opaque stable value accepted by {@link GenerateOptions.reasoningEffort}. */

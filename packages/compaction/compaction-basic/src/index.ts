@@ -11,7 +11,7 @@ import type { CompactionResult, CompactionTrigger } from '@deepseek-ai/dsh-compa
 import type { TokenMeter } from '@deepseek-ai/dsh-token-meter'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { CONTEXT_WINDOW_EXCEEDED_CODE, assertNever } from '@deepseek-ai/dsh-llm'
-import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
+import type { LlmCallConfig, Message } from '@deepseek-ai/dsh-llm'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
 // Type-only: makes the optional sibling service available to `ctx.get()`.
@@ -331,13 +331,26 @@ export class BasicCompactionEngine extends CompactionEngine {
       )
     }
     const spec = resolveCompactSpec(policy, context.contextWindow)
+
+    // Pressure prices every threshold decision from the provider-reported
+    // count when the routed adapter declares the counting capability; the
+    // heuristic estimate prices an undeclared adapter or a failed count.
+    measurement = meter.measure(
+      agent.session,
+      undefined,
+      await this.reportedRequestTokens(agent.session, target, signal),
+    )
     if (measurement.totalTokens < spec.thresholdTokens) return null
 
     // Once pressure qualifies, land the model-free pass before choosing a
     // summary range, then remeasure through the singleton replay fold.
     if (prune !== undefined) {
       prune.pruneSession(agent.session)
-      measurement = meter.measure(agent.session)
+      measurement = meter.measure(
+        agent.session,
+        undefined,
+        await this.reportedRequestTokens(agent.session, target, signal),
+      )
     }
     if (measurement.totalTokens < spec.thresholdTokens) return null
 
@@ -351,14 +364,60 @@ export class BasicCompactionEngine extends CompactionEngine {
         break
       }
       result = await this.compactRegion(range.start, range.end, agent, signal)
-      measurement = meter.measure(agent.session)
+      measurement = meter.measure(
+        agent.session,
+        undefined,
+        await this.reportedRequestTokens(agent.session, target, signal),
+      )
       if (measurement.totalTokens < spec.thresholdTokens) return result
     }
 
     throw new Error(
       `compaction still above threshold after ${spec.compactionRetries + 1} compaction attempts `
-      + `(${measurement.totalTokens} estimated tokens >= threshold ${spec.thresholdTokens})`,
+      + `(${measurement.totalTokens} tokens >= threshold ${spec.thresholdTokens})`,
     )
+  }
+
+  /**
+   * Provider-reported prompt token count for the current routed request
+   * envelope — the logged header's system and tools plus the fully derived
+   * surface — through the routing adapter's optional counting capability.
+   * An undeclared adapter returns `undefined`, and a failed count warns and
+   * returns `undefined` so pricing falls back to the fixed heuristic estimate;
+   * a count the cancellation signal already won rethrows, because cancellation
+   * precedes pricing.
+   */
+  private async reportedRequestTokens(
+    session: Session,
+    target: Pick<LlmCallConfig, 'provider' | 'model'>,
+    signal: AbortSignal,
+  ): Promise<number | undefined> {
+    try {
+      const header = session.requestHeader()
+      const messages = session.surface.nodes
+        // Surface node seqs are valid log indices.
+        // oxlint-disable-next-line typescript/no-non-null-assertion
+        .map(seq => session.deriveEventMessage(session.events[seq]!))
+        .filter((message): message is Message => message !== null)
+      return await this.ctx.llm.countTokens(
+        target.provider,
+        target.model,
+        {
+          ...header?.system === undefined ? {} : { system: header.system },
+          ...header?.tools === undefined ? {} : { tools: header.tools },
+          messages,
+        },
+        signal,
+      )
+    } catch (error: unknown) {
+      if (signal.aborted) throw error
+      const message = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.warn(
+        `compaction: provider token count failed on ${target.provider}/${target.model}: ${message}; `
+        + 'continuing with the character estimate',
+      )
+      return undefined
+    }
   }
 
   /**

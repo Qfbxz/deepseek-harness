@@ -15,11 +15,13 @@ import LlmRuntime, {
   createMessage,
 } from '@deepseek-ai/dsh-llm'
 import type {
+  LlmCountTokensRequest,
   LlmModelContext,
   LlmModelInfo,
   LlmModelReasoningInfo,
   LlmProviderInfo,
   LlmResolvedModelInfo,
+  Message,
 } from '@deepseek-ai/dsh-llm'
 
 class ScriptedAdapter extends LlmAdapter {
@@ -223,6 +225,49 @@ describe('LlmRuntime', () => {
       expect.objectContaining({ code: 'NO_ADAPTER' }),
     )
   })
+
+  it('reports an undeclared counting capability as undefined and forwards declared counts', async () => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    const counted = new class extends ScriptedAdapter {
+      lastCount: { provider: string; model: string; request: LlmCountTokensRequest; signal: AbortSignal | undefined } | undefined
+
+      override countTokens(
+        provider: string,
+        model: string,
+        request: LlmCountTokensRequest,
+        signal?: AbortSignal,
+      ): Promise<number> {
+        this.lastCount = { provider, model, request, signal }
+        return Promise.resolve(990)
+      }
+    }(SCRIPT)
+    ctx.llm.registerAdapter(['plain'], new ScriptedAdapter(SCRIPT))
+    ctx.llm.registerAdapter(['route'], counted)
+    const controller = new AbortController()
+    const request = { messages: [] as Message[], system: 'system', tools: [] }
+
+    await expect(ctx.llm.countTokens('plain', 'model', { messages: [] })).resolves.toBeUndefined()
+    await expect(ctx.llm.countTokens('missing', 'model', { messages: [] })).rejects.toMatchObject({ code: 'NO_ADAPTER' })
+    await expect(ctx.llm.countTokens('route', 'model', request, controller.signal)).resolves.toBe(990)
+    expect(counted.lastCount).toEqual({ provider: 'route', model: 'model', request, signal: controller.signal })
+  })
+
+  it.each([-1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects an invalid adapter-reported token count %s',
+    async (tokens) => {
+      const ctx = new Context()
+      await ctx.plugin(LlmRuntime)
+      ctx.llm.registerAdapter(['route'], new class extends ScriptedAdapter {
+        override countTokens(): Promise<number> {
+          return Promise.resolve(tokens)
+        }
+      }(SCRIPT))
+
+      await expect(ctx.llm.countTokens('route', 'model', { messages: [] }))
+        .rejects.toMatchObject({ code: 'INVALID_TOKEN_COUNT' })
+    },
+  )
 
   it('keeps a prepared registration and retry policy after route replacement', async () => {
     const oldPolicy = resolveRetryPolicy({ mode: 'always' }, 'old retryPolicy')

@@ -100,10 +100,13 @@ export class TokenMeter extends Service {
   /**
    * Measure current request pressure and surface through the durable tail.
    *
-   * Provider usage is reused only when the latest successful call's canonical
-   * request envelope matches `requestHeader` and its total is no lower than
-   * that call's full heuristic anchor; otherwise the complete envelope and
-   * surface are heuristically repriced.
+   * A caller-supplied `reportedTokens` count covers the exact measured
+   * envelope — the provider counted the current system, tools, and surface at
+   * this boundary — so it anchors the measurement directly with no signed
+   * surface delta. Provider usage is reused only when the latest successful
+   * call's canonical request envelope matches `requestHeader` and its total is
+   * no lower than that call's full heuristic anchor; otherwise the complete
+   * envelope and surface are heuristically repriced.
    *
    * `requestHeader` affects request pressure only; surface fields always
    * describe the current session surface. Every call clones those positional
@@ -111,9 +114,11 @@ export class TokenMeter extends Service {
    *
    * @param session - session to replay through its current durable tail.
    * @param requestHeader - optional effective request envelope replacing the latest logged header.
+   * @param reportedTokens - optional provider-reported count for the measured envelope, taken through
+   *   the routing adapter's counting capability; it overrides the usage and estimated anchors.
    * @returns a detached deeply immutable pressure and surface measurement.
    */
-  measure(session: Session, requestHeader?: EpochHeader): TokenMeasurement {
+  measure(session: Session, requestHeader?: EpochHeader, reportedTokens?: number): TokenMeasurement {
     const state = this._sync(session)
     const header = requestHeader === undefined
       ? state.header
@@ -122,7 +127,10 @@ export class TokenMeter extends Service {
 
     let baseline: TokenMeasurementBaseline
     let surfaceDeltaTokens: number
-    if (anchor !== undefined && optionalHeaderEquals(anchor.header, header)) {
+    if (reportedTokens !== undefined) {
+      baseline = { kind: 'reported', tokens: reportedTokens }
+      surfaceDeltaTokens = 0
+    } else if (anchor !== undefined && optionalHeaderEquals(anchor.header, header)) {
       baseline = anchor.baseline
       surfaceDeltaTokens = state.surfaceTokens - anchor.surfaceTokens
     } else if (header === undefined && state.surfaceTokens === 0) {

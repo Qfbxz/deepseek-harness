@@ -26,7 +26,7 @@ interface TokenMeasurement {
 }
 ```
 
-`baseline.kind === 'usage'` 表示最近一次成功的提供方调用具有相同的规范请求 envelope，且该调用的总量不低于其完整启发式锚点。`estimated` 表示不存在可复用的保守 usage 锚点，因此服务使用固定启发式规则对完整信封和表层定价。后续成功请求会替换早先的锚点；有符号的 `surfaceDeltaTokens` 会保留相对于匹配锚点的增长与缩减。`totalTokens` 仍表示请求与响应压力，`surfaceTokens` 则是仅针对表层的启发式总量，等于所有节点价格之和。
+`baseline.kind === 'usage'` 表示最近一次成功的提供方调用具有相同的规范请求 envelope，且该调用的总量不低于其完整启发式锚点。`reported` 表示调用方通过路由适配器的计数能力提供了该次测量 envelope 的提供方计数总量，因此锚点就是上报数值，没有有符号表层增量。`estimated` 表示不存在可复用的保守 usage 锚点或上报计数，因此服务使用固定启发式规则对完整信封和表层定价。后续成功请求会替换早先的锚点；有符号的 `surfaceDeltaTokens` 会保留相对于匹配锚点的增长与缩减。`totalTokens` 仍表示请求与响应压力，`surfaceTokens` 则是仅针对表层的启发式总量，等于所有节点价格之和。
 
 ## `TokenSurfaceNode`
 
@@ -60,10 +60,13 @@ Replay owner for one service-wide estimator and isolated per-session folds.
 /**
  * Measure current request pressure and surface through the durable tail.
  *
- * Provider usage is reused only when the latest successful call's canonical
- * request envelope matches `requestHeader` and its total is no lower than
- * that call's full heuristic anchor; otherwise the complete envelope and
- * surface are heuristically repriced.
+ * A caller-supplied `reportedTokens` count covers the exact measured
+ * envelope — the provider counted the current system, tools, and surface at
+ * this boundary — so it anchors the measurement directly with no signed
+ * surface delta. Provider usage is reused only when the latest successful
+ * call's canonical request envelope matches `requestHeader` and its total is
+ * no lower than that call's full heuristic anchor; otherwise the complete
+ * envelope and surface are heuristically repriced.
  *
  * `requestHeader` affects request pressure only; surface fields always
  * describe the current session surface. Every call clones those positional
@@ -71,9 +74,11 @@ Replay owner for one service-wide estimator and isolated per-session folds.
  *
  * @param session - session to replay through its current durable tail.
  * @param requestHeader - optional effective request envelope replacing the latest logged header.
+ * @param reportedTokens - optional provider-reported count for the measured envelope, taken through
+ *   the routing adapter's counting capability; it overrides the usage and estimated anchors.
  * @returns a detached deeply immutable pressure and surface measurement.
  */
-measure(session: Session, requestHeader?: EpochHeader): TokenMeasurement
+measure(session: Session, requestHeader?: EpochHeader, reportedTokens?: number): TokenMeasurement
 
 /**
  * Heuristically price one model-visible message (instance face of the pure

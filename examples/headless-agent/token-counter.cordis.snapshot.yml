@@ -1,0 +1,28 @@
+# WP5 provider token counter replay: one scripted todo_write step triggers the
+# step-pressure check, the routed adapter reports a real tokenizer-style count
+# for the full request envelope, and the threshold decision runs on that
+# reported count. Includes cordis.yml directly (a config patch cannot target an
+# entry behind a nested include), restates the compaction-basic row, and
+# disables the key-requiring DeepSeek adapter in favor of the keyless
+# counter-mock fixture, which claims the composition's own deepseek-official
+# route. The fixture counts at 2 chars/token (near the measured 2.09), so the
+# first reported count is 9896 and the post-compaction count 9420; the
+# 0.5 × 19000 = 9500 threshold sits between them, while the character estimate
+# (~5000) stays below it — only the reported count can trigger this compaction.
+- id: token-counter-mock-llm
+  name: './tests/fixtures/token-counter-mock-llm.ts'
+
+- id: base
+  name: '@deepseek-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+    patches:
+      - id: llm-deepseek
+        name: '@deepseek-ai/dsh-llm-deepseek'
+        disabled: true
+      - id: compaction-basic
+        name: '@deepseek-ai/dsh-compaction-basic'
+        config:
+          thresholdRatio: 0.5
+          retainTokens: 20
+          maxTokens: 64

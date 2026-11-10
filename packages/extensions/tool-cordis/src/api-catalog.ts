@@ -929,6 +929,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the provider-owned policy, with normal defaults already resolved.',
       },
       {
+        signature: 'async countTokens( provider: string, model: string, request: LlmCountTokensRequest, signal?: AbortSignal, ): Promise<number | undefined>',
+        description: 'Count tokens for one request through the route\'s adapter, when the adapter declares the LlmAdapter.countTokens capability. Undeclared absence is a fact, not an error: callers keep the character estimator instead. The adapter-returned count is validated at this wire boundary.',
+        parameters: [{ name: 'provider', description: 'registered provider route to interrogate.' }, { name: 'model', description: 'exact model id the count targets.' }, { name: 'request', description: 'the request whose prompt tokens are counted.' }, { name: 'signal', description: 'optional cancellation for adapter-owned asynchronous counting.' }],
+        returns: 'the provider-reported count, or `undefined` when the adapter does not declare the capability.',
+        throws: ['{LlmError} `NO_ADAPTER` when no adapter is registered for `provider`, or `INVALID_TOKEN_COUNT` when the adapter returns a value that is not a non-negative safe integer.'],
+      },
+      {
         signature: 'async listModels(provider: string): Promise<LlmModelInfo[]>',
         description: 'Discover models advertised by one registered provider. Catalog membership is advisory and never changes routing or request validation.',
         parameters: [{ name: 'provider', description: 'registered provider route to inspect.' }],
@@ -1951,9 +1958,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Replay owner for one service-wide estimator and isolated per-session folds.',
     methods: [
       {
-        signature: 'measure(session: Session, requestHeader?: EpochHeader): TokenMeasurement',
-        description: 'Measure current request pressure and surface through the durable tail.\n\nProvider usage is reused only when the latest successful call\'s canonical request envelope matches `requestHeader` and its total is no lower than that call\'s full heuristic anchor; otherwise the complete envelope and surface are heuristically repriced.\n\n`requestHeader` affects request pressure only; surface fields always describe the current session surface. Every call clones those positional nodes, so measurement is O(surface).',
-        parameters: [{ name: 'session', description: 'session to replay through its current durable tail.' }, { name: 'requestHeader', description: 'optional effective request envelope replacing the latest logged header.' }],
+        signature: 'measure(session: Session, requestHeader?: EpochHeader, reportedTokens?: number): TokenMeasurement',
+        description: 'Measure current request pressure and surface through the durable tail.\n\nA caller-supplied `reportedTokens` count covers the exact measured envelope — the provider counted the current system, tools, and surface at this boundary — so it anchors the measurement directly with no signed surface delta. Provider usage is reused only when the latest successful call\'s canonical request envelope matches `requestHeader` and its total is no lower than that call\'s full heuristic anchor; otherwise the complete envelope and surface are heuristically repriced.\n\n`requestHeader` affects request pressure only; surface fields always describe the current session surface. Every call clones those positional nodes, so measurement is O(surface).',
+        parameters: [{ name: 'session', description: 'session to replay through its current durable tail.' }, { name: 'requestHeader', description: 'optional effective request envelope replacing the latest logged header.' }, { name: 'reportedTokens', description: 'optional provider-reported count for the measured envelope, taken through the routing adapter\'s counting capability; it overrides the usage and estimated anchors.' }],
         returns: 'a detached deeply immutable pressure and surface measurement.',
       },
       {
@@ -3386,7 +3393,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmAdapter',
-    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    countTokens?(provider: string, model: string, request: LlmCountTokensRequest, signal?: AbortSignal): Promise<number>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
     name: 'LlmCallConfig',
@@ -3399,6 +3406,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LlmConfigurableProvider',
     declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n}',
+  },
+  {
+    name: 'LlmCountTokensRequest',
+    declaration: 'export interface LlmCountTokensRequest {\n    readonly messages: readonly Message[];\n    readonly system?: string;\n    readonly tools?: readonly ToolSchema[];\n}',
   },
   {
     name: 'LlmDiscoveredModel',
@@ -3438,7 +3449,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends Service {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+    declaration: 'export class LlmRuntime extends Service {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    async countTokens(provider: string, model: string, request: LlmCountTokensRequest, signal?: AbortSignal): Promise<number | undefined>;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
     name: 'LspHover',
@@ -4514,7 +4525,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TokenMeasurementBaseline',
-    declaration: 'export type TokenMeasurementBaseline = {\n    readonly kind: \'none\';\n    readonly tokens: 0;\n} | {\n    readonly kind: \'estimated\';\n    readonly tokens: number;\n} | {\n    readonly kind: \'usage\';\n    readonly tokens: number;\n    readonly usage: Readonly<TokenUsage>;\n};',
+    declaration: 'export type TokenMeasurementBaseline = {\n    readonly kind: \'none\';\n    readonly tokens: 0;\n} | {\n    readonly kind: \'estimated\';\n    readonly tokens: number;\n} | {\n    readonly kind: \'reported\';\n    readonly tokens: number;\n} | {\n    readonly kind: \'usage\';\n    readonly tokens: number;\n    readonly usage: Readonly<TokenUsage>;\n};',
   },
   {
     name: 'TokenSurfaceNode',

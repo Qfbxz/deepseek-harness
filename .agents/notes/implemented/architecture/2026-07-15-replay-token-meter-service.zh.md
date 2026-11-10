@@ -14,7 +14,7 @@ Status: implemented
 
 ### 一个具体的 LLM（大语言模型）家族服务
 
-`@deepseek-ai/dsh-token-meter` 是 `packages/llm/` 下的单个具体包，并注册 `ctx.tokenMeter`。在第二种实现出现之前，它不会被拆成接口与后端。`TokenMeter` 本身公开 `measure(session, requestHeader?)` 与 `estimateMessage(message)`；消费方直接调用这个单例服务。
+`@deepseek-ai/dsh-token-meter` 是 `packages/llm/` 下的单个具体包，并注册 `ctx.tokenMeter`。在第二种实现出现之前，它不会被拆成接口与后端。`TokenMeter` 本身公开 `measure(session, requestHeader?, reportedTokens?)` 与 `estimateMessage(message)`；消费方直接调用这个单例服务。
 
 服务没有配置。估算采用固定的每 token 四个字符启发式规则，并加上结构开销。服务不提供模型 profile、容量设置、密度设置、分词器后端或语言专用策略。对精确提供方/模型容量的查询由适配器单独负责，具体见[路由模型上下文与压缩策略 Agent Note](2026-07-20-routed-model-context-and-compaction-policy.md)。
 
@@ -22,7 +22,7 @@ Status: implemented
 
 每个会话都有一个隔离的增量折叠。活跃折叠通过 `session/event` 前进；每次读取都会追到持久日志尾部，因此监听器顺序、种子会话与服务重载不会改变答案。折叠跟踪规范的完整请求头快照、步骤边界、表层追加与替换、assistant usage，以及每条 assistant 消息引用的分片 seq。下一个畸形事件会以事务方式失败并保持未读，不会让状态只修改一半。
 
-`measure(session, requestHeader?)` 只同步一次折叠，并在返回标量压力的同时给出逐位置节点价格。`totalTokens` 仍表示请求与响应压力；`surfaceTokens` 是仅针对表层的启发式总量，并等于 `nodes[].tokens` 之和。`requestHeader` 覆盖只改变压力定价，表层字段始终描述当前会话。`estimateMessage(message)` 不依赖会话状态，直接应用固定启发式规则。每个结果都是一个分离且深度不可变的快照，只携带一个 `logRevision`。每次计量都会复制当前节点，因此成本为 O(surface)。
+`measure(session, requestHeader?, reportedTokens?)` 只同步一次折叠，并在返回标量压力的同时给出逐位置节点价格。调用方提供的 `reportedTokens` 计数——针对该次被测 envelope 的提供方计数总量——会作为 `reported` 基线直接锚定这次测量，没有带符号表层增量；参见[提供方 token 计数器 note](../feature/2026-11-10-wp5-provider-token-counter.md)。`totalTokens` 仍表示请求与响应压力；`surfaceTokens` 是仅针对表层的启发式总量，并等于 `nodes[].tokens` 之和。`requestHeader` 覆盖只改变压力定价，表层字段始终描述当前会话。`estimateMessage(message)` 不依赖会话状态，直接应用固定启发式规则。每个结果都是一个分离且深度不可变的快照，只携带一个 `logRevision`。每次计量都会复制当前节点，因此成本为 O(surface)。
 
 只有当待计量的规范请求信封等于最近一次成功调用的锚点时，服务才复用提供方 usage。提供方、模型、系统提示词、前缀、工具或调用配置任一变化都会触发完整的启发式重新定价。表层变化相对匹配锚点保留有符号增量，包括缩小替换后的负值。后续成功请求会替换先前锚点，提供方或模型切换时也一样。
 

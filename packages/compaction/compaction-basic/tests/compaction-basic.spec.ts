@@ -16,6 +16,7 @@ import LlmRuntime, { createUserMessage, CallId, CONTEXT_WINDOW_EXCEEDED_CODE, cr
 import type {
   ContentBlock,
   GenerateOptions,
+  LlmCountTokensRequest,
   LlmFailure,
   LlmResolvedModelInfo,
   Message,
@@ -66,6 +67,24 @@ class RoutedContextAdapter extends LlmAdapter {
 
   override async * stream(): AsyncIterable<StreamChunk> {
     yield { type: 'finish', reason: { kind: 'stop' } }
+  }
+}
+
+/** Context-capacity adapter that additionally declares the counting capability. */
+class CountingContextAdapter extends ContextAdapter {
+  constructor(
+    contextWindow: number,
+    private readonly count: (provider: string, model: string, request: LlmCountTokensRequest) => Promise<number>,
+  ) {
+    super(contextWindow)
+  }
+
+  override countTokens(
+    provider: string,
+    model: string,
+    request: LlmCountTokensRequest,
+  ): Promise<number> {
+    return this.count(provider, model, request)
   }
 }
 
@@ -687,7 +706,86 @@ describe('pressure measurement and retention', () => {
     vi.spyOn(compact, 'compactRegion').mockRejectedValueOnce(stop)
 
     await expect(compactIfNeeded(compact, conversation(4))).rejects.toBe(stop)
-    expect(measure).toHaveBeenCalledTimes(1)
+    // One threshold measurement plus one retention measurement, each unified;
+    // the failed first compaction stops before any convergence remeasure.
+    expect(measure).toHaveBeenCalledTimes(2)
+  })
+
+  it('prices the pressure threshold from the provider-reported count when declared', async () => {
+    const ctx = createContext()
+    const count = vi.fn((_provider: string, _model: string, request: LlmCountTokensRequest) => {
+      expect(request.system).toBeUndefined()
+      expect(request.tools).toBeUndefined()
+      // Content-proportional fixture tokenizer: 150 tokens per surface message.
+      return Promise.resolve(request.messages.length * 150)
+    })
+    ctx.llm.registerAdapter(['counted'], new CountingContextAdapter(1_000, count))
+    const compact = service({ auto: false, thresholdRatio: 0.5, retainTokens: 20 }, ctx)
+    const session = conversation(2)
+    session.append('request/header', {
+      header: { config: { provider: 'counted', model: 'counted' } },
+      reason: 'resume',
+    })
+
+    // The heuristic estimate stays below the 500-token threshold; only the
+    // reported count crosses it.
+    expect(ctx.tokenMeter.measure(session).totalTokens).toBeLessThan(500)
+    const result = await compactIfNeeded(compact, session)
+    expect(result).not.toBeNull()
+    expect(compact.calls).toHaveLength(1)
+    // The count request covers the routed envelope's derived surface, and the
+    // fresh post-compaction count (2 × 150 = 300) converged after exactly one
+    // summary instead of retrying above threshold.
+    expect(count).toHaveBeenCalledTimes(2)
+    const [provider, model, request] = count.mock.calls[0]!
+    expect(provider).toBe('counted')
+    expect(model).toBe('counted')
+    expect(request.messages).toHaveLength(4)
+  })
+
+  it('keeps the character estimate when the adapter does not declare counting', async () => {
+    // Same content and threshold as the declared case above: the estimate
+    // stays below the threshold and no compaction runs.
+    const compact = service({ auto: false, thresholdRatio: 0.5, retainTokens: 20 })
+    await expect(compactIfNeeded(compact, conversation(2))).resolves.toBeNull()
+  })
+
+  it('falls back to the character estimate when a declared count fails', async () => {
+    const ctx = createContext()
+    const count = vi.fn(() => Promise.reject(new Error('count endpoint down')))
+    ctx.llm.registerAdapter(['counted'], new CountingContextAdapter(1_000, count))
+    const compact = service({ auto: false, thresholdRatio: 0.5, retainTokens: 20 }, ctx)
+    const session = conversation(2)
+    session.append('request/header', {
+      header: { config: { provider: 'counted', model: 'counted' } },
+      reason: 'resume',
+    })
+
+    // The failed count warns and prices from the estimate, which stays below
+    // the threshold; the attempt returns null and the breaker stays untouched.
+    const errors: string[] = []
+    ctx.logger.error = ((message: string) => void errors.push(message)) as typeof ctx.logger.error
+    await expect(compactIfNeeded(compact, session)).resolves.toBeNull()
+    expect(count).toHaveBeenCalledTimes(1)
+    expect(errors).toEqual([])
+  })
+
+  it('rethrows a count the cancellation signal already won', async () => {
+    const ctx = createContext()
+    const reason = new Error('cancelled')
+    const count = vi.fn(() => Promise.reject(reason))
+    ctx.llm.registerAdapter(['counted'], new CountingContextAdapter(1_000, count))
+    const compact = service({ auto: false, thresholdRatio: 0.5, retainTokens: 20 }, ctx)
+    const session = conversation(2)
+    session.append('request/header', {
+      header: { config: { provider: 'counted', model: 'counted' } },
+      reason: 'resume',
+    })
+    const controller = new AbortController()
+    controller.abort(reason)
+
+    await expect(compact.compactIfNeeded(agent(session, 'counted'), 'pressure', controller.signal))
+      .rejects.toBe(reason)
   })
 
   it('bounds retries when a shrinking checkpoint remains above threshold', async () => {
