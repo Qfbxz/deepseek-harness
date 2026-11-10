@@ -1,0 +1,8 @@
+{
+  "steps": [
+    {
+      "op": "prompt",
+      "text": "Keep truncation honest when tool output is cut. Record every part of this historical evidence: the snapshot uses keyless replay; persistence uses JSONL; the assembled headless application loads its real Cordis composition; the optional tool-result pruner replaces an oversized bash result with a notice naming the original size, the kept head and tail sizes, and the paging next step; context overflow retains the original failure while recovery is attempted; compaction opens with compaction/start and closes with compaction/end; a successful auxiliary summary records compaction/summary provenance; the retried request sees the pruned replacement; the final response proves the same turn continued; and no external API key is needed. Emit one large deterministic tool result through bash by running `head -c 3000 /dev/zero | tr '\\0' A`, then finish the task after any required recovery with the exact words PRUNE NOTICE RECOVERED."
+    }
+  ]
+}

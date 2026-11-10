@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-The replay-safe model-free pruning service (`ctx.toolResultPruner`). It rewrites over-budget `tool/result` surface nodes to a bounded head, a fixed omission marker, and a bounded tail while retaining the full original event in the append-only session log.
+The replay-safe model-free pruning service (`ctx.toolResultPruner`). It rewrites over-budget `tool/result` surface nodes to a bounded head, a fixed truncation notice, and a bounded tail while retaining the full original event in the append-only session log.
 
 This is a concrete companion to [`dsh-compaction-basic`](../compaction-basic/README.md), not a compaction backend or model-facing tool. Compact-basic reads it through optional `ctx.get('toolResultPruner')`, so either package remains independently composable.
 
@@ -12,9 +12,9 @@ This is a concrete companion to [`dsh-compaction-basic`](../compaction-basic/REA
 
 The method throws synchronously when the session rejects a replacement. Replacements committed earlier in the pass remain durable.
 
-`measureContent(blocks)` counts Unicode code points in `text` blocks. `pruneContent(blocks)` returns the bounded replacement or `null` when content is already within the threshold. Non-text blocks are retained at their original relative positions; text slicing never splits a UTF-16 surrogate pair, though it can split a multi-code-point grapheme cluster.
+`measureContent(blocks)` counts Unicode code points in `text` blocks. `pruneContent(blocks)` returns the bounded replacement or `null` when content is already within the threshold. The removed middle becomes one `truncationNotice(originalChars, headChars, tailChars)` text span. Non-text blocks are retained at their original relative positions; text slicing never splits a UTF-16 surrogate pair, though it can split a multi-code-point grapheme cluster.
 
-Every emitted result has exactly the configured head budget, fixed marker, and tail budget in text code points, is no larger than `thresholdChars`, and is strictly smaller than the triggering input. A second pass therefore emits no replacement.
+Every emitted result has exactly the configured head budget, one truncation notice, and the tail budget in text code points, is no larger than `thresholdChars`, and is strictly smaller than the triggering input. A second pass therefore emits no replacement.
 
 ## Config
 
@@ -26,7 +26,7 @@ Unrecognized keys fail at plugin construction. Resolved config is detached and d
 | `headChars` | no (default `4096`) | Leading Unicode code points retained. |
 | `tailChars` | no (default `1024`) | Trailing Unicode code points retained. |
 
-All values are integers; the threshold is positive and head/tail are non-negative. `headChars + marker + tailChars` must fit within `thresholdChars`, so a valid configuration can prune every over-budget result without growth or repeated rewriting.
+All values are integers; the threshold is positive and head/tail are non-negative. `headChars + truncation notice + tailChars` must fit within `thresholdChars`, where the notice is budgeted at its widest realistic digit count (`TRUNCATION_NOTICE_MAX_CHARS`, each value at `Number.MAX_SAFE_INTEGER`), so a valid configuration can prune every over-budget result without growth or repeated rewriting whatever the original size is.
 
 ## Usage
 
@@ -45,7 +45,7 @@ export function apply(ctx: Context): void {
 
 #### What the model sees
 
-Once a compaction trigger qualifies, future requests see the retained head, `\n\n[... tool result middle pruned ...]\n\n`, and retained tail in place of the removed text. Rich blocks keep their order. The model does not see a second copy of the original.
+Once a compaction trigger qualifies, future requests see the retained head, the truncation notice, and the retained tail in place of the removed text. The notice states the original size, the kept head and tail sizes, and the paging next step: `[truncated] original N chars -> kept head X + tail Y; re-read specific ranges to page through the middle` (framed by blank lines; `N`, `X`, and `Y` are the actual code-point counts). Error results carry the identical notice, so a cut error text keeps the same suffix convention. Rich blocks keep their order. The model does not see a second copy of the original.
 
 #### Token effect
 

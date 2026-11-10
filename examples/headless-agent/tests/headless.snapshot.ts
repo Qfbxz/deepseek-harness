@@ -37,6 +37,10 @@ const compactionScenarioDir = join(snapshotsDir, 'compaction-recovery')
 const compactionSessionFixture = join(compactionScenarioDir, 'session.jsonl')
 const compactionStreamExpected = join(compactionScenarioDir, 'stream-json.expected.jsonl')
 const compactionConfigPath = fileURLToPath(new URL('../compaction.cordis.snapshot.yml', import.meta.url))
+const pruneScenarioDir = join(snapshotsDir, 'compaction-prune')
+const pruneSessionFixture = join(pruneScenarioDir, 'session.jsonl')
+const pruneStreamExpected = join(pruneScenarioDir, 'stream-json.expected.jsonl')
+const pruneConfigPath = fileURLToPath(new URL('../compaction-prune.cordis.snapshot.yml', import.meta.url))
 const credentialsScenarioDir = join(snapshotsDir, 'missing-credential')
 const credentialsConfigPath = fileURLToPath(new URL('../credentials.cordis.snapshot.yml', import.meta.url))
 // Same keyless composition as the missing-credential scenario: the endpoint is
@@ -398,6 +402,88 @@ describe('headless stream-json snapshots', () => {
     const normalized = normalizeHeadlessStream(result.stdout, runCwd)
     if (refreshing) await writeFile(compactionStreamExpected, normalized)
     expect(normalized).toBe(await readFile(compactionStreamExpected, 'utf8'))
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
+  it('prunes oversized tool results with the honest truncation notice through an assembled compaction', async () => {
+    const prompt = await scenarioPrompt(pruneScenarioDir, 'compaction-prune')
+    let expectedSession = await readFile(pruneSessionFixture, 'utf8')
+    let runCwd = ''
+    const result = await runLoaderSmoke({
+      label: 'compaction prune headless stream-json snapshot',
+      tempDirPrefix: 'headless-snapshot-compaction-prune-',
+      binScript,
+      libBinScript: binScript,
+      configPath: pruneConfigPath,
+      binArgs: [pruneConfigPath, prompt],
+      tsconfigPath,
+      env: {
+        DSH_SNAPSHOT: 'replay',
+        DSH_SNAPSHOT_FILE: pruneSessionFixture,
+        NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
+      },
+      prepare: (cwd) => { runCwd = cwd },
+      inspect: async (cwd) => {
+        const logs = await persistedLogs(cwd)
+        expect(logs).toHaveLength(1)
+        const actual = logs[0]
+        if (actual === undefined) throw new Error('compaction prune snapshot did not persist its session')
+        const records = parseJsonl(actual.content)
+        const types = records.map(record => record.type)
+        // The overflow recovery pruned exactly the oversized bash result
+        // before summarization: one shadow-price event, one surface
+        // replacement, and the ordinary compaction envelope around it.
+        expect(types.filter(type => type === 'compaction/prune')).toHaveLength(1)
+        expect(types.filter(type => type === 'compaction/start')).toHaveLength(1)
+        expect(types.filter(type => type === 'compaction/summary')).toHaveLength(1)
+        expect(types.filter(type => type === 'compaction/end')).toHaveLength(1)
+        const prune = types.indexOf('compaction/prune')
+        const replacement = records.findIndex((record) => {
+          if (record.type !== 'tool/result') return false
+          const surfaceOp = record.surfaceOp as JsonObject | undefined
+          return surfaceOp?.op === 'replace'
+        })
+        const start = types.indexOf('compaction/start')
+        const summary = types.indexOf('compaction/summary')
+        const end = types.indexOf('compaction/end')
+        expect(prune).toBeGreaterThanOrEqual(0)
+        expect(prune).toBeLessThan(replacement)
+        expect(replacement).toBeLessThan(start)
+        expect(start).toBeLessThan(summary)
+        expect(summary).toBeLessThan(end)
+        // The replacement states the original size, the kept head and tail
+        // sizes, and the paging next step: the truncation-honesty contract.
+        const notice = '\n\n[truncated] original 3000 chars -> kept head 400 + tail 100; re-read specific ranges to page through the middle\n\n'
+        const replacementRecord = records[replacement] as {
+          data?: { message?: { content?: { content?: { text?: string }[] }[] } }
+        } | undefined
+        const prunedText = replacementRecord?.data?.message?.content?.[0]?.content?.[0]?.text
+        expect(prunedText).toBe(`${'A'.repeat(400)}${notice}${'A'.repeat(100)}`)
+        const final = [...records].reverse().find(record => record.type === 'assistant/message')
+        expect(JSON.stringify(final)).toContain('PRUNE NOTICE RECOVERED')
+
+        const actualContext = contextFromLogs([actual.content])
+        if (refreshing) {
+          const harvested: HarvestedLog = {
+            id: String(actual.header.id),
+            createdAt: Number(actual.header.createdAt),
+            content: actual.content,
+          }
+          const replacements = refreshFixtureReplacements([harvested], [expectedSession])
+          expectedSession = tokenizeSessionFixtureCwd(
+            stabilizeRefreshLog(actual.content, expectedSession, replacements, actualContext),
+          )
+          await writeFile(pruneSessionFixture, expectedSession)
+        }
+        const expectedContext = contextFromLogs([expectedSession])
+        expect(scrubRequestHeaders(normalizeSessionLog(actual.content, actualContext)))
+          .toBe(scrubRequestHeaders(normalizeSessionLog(expectedSession, expectedContext)))
+      },
+    })
+
+    expect(result.stderr).toBe('')
+    const normalized = normalizeHeadlessStream(result.stdout, runCwd)
+    if (refreshing) await writeFile(pruneStreamExpected, normalized)
+    expect(normalized).toBe(await readFile(pruneStreamExpected, 'utf8'))
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
   it('logs actionable missing-credential guidance through the one-shot app', async () => {
