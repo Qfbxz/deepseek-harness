@@ -12,9 +12,21 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { assertNever, createToolResultMessage, type ToolCallBlock } from '@deepseek-ai/dsh-llm'
+import { assertNever, createToolResultMessage, createUserMessage, type ToolCallBlock } from '@deepseek-ai/dsh-llm'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
 import { TOOL_ABORTED_BEFORE_DISPATCH, TOOL_RUNTIME_SCHEDULER, type ToolExecutionInput, type ToolExecutionMode, type ToolExecutionResult, type ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { TOOL_CALL_BUDGET_EXHAUSTED } from './constants.ts'
+
+/**
+ * Per-turn tool-call admission state, owned by the loop agent and reset when
+ * the turn opens. `used` counts every model-issued call admitted to the
+ * scheduler this turn; `notified` keeps the exhaustion notice to one message
+ * per turn no matter how many later steps run over the budget.
+ */
+export interface TurnToolCallBudget {
+  used: number
+  notified: boolean
+}
 
 /** One tool call after argument parsing, ready to schedule. */
 interface PlannedCall {
@@ -49,12 +61,22 @@ interface GroupOutcome {
  * The committed step's AgentLoop driver boundary supplies the initiating Agent
  * that becomes each explicit {@link ToolExecutionInput.agent}.
  *
+ * The turn budget (`maxToolCallsPerTurn`, `0` disables) bounds the calls the
+ * scheduler admits this turn: a batch that crosses it is sliced, the
+ * unstarted remainder is committed with synthetic budget-exhausted results so
+ * replay stays valid, and — once per turn — an injected `agent-loop` context
+ * message names the exhausted budget to the model. The slice returns
+ * `concluded`, so the turn ends through the ordinary conclusion path once the
+ * notice is delivered; later over-budget steps skip their calls without
+ * repeating the notice.
+ *
  * @param ctx - loop context that owns the tool registry and carries the initiating Agent.
  * @param turn - current turn number.
  * @param step - current step number.
  * @param toolCalls - assistant calls in model order.
  * @param signal - abort signal shared by the step.
  * @param acceptContext - accepts committed result context for the next step boundary.
+ * @param turnBudget - the owning agent's per-turn admission counter.
  */
 export async function executeToolCalls(
   ctx: Context,
@@ -63,9 +85,11 @@ export async function executeToolCalls(
   toolCalls: ToolCallBlock[],
   signal: AbortSignal,
   acceptContext: (context: UserMessage) => void,
+  turnBudget: TurnToolCallBudget,
 ): Promise<{ concluded: boolean }> {
   const agent = ctx.agents.requireInitiator()
   const { session } = agent
+  const { maxToolCallsPerTurn } = ctx.agentLoop.config
 
   // Inputs are distinct because tools/execute wrappers may replace `exec.signal`.
   const planned: PlannedCall[] = toolCalls.map(block => ({
@@ -82,20 +106,31 @@ export async function executeToolCalls(
   let next = 0
   let concluded = false
   while (next < planned.length) {
+    const admit = maxToolCallsPerTurn > 0 ? maxToolCallsPerTurn - turnBudget.used : Number.POSITIVE_INFINITY
+    if (admit <= 0) break
     // Commit before classifying again so registry changes affect unstarted calls.
     // oxlint-disable-next-line typescript/no-non-null-assertion -- bounded by the loop condition
     const first = planned[next]!
     const mode = ctx.tools.executionMode(first.exec).kind
-    const group = mode === 'parallel' ? planned.slice(next) : [first]
+    const group = mode === 'parallel' ? planned.slice(next, next + admit) : [first]
     const outcome = await runGroup(
       ctx, turn, step, group, mode, signal, acceptContext,
     )
     next += outcome.consumed
+    turnBudget.used += outcome.consumed
     concluded ||= outcome.concluded
     if (outcome.aborted) {
       for (const call of planned.slice(next)) appendSkippedToolCall(session, turn, step, call.block)
       return { concluded }
     }
+  }
+  if (next < planned.length) {
+    for (const call of planned.slice(next)) appendBudgetSkippedToolCall(session, turn, step, call.block, maxToolCallsPerTurn)
+    if (!turnBudget.notified) {
+      turnBudget.notified = true
+      acceptContext(budgetExhaustedNotice(maxToolCallsPerTurn))
+    }
+    return { concluded: true }
   }
   return { concluded }
 }
@@ -256,6 +291,43 @@ function appendSkippedToolCall(session: Session, turn: number, step: number, blo
       info: { name: 'AbortError', code: TOOL_ABORTED_BEFORE_DISPATCH },
     },
   }, callSeq)
+}
+
+/**
+ * Append the durable call/result pair for a model call skipped by the turn
+ * budget: without a committed result the assistant message's call would have
+ * no matching result in derived history, breaking replay.
+ */
+function appendBudgetSkippedToolCall(
+  session: Session,
+  turn: number,
+  step: number,
+  block: ToolCallBlock,
+  maxToolCallsPerTurn: number,
+): void {
+  const callSeq = appendToolCall(session, turn, step, block)
+  const message = `tool call not executed: the turn reached its tool-call budget of ${maxToolCallsPerTurn}`
+  appendToolResult(session, turn, step, block, {
+    content: [{ type: 'text', text: `Error: ${message}` }],
+    isError: true,
+    error: {
+      message,
+      info: { name: 'ToolBudgetError', code: TOOL_CALL_BUDGET_EXHAUSTED },
+    },
+  }, callSeq)
+}
+
+/** The once-per-turn model-visible reason a budget-exhausted turn ends. */
+function budgetExhaustedNotice(maxToolCallsPerTurn: number): UserMessage {
+  return createUserMessage({
+    content: [{
+      type: 'text',
+      text: `Tool-call budget exhausted: this turn reached its limit of ${maxToolCallsPerTurn} tool calls `
+        + '(agent-loop maxToolCallsPerTurn). Remaining tool calls in this turn are not executed. '
+        + 'Stop calling tools and summarize the current progress and conclusions in text.',
+    }],
+    source: { kind: 'plugin', plugin: 'agent-loop', form: 'notice', summary: `tool-call budget exhausted (${maxToolCallsPerTurn})` },
+  })
 }
 
 /** Append a started call and return the event seq that its result must cite. */

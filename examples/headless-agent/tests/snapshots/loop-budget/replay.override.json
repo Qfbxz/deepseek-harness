@@ -1,0 +1,238 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_budget_1",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_budget_1",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_budget_2",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_budget_2",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_budget_3",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_budget_3",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_budget_4",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_budget_4",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_budget_5",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_budget_5",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "text"
+      },
+      {
+        "type": "text-delta",
+        "index": 0,
+        "text": "LOOP_BUDGET_EVENT: the turn tool-call budget was exhausted; remaining calls were skipped and the reason is in context."
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "text",
+          "text": "LOOP_BUDGET_EVENT: the turn tool-call budget was exhausted; remaining calls were skipped and the reason is in context."
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 35,
+          "outputTokens": 2
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "stop"
+        }
+      }
+    ]
+  }
+]

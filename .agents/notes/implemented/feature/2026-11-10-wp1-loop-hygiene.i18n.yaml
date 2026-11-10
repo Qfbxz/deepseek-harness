@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-10-wp1-loop-hygiene.md
+2026-11-10-wp1-loop-hygiene.md: bb9af5129df48b305d524b789c1708165c40fb37
+2026-11-10-wp1-loop-hygiene.zh.md: 2df2392f591a5df7c0ef0c824f8481df08002a6e

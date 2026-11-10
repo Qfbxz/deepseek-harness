@@ -400,4 +400,265 @@ describe('config validation fails loud', () => {
     const ctx2 = await spine()
     await expect(ctx2.plugin(RepeatToolGuard, { argumentsPreviewChars: 12.5 })).rejects.toThrow(/argumentsPreviewChars/)
   })
+
+  it('rejects a negative or fractional forceStopStreak', async () => {
+    const ctx = await spine()
+    await expect(ctx.plugin(RepeatToolGuard, { forceStopStreak: -1 })).rejects.toThrow(/forceStopStreak/)
+    const ctx2 = await spine()
+    await expect(ctx2.plugin(RepeatToolGuard, { forceStopStreak: 12.5 })).rejects.toThrow(/forceStopStreak/)
+  })
+
+  it('accepts forceStopStreak 0 (the disable value)', async () => {
+    const ctx = await spine()
+    await expect(ctx.plugin(RepeatToolGuard, { forceStopStreak: 0 })).resolves.toBeDefined()
+  })
+})
+
+describe('force stop', () => {
+  /** Every committed dispatch result's `concludesTurn`, captured downstream of the guard. */
+  function captureConclusions(ctx: Context): boolean[] {
+    const conclusions: boolean[] = []
+    ctx.on('tools/post-execute', async (_exec, result, next) => {
+      conclusions.push(result.concludesTurn === true)
+      return next()
+    })
+    return conclusions
+  }
+
+  it('force-stops at the configured streak: marks the call, injects the stop instruction, and ends the turn', async () => {
+    const ctx = await harness({ thresholds: [2], forceStopStreak: 3 })
+    const conclusions = captureConclusions(ctx)
+    const adapter = new MockAdapter([
+      toolCallResponse('c0', 'probe', { q: 'same' }),
+      toolCallResponse('c1', 'probe', { q: 'same' }),
+      toolCallResponse('c2', 'probe', { q: 'same' }),
+      textResponse('SUMMARY_AFTER_FORCE_STOP'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    const found = reminders(agent)
+    expect(found).toHaveLength(2) // gentle reminder at 2, force stop at 3
+    expect(found[0]!.text).toContain('repeating the exact same tool call')
+    expect(found[1]!.text).toContain('停止工具调用，改用文字总结当前进展与结论')
+    expect(found[1]!.text).toContain('(Force stop: 3 consecutive identical calls to probe.)')
+    expect(found[1]!.source).toEqual({
+      kind: 'plugin',
+      plugin: 'repeat-tool-reminder',
+      form: 'notice',
+      summary: 'probe × 3 force-stop',
+    })
+    // The threshold call is the one marked; earlier calls carry no marker.
+    expect(conclusions).toEqual([false, false, true])
+    // Exactly one summary request after the force stop: the turn ended through
+    // the ordinary conclusion path once the instruction was delivered.
+    expect(adapter.requests).toHaveLength(4)
+    expect(JSON.stringify(adapter.requests[3]!.messages)).toContain('停止工具调用')
+    const turnEnd = agent.session.events.findLast(e => e.type === 'turn/end')
+    expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason).toEqual({ kind: 'completed' })
+  })
+
+  it('forceStopStreak 0 keeps only the reminder ladder (no stop instruction, no marker)', async () => {
+    const ctx = await harness({ thresholds: [2], forceStopStreak: 0 })
+    const conclusions = captureConclusions(ctx)
+    const adapter = new MockAdapter([
+      toolCallResponse('c0', 'probe', { q: 'same' }),
+      toolCallResponse('c1', 'probe', { q: 'same' }),
+      toolCallResponse('c2', 'probe', { q: 'same' }),
+      textResponse('model chose to stop'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    const found = reminders(agent)
+    expect(found).toHaveLength(1)
+    expect(found[0]!.text).toContain('repeating the exact same tool call')
+    expect(JSON.stringify(agent.session.events)).not.toContain('停止工具调用')
+    expect(conclusions).toEqual([false, false, false])
+    expect(adapter.requests).toHaveLength(4)
+  })
+
+  it('fires at the default streak of 12 below the default ladder', async () => {
+    const ctx = await harness()
+    const adapter = new MockAdapter([
+      ...Array.from({ length: 12 }, (_, i) => toolCallResponse(`c${i}`, 'probe', { q: 'same' })),
+      textResponse('summarized at the default force stop'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    const found = reminders(agent)
+    expect(found).toHaveLength(4) // 3, 5, 8 ladder + force stop at 12
+    expect(found[0]!.text).toContain('repeating the exact same tool call')
+    expect(found[1]!.text).toContain('consecutive_calls: 5')
+    expect(found[2]!.text).toContain('consecutive_calls: 8')
+    expect(found[3]!.text).toContain('停止工具调用，改用文字总结当前进展与结论')
+    expect(found[3]!.text).toContain('(Force stop: 12 consecutive identical calls to probe.)')
+    expect(adapter.requests).toHaveLength(13)
+  })
+})
+
+describe('same-step duplicate reuse', () => {
+  /** Chunk entry streaming two tool calls in ONE assistant message. */
+  function twoCallResponse(
+    id1: string, name1: string, args1: object,
+    id2: string, name2: string, args2: object,
+  ): ReturnType<typeof toolCallResponse> {
+    const chunks: ReturnType<typeof toolCallResponse> = []
+    let index = 0
+    for (const [id, name, args] of [[id1, name1, args1], [id2, name2, args2]] as const) {
+      const callId = CallId(id)
+      const argumentsJson = JSON.stringify(args)
+      chunks.push(
+        { type: 'block-start', index, blockType: 'tool-call' },
+        { type: 'tool-call-delta', index, id: callId, name, argumentsDelta: argumentsJson },
+        { type: 'block-end', index, block: { type: 'tool-call', id: callId, name, arguments: argumentsJson } },
+      )
+      index += 1
+    }
+    chunks.push(
+      { type: 'usage', usage: { inputTokens: 10, outputTokens: 5 } },
+      { type: 'finish', reason: { kind: 'tool-calls' } },
+    )
+    return chunks
+  }
+
+  /** Harness variant with a counted tool whose body the test controls. */
+  async function countingHarness(config: Config = {}, isConcurrencySafe?: (args: unknown) => boolean) {
+    const ctx = await harness(config)
+    let executions = 0
+    ctx.tools.register(defineContentToolFixture({
+      name: 'counting',
+      description: 'c',
+      parameters: { q: { type: 'json' } },
+      ...(isConcurrencySafe === undefined ? {} : { isConcurrencySafe: (): boolean => isConcurrencySafe({}) }),
+      async execute() {
+        executions += 1
+        return [{ type: 'text', text: `run ${executions}` }]
+      },
+    }))
+    return { ctx, executions: () => executions }
+  }
+
+  it('reuses the recorded result for an exact same-step duplicate without re-executing', async () => {
+    const { ctx, executions } = await countingHarness()
+    const adapter = new MockAdapter([
+      twoCallResponse('d1', 'counting', { q: 7 }, 'd2', 'counting', { q: 7 }),
+      textResponse('done'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    expect(executions()).toBe(1)
+    const results = [...agent.session.events].filter((e): e is SessionEvent<'tool/result'> => e.type === 'tool/result')
+    expect(results).toHaveLength(2)
+    expect(results[0]!.data.message.content[0].content).toEqual([{ type: 'text', text: 'run 1' }])
+    // The duplicate carries the recorded content plus the pinned annotation
+    // as injected context, model-visible on the next request.
+    expect(JSON.stringify(agent.session.events)).toContain('duplicate of an earlier call in this step; recorded result reused')
+    expect(JSON.stringify(adapter.requests[1]!.messages)).toContain('duplicate of an earlier call in this step; recorded result reused')
+    // Both calls are logged attempts: the repeat chain advanced across both
+    // (two identical attempts), though the default ladder only speaks at 3/5/8.
+    const found = reminders(agent)
+    expect(found).toHaveLength(1)
+    expect(found[0]!.source).toEqual({
+      kind: 'plugin',
+      plugin: 'repeat-tool-reminder',
+      form: 'notice',
+      summary: 'counting (duplicate reuse)',
+    })
+  })
+
+  it('does not dedupe calls whose arguments are not exactly equal (same step)', async () => {
+    const { ctx, executions } = await countingHarness()
+    const adapter = new MockAdapter([
+      twoCallResponse('d1', 'counting', { q: 7 }, 'd2', 'counting', { q: 8 }),
+      textResponse('done'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    expect(executions()).toBe(2)
+    expect(JSON.stringify(agent.session.events)).not.toContain('duplicate of an earlier call in this step')
+  })
+
+  it('does not dedupe the same arguments across steps', async () => {
+    const { ctx, executions } = await countingHarness()
+    const adapter = new MockAdapter([
+      toolCallResponse('s1', 'counting', { q: 7 }),
+      toolCallResponse('s2', 'counting', { q: 7 }), // next step: identical call runs again
+      textResponse('done'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    expect(executions()).toBe(2)
+    expect(JSON.stringify(agent.session.events)).not.toContain('duplicate of an earlier call in this step')
+  })
+
+  it('canonicalizes deep property order before matching (order-only variants are duplicates)', async () => {
+    const { ctx, executions } = await countingHarness()
+    const adapter = new MockAdapter([
+      twoCallResponse('d1', 'counting', { a: 1, nested: { x: 2, y: 3 } }, 'd2', 'counting', { nested: { y: 3, x: 2 }, a: 1 }),
+      textResponse('done'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    expect(executions()).toBe(1)
+    expect(JSON.stringify(agent.session.events)).toContain('duplicate of an earlier call in this step')
+  })
+
+  it('reuses without racing an in-flight parallel duplicate', async () => {
+    const { ctx, executions } = await countingHarness({}, () => true)
+    const adapter = new MockAdapter([
+      twoCallResponse('p1', 'counting', { q: 'parallel' }, 'p2', 'counting', { q: 'parallel' }),
+      textResponse('done'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    expect(executions()).toBe(1)
+    const results = [...agent.session.events].filter((e): e is SessionEvent<'tool/result'> => e.type === 'tool/result')
+    expect(results).toHaveLength(2)
+    expect(JSON.stringify(agent.session.events)).toContain('duplicate of an earlier call in this step')
+  })
+
+  it('propagates the first call scheduler failure to an in-flight duplicate instead of fabricating a result', async () => {
+    const { ctx, executions } = await countingHarness({}, () => true)
+    ctx.on('tools/execute', async (exec, next) => {
+      if (exec.name === 'counting') throw new Error('wrapper exploded')
+      return next()
+    })
+    const adapter = new MockAdapter([
+      twoCallResponse('p1', 'counting', { q: 'parallel' }, 'p2', 'counting', { q: 'parallel' }),
+      textResponse('done'),
+    ])
+    ctx.llm.registerAdapter(['mock'], adapter)
+    const agent = ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+    await waitForIdle(ctx, agent)
+
+    expect(executions()).toBe(0)
+    const results = [...agent.session.events].filter((e): e is SessionEvent<'tool/result'> => e.type === 'tool/result')
+    expect(results).toHaveLength(2)
+    expect(results.every(r => r.data.message.content[0].isError)).toBe(true)
+    expect(JSON.stringify(agent.session.events)).toContain('wrapper exploded')
+  })
 })

@@ -38,6 +38,7 @@ The optional `@deepseek-ai/dsh-agent-loop/invariant` companion registers request
 ```ts
 interface Config {
   maxParallelToolCalls?: number // default 10; 1 is serial
+  maxToolCallsPerTurn?: number // default 200; 0 disables the budget
   agents: Array<{
     id: string                 // required
     provider?: string
@@ -49,7 +50,7 @@ interface Config {
 }
 ```
 
-Configured agents start automatically. A model call requires both `provider` and `model`; `agent/request` may supply a missing pair before dispatch. An optional positive `maxTokens` seeds each conversation request's output cap and is logged in its request header. `maxParallelToolCalls` bounds every agent's rolling pool for parallel-safe calls and defaults to `10`; it is also the whole of the `agent-loop` Settings section, so a user layer over this entry caps the next tool group without a restart, and a value that is not a positive integer is refused at the write rather than at that group. `agents` is deliberately absent from that section — it is consumed once when the service starts, so a stored change could only look like it had an effect. `cwd` applies only to fresh sessions, while `resumeSessionId` retains persisted metadata. Configured agents use the deployment persona, and programmatic setup can shadow it per agent. This plugin supplies the per-agent `provider`, `model`, and `cwd` prompt variables; harness identity and deployment persona belong to `dsh-system-prompt`.
+Configured agents start automatically. A model call requires both `provider` and `model`; `agent/request` may supply a missing pair before dispatch. An optional positive `maxTokens` seeds each conversation request's output cap and is logged in its request header. `maxParallelToolCalls` bounds every agent's rolling pool for parallel-safe calls and defaults to `10`; it is also the whole of the `agent-loop` Settings section, so a user layer over this entry caps the next tool group without a restart, and a value that is not a positive integer is refused at the write rather than at that group. `maxToolCallsPerTurn` bounds the tool calls one turn may admit to the scheduler and defaults to `200`; `0` disables it. The count covers every model-issued call in the turn, including calls another policy denied or cancellation skipped. When a batch crosses the budget, unstarted calls are committed with `TOOL_CALL_BUDGET_EXHAUSTED` error results, an injected `agent-loop` context message names the exhausted budget to the model, and the turn ends through the ordinary conclusion path once that message is delivered; later over-budget steps skip their calls without repeating the notice. The budget is fixed at plugin start — deliberately outside the Settings section, so a stored change cannot look effective mid-run. `agents` is likewise absent from that section — it is consumed once when the service starts, so a stored change could only look like it had an effect. `cwd` applies only to fresh sessions, while `resumeSessionId` retains persisted metadata. Configured agents use the deployment persona, and programmatic setup can shadow it per agent. This plugin supplies the per-agent `provider`, `model`, and `cwd` prompt variables; harness identity and deployment persona belong to `dsh-system-prompt`.
 
 ### Internal concrete driver
 
@@ -69,7 +70,7 @@ After `agent/request` returns a provider/model call config, the loop asks `ctx.l
 
 Plugin failure ends the current turn, not the loop. Final adapter selection, dispatch, and iteration failures arrive from `ctx.llm` as terminal error or aborted finishes and enter `agent/request-error`; middleware, result processing, tools, and other extension failures remain thrown and close directly. Recovery receives request coordinates, immutable provider facts, the immutable retry policy captured by the prepared adapter registration, and the turn signal; the policy is absent when middleware owns an unprepared route. A handling listener returns `{ kind: 'retry' }`; an unhandled failure is terminal. AgentLoop owns one cancellation signal for the current admission or turn. An effective `cancel(cause)` clears pending work unless `keepInbox` is set and cooperatively aborts that signal; idle cancellation is a no-op. Waking input that lands after the abort fires but before the activity converges to idle is latched (`wakeRequested`) and replayed at the driver's own convergence boundary, so it runs without a further waking send; a `disposed` cancel never latches, and a wake submitted while already idle always opens its turn boundary (status shows a transient `idle → running → idle` pair even when the message was cleared). Durable `turn/end` records `aborted` for `user` and `parent`, while disposal records `disposed`; undispatched model tool calls receive synthetic `tool/call` and `ABORTED_BEFORE_DISPATCH` result pairs. The cancellation cause changes reporting, not how result context finalized after cancellation is handled. Disposal waits for signal-ignoring work before registry removal. The [explicit-cancellation decision](../../../.agents/notes/implemented/architecture/2026-07-16-explicit-turn-cancellation.md) and the [cancel-convergence wake latch](../../../.agents/notes/implemented/bug-fix/2026-08-07-cancel-convergence-wake-latch.md) own the lifecycle and race contract.
 
-Within a step, exclusive calls form barriers; parallel-safe calls use a bounded rolling pool and are reclassified before start. Only dispatch/body overlaps. Policy, durable results, and result context remain model-ordered. Abort stops new calls, drains started results, and retains their finalized result context without distinguishing the cancellation cause. An internal scheduler failure stops new dispatches, waits for already-started dispatches, and reaches the turn error boundary without fabricating tool results.
+Within a step, exclusive calls form barriers; parallel-safe calls use a bounded rolling pool and are reclassified before start. Only dispatch/body overlaps. Policy, durable results, and result context remain model-ordered. Abort stops new calls, drains started results, and retains their finalized result context without distinguishing the cancellation cause. An internal scheduler failure stops new dispatches, waits for already-started dispatches, and reaches the turn error boundary without fabricating tool results. The turn budget (`maxToolCallsPerTurn`) slices a batch that would cross it: admitted calls run, unstarted calls receive committed budget-skip results, and the exhaustion notice rides out once per turn before the turn concludes.
 
 ### What belongs to plugins
 
@@ -126,9 +127,23 @@ One fixed error result per skipped call remains in history until compaction shad
 
 Append-only; each synthetic result follows the reusable request prefix and does not invalidate existing KV-cache entries.
 
+### Undispatched calls after budget exhaustion
+
+#### What the model sees
+
+When a turn crosses `maxToolCallsPerTurn`, each unstarted call has error code `TOOL_CALL_BUDGET_EXHAUSTED` and result text `Error: tool call not executed: the turn reached its tool-call budget of <N>`, followed by one injected `agent-loop` context message naming the exhausted budget and asking for a text summary. The turn ends once that message is delivered.
+
+#### Token effect
+
+One fixed error result per skipped call plus one fixed notice per exhausted turn remain in history until compaction shadows them.
+
+#### KV Cache effect
+
+Append-only; each synthetic result and the notice follow the reusable request prefix and do not invalidate existing KV-cache entries.
+
 ## Known Limitations and Deferred Work
 
 - **Classification is unary** — calls whose safety depends on comparing siblings or resources must remain exclusive ([rationale](../../../.agents/notes/implemented/feature/2026-07-10-parallel-tool-call-execution.md)).
 - **Config labels are fresh by default** — omitting `sessionId` creates a fresh `${id}-session-<uuid>` on every startup; exact resume-or-create behavior requires an explicit stable `sessionId`, while `resumeSessionId` requires existing persisted history.
 - **Config agents have no per-agent persona field or setup hook** — they use the deployment persona; scoped persona/tool composition is available only through the programmatic `ctx.agents.create()` / `resume()` factory options.
-- **No built-in turn budget** — tool calls or steering continue the current turn; a policy that bounds runaway turns must cancel from an existing lifecycle extension point such as `agent/turn-stopping`.
+- **The turn budget bounds tool calls, not steps or tokens** — `maxToolCallsPerTurn` counts scheduler-admitted tool calls; steering, model round trips, and output tokens have no loop-side budget.

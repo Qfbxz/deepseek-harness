@@ -1,0 +1,518 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_repeat_1",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_repeat_1",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_repeat_2",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_repeat_2",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_repeat_3",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_repeat_3",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_repeat_4",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_repeat_4",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_repeat_5",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_repeat_5",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_repeat_6",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_repeat_6",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_repeat_7",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_repeat_7",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_repeat_8",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_repeat_8",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_repeat_9",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_repeat_9",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_repeat_10",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_repeat_10",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_repeat_11",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_repeat_11",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_repeat_12",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_repeat_12",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP1 loop-hygiene ladder\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 15,
+          "outputTokens": 6
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "text"
+      },
+      {
+        "type": "text-delta",
+        "index": 0,
+        "text": "LOOP_REPEAT_FORCE_STOP: the guard stopped the turn after 12 identical calls; progress summarized in text."
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "text",
+          "text": "LOOP_REPEAT_FORCE_STOP: the guard stopped the turn after 12 identical calls; progress summarized in text."
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 35,
+          "outputTokens": 2
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "stop"
+        }
+      }
+    ]
+  }
+]

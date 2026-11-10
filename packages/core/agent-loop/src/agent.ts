@@ -33,7 +33,7 @@ import { joinContextSections, renderContextSections, renderPrompt } from '@deeps
 import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import type { Context } from '@deepseek-ai/cordis'
 import { RuntimeContextProjection } from './runtime-context.ts'
-import { executeToolCalls } from './tool-calls.ts'
+import { executeToolCalls, type TurnToolCallBudget } from './tool-calls.ts'
 
 type Phase =
   | { kind: 'idle'; lastTurn: number }
@@ -76,6 +76,8 @@ export class ReactLoopAgent implements Agent {
   /** Whether this loop instance has appended its initial/resume request anchor. */
   private requestHeaderLogged = false
   private readonly runtimeContext: RuntimeContextProjection
+  /** Per-turn tool-call admission state; reset when the durable turn opens. */
+  private turnBudget: TurnToolCallBudget = { used: 0, notified: false }
 
   constructor(
     private loopCtx: Context,
@@ -257,6 +259,7 @@ export class ReactLoopAgent implements Agent {
       this.throwError(error)
     }
     phase.turn = turn
+    this.turnBudget = { used: 0, notified: false }
     let turnEnds: TurnEndReason | null = null
     let target: InboxTarget = 'next-turn'
     try {
@@ -414,6 +417,7 @@ export class ReactLoopAgent implements Agent {
       const { concluded } = await executeToolCalls(
         this.loopCtx, turn, step, toolCalls, signal,
         context => this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context]),
+        this.turnBudget,
       )
       return concluded ? { kind: 'completed' } : null
     }
