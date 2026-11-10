@@ -11,11 +11,11 @@ authored（手工编排）快照场景 `subagent-parallel` 跨多次运行间歇
 - **`dsh-llm-replay` 按"首次调用顺序"把子脚本绑定到 live 会话**（见 [subagent-snapshot-replay note](2026-06-22-subagent-snapshot-replay.md)）。同一条 assistant 消息里的两个子代理会争抢第一次模型调用，任何一个 live child 都可能领到另一个 child 的脚本。`loadSessionScripts` 对已录制子脚本的排序是确定的（header `createdAt`，再按 id），但 live 绑定顺序由事件循环时机决定（`XXX(concurrent-subagents)`）。
 - **harness 按 `createdAt` 排序 children。** 同一毫秒内创建的两个 child 打成平局，平局裁决比较的是全新随机的会话 id（`a.id.localeCompare(b.id)`），因此哪份产出日志落在 fixture 位置 1、哪份落在位置 2 是掷硬币。
 
-WP6 时期为了让[同步骤重复调用复用](../../feature/2026-11-10-wp6-methodology-prompt.md)不把两次委派折叠成一个 child，把两次委派改成了不同的（`ALPHA` 与 `BETA`）。不同的委派让两处竞态都变得可观测：绑定交叉时，父侧第一个调用拿到的是另一个 child 的回答；harvest 顺序翻转时，两份 child fixture 互相拿对方的内容做比较。只有两处竞态都复现录制方向时场景才绿。
+WP6 时期为了让[同步骤重复调用复用](../feature/2026-11-10-wp6-methodology-prompt.md)不把两次委派折叠成一个 child，把两次委派改成了不同的（`ALPHA` 与 `BETA`）。不同的委派让两处竞态都变得可观测：绑定交叉时，父侧第一个调用拿到的是另一个 child 的回答；harvest 顺序翻转时，两份 child fixture 互相拿对方的内容做比较。只有两处竞态都复现录制方向时场景才绿。
 
 ## 决策
 
-恢复[并行委派 note](../../feature/2026-08-09-parallel-subagent-delegations.md)规定的孪生契约——只有可互换的孪生才能无竞态地回放——同时仍然拉起两个 live child：
+恢复[并行委派 note](../feature/2026-08-09-parallel-subagent-delegations.md)规定的孪生契约——只有可互换的孪生才能无竞态地回放——同时仍然拉起两个 live child：
 
 - **两次委派是逐字节相同的孪生**（`description`、`prompt`、显式 `run_in_background: false`）。显式写出来不是风格问题：acp-agent 组合以 `backgroundMode: continuable` 运行委派工具，省略 `run_in_background` 会默认变成后台 continuable child，返回持久 id 而不是任务结果。
 - **该场景启动专用 overlay**（`subagent-parallel.cordis.yml` 与其 `*cordis.snapshot.yml` 回放对应物），仅为这个场景禁用 `repeat-tool-reminder` guard。该 guard 的同步骤重复复用会把精确匹配 `(tool, canonical arguments)` 的重复调用直接用第一次调用的已录制结果应答，因此逐字节相同的孪生会被折叠回一个 child。guard 不注入 system-prompt 段、不注册任何工具，所以 overlay 组合出的 header 与 default class 逐字节一致，仍在 text-turn 的 pin 之下。

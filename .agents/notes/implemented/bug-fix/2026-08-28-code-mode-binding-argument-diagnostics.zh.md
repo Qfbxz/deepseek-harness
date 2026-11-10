@@ -12,6 +12,14 @@ Status: implemented
 
 `makeNamespaces` 在 post 之前拒绝位置原始值，消息给出收到的类型、有界的预览、以及纠正形态 `tools.${name}({ … })`。函数、日期、数组与对象保持原路径，lossless-JSON 语义及其测试不变。对 lossless 拒绝，`describeLossyProperties` 列出至多八个 JSON 快照无法承载的顶层属性（`undefined`、函数、抛错的 getter），超过八个追加 `+N more` 后缀；说不出诊断时保持为空。
 
+## Alternatives considered
+
+**把单个位置原始值包装成对象形态后放行。** 已否决：猜测模型意图会复现本 note 记录的失败——含混的拒绝让模型反复猜；消息改为给出纠正形态 `tools.${name}({ … })`。
+
+**对一切非 lossless-JSON 的参数形态统一拒绝。** 已否决：函数、日期、数组与对象保持原路径，lossless-JSON 语义及其测试不变；新增的只有位置原始值这一种情形。
+
+**保留泛化的 lossless-JSON 拒绝。** 已否决：`{ id: undefined }` 只说参数不是无损 JSON，模型于是重复同一调用；`describeLossyProperties` 点名至多八个有问题的顶层属性，说不出诊断时保持为空。
+
 ## Consequences
 
 - 可纠正的失败现在把修法带在消息里；即 `run_code` 用户记录的位置参数坑。

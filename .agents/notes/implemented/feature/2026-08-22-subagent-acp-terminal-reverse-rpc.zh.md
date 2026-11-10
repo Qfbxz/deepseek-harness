@@ -26,3 +26,9 @@ ACP 后端此前有意声明 `clientCapabilities: {}`——其子 agent 被假�
 ## 验证
 
 `tests/terminal.spec.ts` 覆盖截断（多字节边界）、wire 边界校验、spawn 规格（collect 配置、env、cwd 默认）、合并/截断快照、kill/release 的 id 语义、spawn 失败映射与 `releaseAll`。端到端：`dsh-frostfin` 开启 `terminal: true` 后，Kimi Code 子 agent 的 shell 工具经该池执行；关闭标志则同一子 agent 复现 "ACP terminal capability is unavailable" 失败。
+
+## 后果
+
+- 文档化的自给自足默认不变：`terminal` 默认 `false`，自行处理 shell 工作的子 agent 看不到该能力，行为照旧。
+- 开启后，终端 I/O 经 ACP 线路传输，但与子 agent 本体同受 `dsh-subprocess` seam 纪律约束——清理环境、有界收集尾部、树级拆卸——而非临时 spawn。
+- 运行 dispose 时终止每个存活终端树并等待 seam 的退出证明，再运行子 agent 拆卸阶梯，终端不会比其运行更长寿。

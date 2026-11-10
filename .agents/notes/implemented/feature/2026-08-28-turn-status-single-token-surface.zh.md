@@ -16,6 +16,10 @@ Status: implemented
 
 随显示一并删除：`RunningTurnUsage` 对 legacy assistant 节点的折叠、`nonNegTokens`、`turnStatusGlyph` 脉冲动画、两种语言的 `turn.statusTokensBoth` / `turn.statusTokensOut` locale key。
 
+## Alternatives considered
+
+**保留 2026-08-26 的双表面展示（状态行显示每轮用量，StatsLine 显示会话总量）。** 已否决：两个界面重述重叠的数字，去重线（commit `3e9200935` 及其前序）不得不持续为同一个事实调和两个渲染方。
+
 ## Consequences
 
 - 测试断言运行中状态行不含 `tokens` 文本。

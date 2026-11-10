@@ -16,6 +16,10 @@ The status row carries only the phase label and the elapsed-time clock. Every to
 
 Removed with the display: the `RunningTurnUsage` fold over legacy assistant nodes, `nonNegTokens`, the `turnStatusGlyph` pulse animation, and the `turn.statusTokensBoth` / `turn.statusTokensOut` locale keys in both languages.
 
+## Alternatives considered
+
+**Keep the 2026-08-26 two-surface display (per-turn usage on the status row, session totals on StatsLine).** Rejected: the two surfaces restated overlapping figures, and the duplicate-token cleanup line (commit `3e9200935` and its predecessors) kept having to reconcile two renderers for one fact.
+
 ## Consequences
 
 - Tests assert the status row contains no `tokens` text while running.

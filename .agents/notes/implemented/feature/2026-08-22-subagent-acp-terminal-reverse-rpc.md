@@ -26,3 +26,9 @@ Opt-in config `terminal` (default `false`, preserving the documented self-serve 
 ## Verification
 
 `tests/terminal.spec.ts` covers the clamp (multibyte boundary), wire-boundary validation, the spawn spec (collect dispositions, env, cwd default), merged/clamped snapshots, kill/release id semantics, spawn-failure mapping, and `releaseAll`. End-to-end: `dsh-frostfin` with `terminal: true` runs a Kimi Code child whose shell tools execute through the pool; without the flag the same child reproduces the "ACP terminal capability is unavailable" failure.
+
+## Consequences
+
+- The documented self-serve default is unchanged: `terminal` defaults to `false`, so a child that self-serves shell work keeps doing so and never sees the capability.
+- Enabled runs move terminal I/O across the ACP wire under the same `dsh-subprocess` seam discipline as the child itself — scrubbed environment, bounded collect tails, tree-scoped teardown — rather than an ad-hoc spawn.
+- Run disposal terminates every live terminal tree and awaits the seam's exit proof before the child ladder runs, so no terminal outlives its run.
