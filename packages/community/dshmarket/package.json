@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-market",
   "description": "Plugin marketplace: HTTP routes (registry/install/uninstall/update) for the browser market card",
-  "version": "0.1.0-rc.8",
+  "version": "0.2.3-rc.1",
   "publishConfig": {
     "access": "public"
   },
