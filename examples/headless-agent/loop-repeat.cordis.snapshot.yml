@@ -1,0 +1,19 @@
+# WP1 loop-hygiene replay: the repeat-tool-reminder reminder ladder (3/5/8)
+# plus the force stop at the default `forceStopStreak: 12`, driven keyless by
+# llm-replay. Includes cordis.yml directly (a config patch cannot target an
+# entry behind a nested include), inserts the guard with its DEFAULT config so
+# the assembled composition pins the shipped defaults, and disables the
+# key-requiring DeepSeek adapter in favor of the replay catch-all.
+- id: base
+  name: '@deepseek-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+    patches:
+      - id: llm-deepseek
+        name: '@deepseek-ai/dsh-llm-deepseek'
+        disabled: true
+      - insert:
+          - id: repeat-tool-reminder
+            name: '@deepseek-ai/dsh-repeat-tool-reminder'
+          - id: llm-replay
+            name: '@deepseek-ai/dsh-llm-replay'

@@ -27,7 +27,7 @@ import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-tools'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import { ReactLoopAgent } from './agent.ts'
-import { DEFAULT_MAX_PARALLEL_TOOL_CALLS } from './constants.ts'
+import { DEFAULT_MAX_PARALLEL_TOOL_CALLS, DEFAULT_MAX_TOOL_CALLS_PER_TURN, TOOL_CALL_BUDGET_EXHAUSTED } from './constants.ts'
 
 /** Fiber states that cannot own or serve a new lifecycle. */
 const INACTIVE_STATES: ReadonlySet<FiberState> = new Set([
@@ -184,7 +184,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-export { DEFAULT_MAX_PARALLEL_TOOL_CALLS }
+export { DEFAULT_MAX_PARALLEL_TOOL_CALLS, DEFAULT_MAX_TOOL_CALLS_PER_TURN, TOOL_CALL_BUDGET_EXHAUSTED }
 
 /**
  * One launcher-selected session identity for a configured agent. `resume`
@@ -258,6 +258,18 @@ export interface Config {
    * omission defaults to {@link DEFAULT_MAX_PARALLEL_TOOL_CALLS}.
    */
   maxParallelToolCalls?: number
+  /**
+   * Tool calls a single turn may admit to the scheduler (default
+   * {@link DEFAULT_MAX_TOOL_CALLS_PER_TURN}; `0` disables the budget). The
+   * count covers every model-issued call in the turn, including calls another
+   * policy denied or cancellation skipped. When a batch crosses the budget,
+   * unstarted calls are committed with `TOOL_CALL_BUDGET_EXHAUSTED` error
+   * results, an injected `agent-loop` context message names the exhausted
+   * budget to the model, and the turn ends through the ordinary conclusion
+   * path once that message is delivered. Fixed at plugin start: not part of
+   * the settings section, so a stored change cannot look effective mid-run.
+   */
+  maxToolCallsPerTurn?: number
   /** Agents created or resumed at plugin startup. */
   agents: (AgentOptions & {
     /** Stable config label used in logs and as the fresh combined-id prefix. */
@@ -272,7 +284,16 @@ export interface Config {
 }
 
 /** Agent-loop configuration after defaults and load-time validation. */
-type ResolvedConfig = Config & { maxParallelToolCalls: number }
+type ResolvedConfig = Config & { maxParallelToolCalls: number; maxToolCallsPerTurn: number }
+
+/** Resolve the per-turn tool-call budget at the owning config boundary. */
+function resolveMaxToolCallsPerTurn(value: number | undefined): number {
+  const maxToolCallsPerTurn = value ?? DEFAULT_MAX_TOOL_CALLS_PER_TURN
+  if (!Number.isInteger(maxToolCallsPerTurn) || maxToolCallsPerTurn < 0) {
+    throw new Error('maxToolCallsPerTurn must be a non-negative integer (0 disables the budget)')
+  }
+  return maxToolCallsPerTurn
+}
 
 /** Reject self-contained identity conflicts before any configured agent starts. */
 function validateConfiguredAgents(agents: Config['agents']): void {
@@ -299,6 +320,7 @@ export class AgentLoop extends Service implements AgentFactory {
   /** Runtime schema for declarative agents. */
   static Config = z.object({
     maxParallelToolCalls: z.number().step(1).min(1).default(DEFAULT_MAX_PARALLEL_TOOL_CALLS),
+    maxToolCallsPerTurn: z.number().step(1).min(0).default(DEFAULT_MAX_TOOL_CALLS_PER_TURN),
     agents: z.array(z.object({
       id: z.string().required(),
       sessionId: z.string().min(1),
@@ -325,6 +347,7 @@ export class AgentLoop extends Service implements AgentFactory {
     this.config = {
       ...config,
       agents: applyLauncherIdentities(config.agents, ctx.get(CONFIGURED_AGENT_IDENTITIES_KEY)),
+      maxToolCallsPerTurn: resolveMaxToolCallsPerTurn(config.maxToolCallsPerTurn),
       // Read through on every scheduler decision: `tool-calls.ts` destructures
       // this at the start of each group, so a committed change caps the next
       // group without disturbing the one in flight.
