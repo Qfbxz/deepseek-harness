@@ -12,7 +12,7 @@ Status: implemented
 
 **估算器归属确定为 `packages/llm/token-meter`。** `estimate.ts` 是唯一的启发式模块（固定密度加结构开销），`ctx.tokenMeter.measure()`/`estimateMessage()` 服务面是消费方为内容计价的唯一途径。任何消费方都不直接 import 估算器；所有定价决定都留在 meter 内部。
 
-**计数能力以可选适配器方法挂载在 llm capability 上。** `LlmAdapter` 声明 `countTokens?(provider, model, request, signal?): Promise<number>`，基类不提供实现——与 `providerRetryPolicy()` 相同的缺省缺席模式。`LlmRuntime.countTokens()` 转发到该路由的适配器，适配器未声明该能力时返回 `undefined`：缺席是需要调用方定价处理的事实，从不是错误。运行时在该 wire 边界校验适配器返回值——非负安全整数，否则以 `LlmError` `INVALID_TOKEN_COUNT` 拒绝——与精确模型元数据校验同构。请求类型 `LlmCountTokensRequest` 携带 `messages`、可选 `system` 与可选 `tools`，使计数能覆盖完整请求 envelope。随产品交付的 DeepSeek 与 pi-ai 适配器有意暂不声明该能力；声明支持是提供方侧决策，记录在 Alternatives。
+**计数能力以可选适配器方法挂载在 llm capability 上。** `LlmAdapter` 声明 `countTokens?(provider, model, request, signal?): Promise<number>`，基类不提供实现——与 `providerRetryPolicy()` 相同的缺省缺席模式。`LlmRuntime.countTokens()` 转发到该路由的适配器，适配器未声明该能力时返回 `undefined`：缺席是需要调用方定价处理的事实，从不是错误。运行时在该 wire 边界校验适配器返回值——非负安全整数，否则以 `LlmError` `INVALID_TOKEN_COUNT` 拒绝——与精确模型元数据校验同构。请求类型 `LlmCountTokensRequest` 携带 `messages`、可选 `system` 与可选 `tools`，使计数能覆盖完整请求 envelope。随产品交付的 DeepSeek 适配器有意不声明该能力；声明支持是提供方侧决策，记录在 Alternatives，pi-ai 适配器已针对暴露计数端点的引擎声明了它（[llm-pi-ai countTokens](2026-11-11-llm-pi-ai-count-tokens.md)）。
 
 **消费接线走 compaction-basic，它本就同时注入两个服务。** 路由适配器声明计数时，压力路径上的每一次阈值判定——初始检查、模型无关剪枝后的重测、重试循环内的每次收敛重测——都为当前 envelope（已记录标头的 system 与 tools 加上完整派生的表层消息）取一份新的提供方计数并传入 `measure()`。失败的计数发出警告并回退到字符估算；被取消 signal 赢得的计数重新抛出；计数失败从不推进连续失败熔断器，因为它们是定价输入失败，不是压缩尝试。溢出路径不需要计数（其范围选择只读逐节点价格），手动 `compactNow()` 没有阈值，而区域准备、稳定性检查与 `shadowedTokenCount` 保持逐节点启发式价格——因此保留选择与 compaction-recovery 哨兵值都独立于计数器。
 
@@ -26,7 +26,7 @@ Status: implemented
 
 **把能力挂在 `LlmResolvedModelInfo` 上。** 否决：精确模型元数据是脱离请求内容的身份/容量回答；带请求内容的操作无法放在那里。
 
-**现在就让真实的 DeepSeek/pi-ai 适配器声明计数。** 暂缓：提供方侧支持（例如 `count_tokens` 端点）是独立的适配器决策；在此之前，keyless counter-mock fixture 证明完整路径。
+**当时就让真实的 DeepSeek/pi-ai 适配器声明计数。** 暂缓：提供方侧支持（例如 `count_tokens` 端点）是独立的适配器决策；keyless counter-mock fixture 在 pi-ai 适配器声明之前证明了完整路径（[llm-pi-ai countTokens](2026-11-11-llm-pi-ai-count-tokens.md)），DeepSeek 适配器保持未声明。
 
 **只在初始测量时取计数。** 否决：剪枝后与收敛重测将改与字符估算比较，而触发用的是上报计数——密度分化时（实测 2.09 案例）同一表层会在两种计价制度间翻转上下阈值，压缩会基于不一致的数字中止或重试。
 

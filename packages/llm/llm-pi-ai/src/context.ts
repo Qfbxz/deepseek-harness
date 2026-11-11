@@ -5,7 +5,7 @@
  */
 
 import { CallId, contentHasImage, LlmError, offloadRequestImages } from '@deepseek-ai/dsh-llm'
-import type { ContentBlock, GenerateOptions, Message } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, GenerateOptions, Message, ToolSchema } from '@deepseek-ai/dsh-llm'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { Context as PiContext, ImageContent, Message as PiMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
 import { toPiAssistant } from './replay.ts'
@@ -76,7 +76,17 @@ async function userContent(
   return content
 }
 
-function toolsOf(options: GenerateOptions): PiTool[] | undefined {
+/** The request fields pi-ai history conversion reads; a full request carries the rest. */
+export interface PiConvertibleRequest {
+  /** Ordered conversation messages, exactly as a request would carry them. */
+  readonly messages: readonly Message[]
+  /** System prompt text, when the request carries one. */
+  readonly system?: string
+  /** Tool schemas, when the request carries them. */
+  readonly tools?: readonly ToolSchema[]
+}
+
+function toolsOf(options: PiConvertibleRequest): PiTool[] | undefined {
   return options.tools?.map(tool => ({
     name: tool.name,
     description: tool.description,
@@ -87,7 +97,7 @@ function toolsOf(options: GenerateOptions): PiTool[] | undefined {
 }
 
 /** Assemble the request-level pi-ai context envelope shared by both conversion paths. */
-function piContext(options: GenerateOptions, messages: PiMessage[]): PiContext {
+function piContext(options: PiConvertibleRequest, messages: PiMessage[]): PiContext {
   const tools = toolsOf(options)
   return {
     ...options.system !== undefined ? { systemPrompt: options.system } : {},
@@ -96,7 +106,7 @@ function piContext(options: GenerateOptions, messages: PiMessage[]): PiContext {
   }
 }
 
-function textOnlyContext(options: GenerateOptions, onReplayDegrade?: (reason: string) => void): PiContext {
+function textOnlyContext(options: PiConvertibleRequest, onReplayDegrade?: (reason: string) => void): PiContext {
   const toolNames = new Map<CallId, string>()
   const messages: PiMessage[] = []
   for (const message of options.messages) {
@@ -170,13 +180,63 @@ export function toPiContext(
   onReplayDegrade?: (reason: string) => void,
   maxRequestImageBytes?: number,
 ): PiContext | Promise<PiContext> {
+  return convertToPiContext(options, attachments, onReplayDegrade, maxRequestImageBytes)
+}
+
+/** The shared conversion both public entry points delegate to. */
+function convertToPiContext(
+  request: PiConvertibleRequest,
+  attachments?: AttachmentStore,
+  onReplayDegrade?: (reason: string) => void,
+  maxRequestImageBytes?: number,
+): PiContext | Promise<PiContext> {
   return attachments === undefined
-    ? textOnlyContext(options, onReplayDegrade)
-    : toPiContextWithImages(options, attachments, onReplayDegrade, maxRequestImageBytes)
+    ? textOnlyContext(request, onReplayDegrade)
+    : toPiContextWithImages(request, attachments, onReplayDegrade, maxRequestImageBytes)
+}
+
+/**
+ * Convert a token-count interrogation to a pi-ai Context through the same
+ * history conversion a stream request takes, so the count prices the prompt a
+ * real request would carry. Synchronous while the interrogation carries no
+ * image.
+ * @param request - the interrogation whose messages, system, and tools are converted.
+ * @param attachments - absent; selects the synchronous conversion.
+ * @param onReplayDegrade - forwarded to {@link toPiAssistant} for each assistant message.
+ * @returns the pi-ai context.
+ */
+export function toPiCountContext(
+  request: PiConvertibleRequest,
+  attachments?: undefined,
+  onReplayDegrade?: (reason: string) => void,
+): PiContext
+/**
+ * Convert a token-count interrogation to a pi-ai Context while resolving
+ * durable images, replacing the oldest with text placeholders once the
+ * accumulated base64 payload exceeds `maxRequestImageBytes`.
+ * @param request - the interrogation whose messages, system, and tools are converted.
+ * @param attachments - durable byte resolver for image references.
+ * @param onReplayDegrade - forwarded to {@link toPiAssistant} for each assistant message.
+ * @param maxRequestImageBytes - request-level bound on base64-encoded image payload.
+ * @returns the asynchronously resolved pi-ai context.
+ */
+export function toPiCountContext(
+  request: PiConvertibleRequest,
+  attachments: AttachmentStore,
+  onReplayDegrade?: (reason: string) => void,
+  maxRequestImageBytes?: number,
+): Promise<PiContext>
+export function toPiCountContext(
+  request: PiConvertibleRequest,
+  attachments?: AttachmentStore,
+  onReplayDegrade?: (reason: string) => void,
+  maxRequestImageBytes?: number,
+): PiContext | Promise<PiContext> {
+  return convertToPiContext(request, attachments, onReplayDegrade, maxRequestImageBytes)
 }
 
 async function toPiContextWithImages(
-  options: GenerateOptions,
+  options: PiConvertibleRequest,
   attachments: AttachmentStore,
   onReplayDegrade?: (reason: string) => void,
   maxRequestImageBytes?: number,
