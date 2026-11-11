@@ -1,0 +1,24 @@
+# WP7 MCP roundtrip overlay: patches the base bundle's `mcp` registry row to
+# mount one fixture stdio server (path passed via DSH_MCP_FIXTURE_SERVER), so
+# the assembled product profile discovers real `mcp__fixture__add` through the
+# real MCP wire protocol. The keyless mcp-mock adapter scripts the call.
+- id: agent-default-model
+  config:
+    provider: mcp-mock
+    model: mcp-mock
+
+- id: mcp
+  config:
+    servers:
+      - transport: stdio
+        serverName: fixture
+        command: !!js process.execPath
+        args: [!!js process.env.DSH_MCP_FIXTURE_SERVER]
+        cwd: !!js process.cwd()
+        failOnStartupError: true
+        reconnect:
+          enabled: false
+
+- insert:
+    - id: mcp-mock-llm
+      name: './snapshot-fixtures/mcp-mock-llm.ts'

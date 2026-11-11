@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-08-19-binding-omitted-args-empty-object.zh.md)
+
 ## Problem
 
 Every tool call from a run_code program crosses the worker boundary through a binding wrapper that snapshots its argument record as lossless JSON before posting. A call that omits every optional parameter — `tools.job_list()`, `tools.get_goal()` — passes `undefined` as the record, and the snapshot of `undefined` is `undefined`. The wrapper read that as "not representable" and rejected the call with `binding arguments must be lossless JSON` before any request reached the host: a zero-argument call on an all-optional schema was impossible to express, and the error text pointed at JSON lossiness instead of at the omission.

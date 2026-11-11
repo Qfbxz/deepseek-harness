@@ -1,0 +1,25 @@
+# WP8 prefix-rule replay: `echo alpha` asks once and the fixture answerer
+# persists the `echo` command prefix through the public service API, so the
+# different-shaped `echo beta` runs without a prompt; the `rm -rf` call then
+# attempts a forbidden persistence, the service refuses it (the refusal text
+# lands in wp8-forbidden-prefix-refusal.txt), and the fixture rejects the ask
+# so the command never executes. Includes cordis.yml directly, mounts the
+# approval seam plainly, inserts the interaction fixture and the scripted
+# keyless adapter, and disables the key-requiring DeepSeek adapter.
+- id: approval
+  name: '@deepseek-ai/dsh-user-approval'
+
+- id: wp8-approval-fixture
+  name: './tests/fixtures/wp8-approval-fixture-prefix.ts'
+
+- id: wp8-prefix-mock-llm
+  name: './tests/fixtures/wp8-prefix-mock-llm.ts'
+
+- id: base
+  name: '@deepseek-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+    patches:
+      - id: llm-deepseek
+        name: '@deepseek-ai/dsh-llm-deepseek'
+        disabled: true

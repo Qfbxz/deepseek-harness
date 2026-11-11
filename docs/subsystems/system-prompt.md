@@ -48,8 +48,9 @@ interface PromptSection {
   readonly name: string
   /**
    * Sections are concatenated in ascending order. Convention: `-100` is the
-   * harness identity, `0` the deployment persona, tool guidance uses 100–199;
-   * other negative orders also render before the persona.
+   * harness identity, `0` the deployment persona, `10` the harness methodology
+   * section, tool guidance uses 100–199; other negative orders also render
+   * before the persona.
    */
   readonly order: number
   /**
@@ -156,7 +157,7 @@ variable(name: string, provider: (context: AssembleContext) => string | undefine
 async assemble(context: AssembleContext = {}): Promise<PromptAssembly>
 ```
 
-Source: [`packages/core/system-prompt/src/index.ts:338`](../../packages/core/system-prompt/src/index.ts)
+Source: [`packages/core/system-prompt/src/index.ts:384`](../../packages/core/system-prompt/src/index.ts)
 
 <a id="system-prompt-events"></a>
 

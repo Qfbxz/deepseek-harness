@@ -30,6 +30,10 @@ export async function mockServer(script: {
   status?: number
   events?: string[]
   body?: string
+  /** Answer with a 200 (or `status`) JSON body instead of an event stream. */
+  json?: unknown
+  /** Answer with a 200 (or `status`) body that is not valid JSON. */
+  rawBody?: string
   delayMs?: number
   headers?: Record<string, string>
 }[]): Promise<MockServer> {
@@ -53,6 +57,20 @@ export async function mockServer(script: {
       if (behavior.status !== undefined && behavior.status !== 200) {
         response.writeHead(behavior.status, { 'content-type': 'application/json', ...behavior.headers })
         response.end(behavior.body ?? '{}')
+        return
+      }
+      if (behavior.json !== undefined) {
+        const answer = (): void => {
+          response.writeHead(behavior.status ?? 200, { 'content-type': 'application/json', ...behavior.headers })
+          response.end(JSON.stringify(behavior.json))
+        }
+        if (behavior.delayMs === undefined) answer()
+        else setTimeout(answer, behavior.delayMs)
+        return
+      }
+      if (behavior.rawBody !== undefined) {
+        response.writeHead(behavior.status ?? 200, { 'content-type': 'application/json', ...behavior.headers })
+        response.end(behavior.rawBody)
         return
       }
       response.writeHead(200, { 'content-type': 'text/event-stream' })

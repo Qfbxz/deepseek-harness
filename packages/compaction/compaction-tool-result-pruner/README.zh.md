@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-可安全回放、不依赖模型的剪枝服务（`ctx.toolResultPruner`）。它会将超出预算的 `tool/result` 表层节点改写为长度受限的头部、固定省略标记和长度受限的尾部，同时在仅追加会话日志中保留完整原始事件。
+可安全回放、不依赖模型的剪枝服务（`ctx.toolResultPruner`）。它会将超出预算的 `tool/result` 表层节点改写为长度受限的头部、固定的截断通知和长度受限的尾部，同时在仅追加会话日志中保留完整原始事件。
 
 这是 [`dsh-compaction-basic`](../compaction-basic/README.md) 的具体配套服务，不是压缩（compaction）后端或面向模型的工具。Compact-basic 通过可选的 `ctx.get('toolResultPruner')` 读取它，因此这两个包仍可各自独立组合。
 
@@ -12,9 +12,9 @@
 
 当会话拒绝替换时，该方法会同步抛出异常。本次扫描中先前已提交的替换仍会保留。
 
-`measureContent(blocks)` 会统计 `text` 块中的 Unicode 码点。`pruneContent(blocks)` 会返回长度受限的替换；如果内容已在阈值内，则返回 `null`。非文本块保持原始相对位置；文本切片绝不会拆分 UTF-16 代理项对，但可能拆分由多个码点组成的字素簇。
+`measureContent(blocks)` 会统计 `text` 块中的 Unicode 码点。`pruneContent(blocks)` 会返回长度受限的替换；如果内容已在阈值内，则返回 `null`。被移除的中段会变成一个 `truncationNotice(originalChars, headChars, tailChars)` 文本片段。非文本块保持原始相对位置；文本切片绝不会拆分 UTF-16 代理项对，但可能拆分由多个码点组成的字素簇。
 
-每个发出的结果在文本码点上都精确包含已配置的头部预算、固定标记和尾部预算，不大于 `thresholdChars`，且严格小于触发输入。因此第二次扫描不会发出替换。
+每个发出的结果在文本码点上都精确包含已配置的头部预算、一个截断通知和尾部预算，不大于 `thresholdChars`，且严格小于触发输入。因此第二次扫描不会发出替换。
 
 ## 配置
 
@@ -26,7 +26,7 @@
 | `headChars` | 否（默认 `4096`） | 保留的开头 Unicode 码点数。 |
 | `tailChars` | 否（默认 `1024`） | 保留的末尾 Unicode 码点数。 |
 
-所有值都必须是整数；阈值必须为正数，头部／尾部必须为非负数。`headChars + marker + tailChars` 之和不得超过 `thresholdChars`，因此有效配置可以剪枝每个超出预算的结果，不会增长或重复改写。
+所有值都必须是整数；阈值必须为正数，头部／尾部必须为非负数。`headChars + 截断通知 + tailChars` 之和不得超过 `thresholdChars`，其中通知按其最宽现实位数预留（`TRUNCATION_NOTICE_MAX_CHARS`，每个取值按 `Number.MAX_SAFE_INTEGER` 计），因此有效配置无论原文多大，都能剪枝每个超出预算的结果，不会增长或重复改写。
 
 ## 用法
 
@@ -45,7 +45,7 @@ export function apply(ctx: Context): void {
 
 #### 模型看到的内容
 
-一旦满足压缩触发条件，后续请求看到的将是保留的头部、`\n\n[... tool result middle pruned ...]\n\n` 和保留的尾部，而非被移除的文本。非文本块保持原有顺序。模型不会看到原文的第二份副本。
+一旦满足压缩触发条件，后续请求看到的将是保留的头部、截断通知和保留的尾部，而非被移除的文本。通知会写明原始大小、保留的头尾大小与翻页下一步：`[truncated] original N chars -> kept head X + tail Y; re-read specific ranges to page through the middle`（前后各一个空行；`N`、`X`、`Y` 为实际码点数）。错误结果携带完全相同的通知，因此被截断的错误文本遵循同一后缀约定。非文本块保持原有顺序。模型不会看到原文的第二份副本。
 
 #### Token 影响
 

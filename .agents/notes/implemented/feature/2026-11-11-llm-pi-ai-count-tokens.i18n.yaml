@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-11-llm-pi-ai-count-tokens.md
+2026-11-11-llm-pi-ai-count-tokens.md: b69a53390e2b5171e26a669c1ad90cbe97564183
+2026-11-11-llm-pi-ai-count-tokens.zh.md: 883c9c156924597e95f994c9716509377a1f9d18

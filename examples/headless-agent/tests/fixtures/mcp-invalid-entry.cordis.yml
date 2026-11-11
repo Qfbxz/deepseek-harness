@@ -1,0 +1,7 @@
+# WP7 misconfiguration scenario: the registry entry fails the mcp-client
+# config schema (stdio without a command), so the boot must fail at load.
+- id: mcp
+  config:
+    servers:
+      - transport: stdio
+        serverName: broken

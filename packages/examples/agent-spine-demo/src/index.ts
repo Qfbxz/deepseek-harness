@@ -69,12 +69,13 @@ export interface GoalConfig {
 /**
  * Bundle config: each field forwarded verbatim to the child that owns it —
  * `agents` to the agent loop (an app that pre-creates no agents, like the ACP
- * bridge, simply omits it), `includeHarnessIdentity`, `includeRuntimeContext`,
- * `persona`, and `toolOrder` to the system-prompt plugin (the fixed opener,
- * dynamic-context policy, deployment persona, and explicit model-facing tool
- * order), the `tools` object to the tool registry (its presentation `mode`),
- * `dshHome` to bash environment and local skill discovery, `sessionTitle` to
- * the fallback title service, `skills` to the
+ * bridge, simply omits it), `includeHarnessIdentity`, `includeMethodology`,
+ * `includeRuntimeContext`, `persona`, and `toolOrder` to the system-prompt
+ * plugin (the fixed opener, the methodology section, dynamic-context policy,
+ * deployment persona, and explicit model-facing tool order), the `tools`
+ * object to the tool registry (its presentation `mode`), `dshHome` to bash
+ * environment and local skill discovery, `sessionTitle` to the fallback title
+ * service, `skills` to the
  * skill registry/local provider/tool consumer, `workspaceContext` to the
  * agent-instructions loader, `jobs` to the process-local job provider, and
  * `toolBash`/`toolJobs` to the model-facing tool plugins this bundle owns.
@@ -98,6 +99,12 @@ export interface Config {
   maxToolCallsPerTurn?: AgentLoopConfig['maxToolCallsPerTurn']
   /** Whether the system prompt includes the fixed Harness identity (default true). */
   includeHarnessIdentity?: SystemPromptConfig['includeHarnessIdentity']
+  /** Whether the system prompt includes the harness methodology section (default true). */
+  includeMethodology?: SystemPromptConfig['includeMethodology']
+  /** Replacement text for the methodology section (see dsh-system-prompt's `Config`). */
+  methodology?: SystemPromptConfig['methodology']
+  /** Maximum accepted word count for the methodology section (see dsh-system-prompt's `Config`). */
+  methodologyMaxWords?: SystemPromptConfig['methodologyMaxWords']
   /** Whether model history includes dynamic runtime-context snapshots (default true). */
   includeRuntimeContext?: SystemPromptConfig['includeRuntimeContext']
   /** The deployment persona (see dsh-system-prompt's `Config`). */
@@ -186,8 +193,11 @@ export function pickSpineConfig(config: Omit<Config, 'agents'>): Omit<Config, 'a
     ...config.maxParallelToolCalls !== undefined ? { maxParallelToolCalls: config.maxParallelToolCalls } : {},
     ...config.maxToolCallsPerTurn !== undefined ? { maxToolCallsPerTurn: config.maxToolCallsPerTurn } : {},
     ...config.includeHarnessIdentity !== undefined ? { includeHarnessIdentity: config.includeHarnessIdentity } : {},
+    ...config.includeMethodology !== undefined ? { includeMethodology: config.includeMethodology } : {},
     ...config.includeRuntimeContext !== undefined ? { includeRuntimeContext: config.includeRuntimeContext } : {},
     ...config.persona !== undefined ? { persona: config.persona } : {},
+    ...config.methodology !== undefined ? { methodology: config.methodology } : {},
+    ...config.methodologyMaxWords !== undefined ? { methodologyMaxWords: config.methodologyMaxWords } : {},
     ...config.toolOrder !== undefined ? { toolOrder: config.toolOrder } : {},
     ...config.tools !== undefined ? { tools: config.tools } : {},
     ...config.dshHome !== undefined ? { dshHome: config.dshHome } : {},
@@ -227,8 +237,12 @@ export function apply(ctx: Context, config: Config): void {
   // Owner schemas resolve defaults; forward toolOrder only when explicitly set.
   ctx.plugin(SystemPrompt, {
     includeHarnessIdentity: config.includeHarnessIdentity ?? true,
+    includeMethodology: config.includeMethodology ?? true,
     includeRuntimeContext: config.includeRuntimeContext ?? true,
     persona: config.persona ?? '',
+    // Preserve omission so the fixed harness methodology text is the default.
+    ...config.methodology !== undefined ? { methodology: config.methodology } : {},
+    ...config.methodologyMaxWords !== undefined ? { methodologyMaxWords: config.methodologyMaxWords } : {},
     ...config.toolOrder !== undefined ? { toolOrder: config.toolOrder } : {},
   })
   ctx.plugin(ToolRuntime, config.tools ?? {})

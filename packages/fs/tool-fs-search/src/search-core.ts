@@ -204,6 +204,17 @@ export function resolveRgPath(): Promise<string> {
 }
 
 /**
+ * The uniform abort message: names the cause and the remedy in one line, so a
+ * timeout on a broad search tells the model to narrow instead of retrying blind.
+ */
+function abortError(toolName: string): SearchError {
+  return new SearchError(
+    `${toolName} was aborted before completion (tool timeout or caller cancellation); narrow the pattern, add an include glob, or scope the path and retry`,
+    'SEARCH_ABORTED',
+  )
+}
+
+/**
  * Run the packaged ripgrep binary with a plain argv vector and return its
  * complete raw stdout. The working directory is the calling agent's session
  * cwd (`exec.agent.session.header.cwd`) when available, else
@@ -238,16 +249,6 @@ export function resolveRgPath(): Promise<string> {
  * @param stderrMaxBytes - cap on the retained stderr diagnostic tail.
  * @returns the complete stdout, the zero-result flag, and the resolved workdir.
  */
-/**
- * The uniform abort message: names the cause and the remedy in one line, so a
- * timeout on a broad search tells the model to narrow instead of retrying blind.
- */
-function abortError(toolName: string): SearchError {
-  return new SearchError(
-    `${toolName} was aborted before completion (tool timeout or caller cancellation); narrow the pattern, add an include glob, or scope the path and retry`,
-    'SEARCH_ABORTED',
-  )
-}
 export async function runRipgrep(
   ctx: Context,
   exec: ToolExecution,

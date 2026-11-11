@@ -1,12 +1,10 @@
-# kimi-acp-host — 完整实现所有反向 RPC 的 kimi ACP 宿主
+# kimi-acp-host — a kimi ACP host implementing every reverse RPC
 
-零依赖 Node 脚本（≥18）：把 `kimi acp` 作为子进程拉起，通过 stdio 上的
-NDJSON JSON-RPC 驱动它，并实现 kimi 适配层用到的**全部客户端侧方法**。
-本会话里 `Bash`/`Grep`/`Glob` 报 `ACP terminal capability is unavailable`，
-根因就是宿主既没在 `initialize` 里声明 `clientCapabilities.terminal = true`，
-也没实现 terminal 方法族；本宿主两者都补齐。
+English | [中文](README.zh.md)
 
-## 运行
+A zero-dependency Node script (≥18): launches `kimi acp` as a subprocess, drives it over stdio with NDJSON JSON-RPC, and implements **every client-side method** the kimi adapter uses. In one session, `Bash`/`Grep`/`Glob` failed with `ACP terminal capability is unavailable` precisely because the host neither declared `clientCapabilities.terminal = true` in `initialize` nor implemented the terminal method family; this host supplies both.
+
+## Run
 
 ```sh
 node kimi-acp-host/host.mjs --cwd /path/to/repo
@@ -14,39 +12,30 @@ node kimi-acp-host/host.mjs --cwd /path/to/repo
 #       --approve ask|always|reject   (默认 ask)
 ```
 
-先在终端 `kimi` 完成登录（Paseo 场景同理），再启动本宿主。
+Complete the `kimi` login in a terminal first (same for the Paseo scenario), then start this host.
 
-REPL 内：直接输入即 `session/prompt`；`/cancel` 中断本轮；
-`/permission always` 运行中切策略；`/new` 开新会话；`/exit` 退出。
-Ctrl-C：优先取消挂起的权限问答 → 否则发 `session/cancel` → 再按退出。
+Inside the REPL: plain input is `session/prompt`; `/cancel` interrupts the current turn; `/permission always` switches policy mid-run; `/new` starts a new session; `/exit` quits. Ctrl-C first cancels a pending permission question → otherwise sends `session/cancel` → then exits.
 
-## 方法覆盖（agent → host 反向 RPC）
+## Method coverage (agent → host reverse RPC)
 
-| 线上方法 | 实现 |
+| Wire method | Implementation |
 | --- | --- |
-| `session/update` | 流式渲染：agent/user/thought chunk、tool_call(_update)、plan(_update/_removed)、usage、mode、session_info |
-| `session/request_permission` | 三种策略：`ask` 编号问答 / `always` 自动 allow_once / `reject` 自动拒绝；被 cancel 时按规范回 `cancelled` |
-| `fs/read_text_file` | 支持 1-based `line` + `limit` |
-| `fs/write_text_file` | 直接落盘 |
-| `terminal/create` | 本地 spawn，stdout+stderr 合并捕获，`outputByteLimit`（默认 1MB）从头部按 UTF-8 字符边界截断并置 `truncated`；spawn 失败按真实 shell 语义记 exit 127 |
-| `terminal/output` | 立即返回当前输出 + 可选 `exitStatus` |
-| `terminal/wait_for_exit` | 挂起至退出，返回 `{exitCode, signal}` |
-| `terminal/kill` | SIGTERM，2s 后升级 SIGKILL，terminalId 保持有效 |
-| `terminal/release` | 先 kill 再失效 |
-| `elicitation/create` · `elicitation/complete` | UNSTABLE，尽力实现：form 逐字段问答 / url 打印链接；`complete` 为通知 no-op |
-| 其余（`mcp/connect` 等） | 回 JSON-RPC `-32601`；kimi 适配层自己转换 http/stdio/sse MCP，不会发这些 |
+| `session/update` | Streaming render: agent/user/thought chunks, tool_call(_update), plan(_update/_removed), usage, mode, session_info |
+| `session/request_permission` | Three policies: `ask` numbered question / `always` automatic allow_once / `reject` automatic denial; a cancelled request answers `cancelled` per the spec |
+| `fs/read_text_file` | Supports 1-based `line` + `limit` |
+| `fs/write_text_file` | Writes straight to disk |
+| `terminal/create` | Local spawn, merged stdout+stderr capture, `outputByteLimit` (default 1 MB) truncating from the head at UTF-8 character boundaries with `truncated` set; a spawn failure records exit 127 with real-shell semantics |
+| `terminal/output` | Returns the current output plus the optional `exitStatus` immediately |
+| `terminal/wait_for_exit` | Parks until exit, returns `{exitCode, signal}` |
+| `terminal/kill` | SIGTERM, escalating to SIGKILL after 2 s; the terminalId stays valid |
+| `terminal/release` | Kills first, then invalidates |
+| `elicitation/create` · `elicitation/complete` | UNSTABLE, best-effort: form asks field by field / url prints the link; `complete` is a notification no-op |
+| Everything else (`mcp/connect` etc.) | Answers JSON-RPC `-32601`; the kimi adapter converts http/stdio/sse MCP itself and never sends these |
 
-initialize 声明：`protocolVersion: 1`、`clientCapabilities: { terminal: true,
-fs: { readTextFile: true, writeTextFile: true } }`——这正是解锁 kimi 在 ACP
-模式下 shell/文件工具的关键开关。
+`initialize` declares `protocolVersion: 1` and `clientCapabilities: { terminal: true, fs: { readTextFile: true, writeTextFile: true } }` — exactly the switch that unlocks kimi's shell/file tools under ACP.
 
-## 已知边界
+## Known limits
 
-- 未在本仓库内做自动化测试（编写时编写环境无 shell）。冒烟：
-  `node kimi-acp-host/host.mjs --cwd /tmp && 输入 "跑一下 ls -la"`，
-  应看到 `terminal/create` 被本宿主执行并回传输出。
-- 权限问答被 Ctrl-C 取消后，已键入的下一行会被挂起的 readline question
-  吞掉一次（回答被丢弃），再输入一行即恢复正常。
-- 参考规格：仓库内 `node_modules/@agentclientprotocol/sdk`（0.25.1）的
-  `dist/schema/index.d.ts` 方法表与 `types.gen.d.ts` 字段定义；
-  kimi 侧能力矩阵见官方文档 kimi-acp 参考页。
+- No automated tests inside this repository (the authoring environment had no shell). Smoke test: `node kimi-acp-host/host.mjs --cwd /tmp`, type "run ls -la", and `terminal/create` should execute under this host and return output.
+- After Ctrl-C cancels a permission question, the next typed line is swallowed once by the parked readline question (the answer is dropped); typing one more line restores normal behavior.
+- Reference spec: the method table in this repository's `node_modules/@agentclientprotocol/sdk` (0.25.1) `dist/schema/index.d.ts` and the field definitions in `types.gen.d.ts`; the kimi-side capability matrix lives in the official kimi-acp reference page.

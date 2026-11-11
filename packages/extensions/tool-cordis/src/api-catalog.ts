@@ -398,7 +398,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'approval',
     summary: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session.',
-    description: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session. It exposes deterministic policy changes to the model through the runtime-context snapshot and switch notices.',
+    description: 'Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session. Within the `\'ask\'` policy it short-circuits the ask when a persisted prefix rule matches or when the same normalized request shape was already approved this session, so a repeated shape interrupts once. It exposes deterministic policy changes to the model through the runtime-context snapshot and switch notices.',
     methods: [
       {
         signature: 'setPolicy(agent: Agent, policy: ApprovalPolicy): void',
@@ -406,9 +406,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'agent', description: 'the live agent whose policy is changing.' }, { name: 'policy', description: 'the new effective policy.' }],
       },
       {
+        signature: 'persistPrefix(agent: Agent, toolName: string, tokens: readonly string[]): void',
+        description: 'Persist one command-prefix rule for the agent\'s session: later asks for `toolName` whose `command` argument begins with exactly `tokens` resolve `\'allowed-once\'` without consulting any answerer. Rules live in session memory only — they do not survive restart — and an exact duplicate persists as the same rule. The forbidden-shape refusal is unconditional: `rm`, heredoc, and general-interpreter shapes (see forbiddenPrefixReason) throw before any rule is stored, and the check is not configurable because it is a fixed safety invariant.',
+        parameters: [{ name: 'agent', description: 'the agent whose session the rule governs.' }, { name: 'toolName', description: 'the tool whose asks the rule may answer.' }, { name: 'tokens', description: 'the exact leading command tokens, each a non-empty string.' }],
+        throws: ['TypeError when `tokens` is empty or carries an empty/non-string token.', 'Error with the {@link forbiddenPrefixReason} text when the shape is forbidden.'],
+      },
+      {
         signature: 'async request(req: ApprovalRequest): Promise<ApprovalOutcome>',
-        description: 'Ask the composed answerers to decide one readonly same-process request. The service borrows the request, agent, session, and live signal directly. The request requires an open turn because the audit pair must be enclosed by the durable log\'s commit/replay boundary; an idle ask rejects before appending anything. The answerer phase always produces an outcome: an aborted signal yields `\'cancelled\'`, a missing or throwing answerer yields `\'unavailable\'` (fail closed), and a rogue non-vocabulary return value is normalized to `\'unavailable\'`. A failure that prevents either audit append from committing still rejects because returning an unlogged decision would violate the pair. Session contains post-commit observer failures, so an authoritative append cannot reject the request or suppress its matching audit event.',
-        parameters: [{ name: 'req', description: 'the pending decision (agent, tool identity, reason, signal).' }],
+        description: 'Ask the composed answerers to decide one readonly same-process request. The service borrows the request, agent, session, and live signal directly. The request requires an open turn because the audit pair must be enclosed by the durable log\'s commit/replay boundary; an idle ask rejects before appending anything. Under the `\'ask\'` policy, a matching persisted prefix rule or a shape already approved this session resolves `\'allowed-once\'` without dispatching any answerer; otherwise the answerer phase always produces an outcome: an aborted signal yields `\'cancelled\'`, a missing or throwing answerer yields `\'unavailable\'` (fail closed), and a rogue non-vocabulary return value is normalized to `\'unavailable\'`. A failure that prevents either audit append from committing still rejects because returning an unlogged decision would violate the pair. Session contains post-commit observer failures, so an authoritative append cannot reject the request or suppress its matching audit event.',
+        parameters: [{ name: 'req', description: 'the pending decision (agent, tool identity, arguments, reason, signal).' }],
         returns: 'the closed outcome; `\'allowed-once\'` is the only grant.',
         throws: ['when no turn is open or either audit event fails before the session append commit point.'],
       },
@@ -927,6 +933,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Resolve the retry policy captured when one provider route was registered.',
         parameters: [{ name: 'provider', description: 'registered provider route to inspect.' }],
         returns: 'the provider-owned policy, with normal defaults already resolved.',
+      },
+      {
+        signature: 'async countTokens( provider: string, model: string, request: LlmCountTokensRequest, signal?: AbortSignal, ): Promise<number | undefined>',
+        description: 'Count tokens for one request through the route\'s adapter, when the adapter declares the LlmAdapter.countTokens capability. Undeclared absence is a fact, not an error: callers keep the character estimator instead. The adapter-returned count is validated at this wire boundary.',
+        parameters: [{ name: 'provider', description: 'registered provider route to interrogate.' }, { name: 'model', description: 'exact model id the count targets.' }, { name: 'request', description: 'the request whose prompt tokens are counted.' }, { name: 'signal', description: 'optional cancellation for adapter-owned asynchronous counting.' }],
+        returns: 'the provider-reported count, or `undefined` when the adapter does not declare the capability.',
+        throws: ['{LlmError} `NO_ADAPTER` when no adapter is registered for `provider`, or `INVALID_TOKEN_COUNT` when the adapter returns a value that is not a non-negative safe integer.'],
       },
       {
         signature: 'async listModels(provider: string): Promise<LlmModelInfo[]>',
@@ -1951,9 +1964,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     description: 'Replay owner for one service-wide estimator and isolated per-session folds.',
     methods: [
       {
-        signature: 'measure(session: Session, requestHeader?: EpochHeader): TokenMeasurement',
-        description: 'Measure current request pressure and surface through the durable tail.\n\nProvider usage is reused only when the latest successful call\'s canonical request envelope matches `requestHeader` and its total is no lower than that call\'s full heuristic anchor; otherwise the complete envelope and surface are heuristically repriced.\n\n`requestHeader` affects request pressure only; surface fields always describe the current session surface. Every call clones those positional nodes, so measurement is O(surface).',
-        parameters: [{ name: 'session', description: 'session to replay through its current durable tail.' }, { name: 'requestHeader', description: 'optional effective request envelope replacing the latest logged header.' }],
+        signature: 'measure(session: Session, requestHeader?: EpochHeader, reportedTokens?: number): TokenMeasurement',
+        description: 'Measure current request pressure and surface through the durable tail.\n\nA caller-supplied `reportedTokens` count covers the exact measured envelope — the provider counted the current system, tools, and surface at this boundary — so it anchors the measurement directly with no signed surface delta. Provider usage is reused only when the latest successful call\'s canonical request envelope matches `requestHeader` and its total is no lower than that call\'s full heuristic anchor; otherwise the complete envelope and surface are heuristically repriced.\n\n`requestHeader` affects request pressure only; surface fields always describe the current session surface. Every call clones those positional nodes, so measurement is O(surface).',
+        parameters: [{ name: 'session', description: 'session to replay through its current durable tail.' }, { name: 'requestHeader', description: 'optional effective request envelope replacing the latest logged header.' }, { name: 'reportedTokens', description: 'optional provider-reported count for the measured envelope, taken through the routing adapter\'s counting capability; it overrides the usage and estimated anchors.' }],
         returns: 'a detached deeply immutable pressure and surface measurement.',
       },
       {
@@ -1982,7 +1995,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'pruneContent(blocks: readonly ContentBlock[]): ContentBlock[] | null',
-        description: 'Replace an over-budget text middle while retaining rich-block order. Text slicing is by Unicode code point, not UTF-16 code unit, so a retained boundary cannot split a surrogate pair. Grapheme clusters may still split.',
+        description: 'Replace an over-budget text middle with the fixed truncation notice while retaining rich-block order. The notice states the original size, the kept head and tail sizes, and the paging next step. Text slicing is by Unicode code point, not UTF-16 code unit, so a retained boundary cannot split a surrogate pair. Grapheme clusters may still split.',
         parameters: [{ name: 'blocks', description: 'original tool-result content.' }],
         returns: 'pruned content, or `null` when the text is within budget.',
       },
@@ -2770,11 +2783,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ApprovalRequest',
-    declaration: 'export interface ApprovalRequest {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: CallId;\n    readonly reason?: string;\n    readonly signal?: AbortSignal;\n}',
+    declaration: 'export interface ApprovalRequest {\n    readonly agent: Agent;\n    readonly toolName: string;\n    readonly callId?: CallId;\n    readonly arguments?: unknown;\n    readonly reason?: string;\n    readonly signal?: AbortSignal;\n}',
   },
   {
     name: 'ApprovalService',
-    declaration: 'export class ApprovalService extends Service {\n    static Config: z<Config>;\n    constructor(ctx: Context, public config: Config);\n    setPolicy(agent: Agent, policy: ApprovalPolicy): void;\n    async request(req: ApprovalRequest): Promise<ApprovalOutcome>;\n    overrideOf(session: Session): ApprovalPolicy | undefined;\n}',
+    declaration: 'export class ApprovalService extends Service {\n    static Config: z<Config>;\n    constructor(ctx: Context, public config: Config);\n    setPolicy(agent: Agent, policy: ApprovalPolicy): void;\n    persistPrefix(agent: Agent, toolName: string, tokens: readonly string[]): void;\n    async request(req: ApprovalRequest): Promise<ApprovalOutcome>;\n    overrideOf(session: Session): ApprovalPolicy | undefined;\n}',
   },
   {
     name: 'AskUserQuestionAnswer',
@@ -3386,7 +3399,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmAdapter',
-    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+    declaration: 'export abstract class LlmAdapter {\n    providerInfo(provider: string): LlmProviderInfo;\n    providerRetryPolicy(_provider: string): ResolvedRetryPolicy | undefined;\n    listModels(_provider: string): Promise<readonly LlmModelInfo[]>;\n    resolveModel(provider: string, model: string, _signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    countTokens?(provider: string, model: string, request: LlmCountTokensRequest, signal?: AbortSignal): Promise<number>;\n    abstract stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
     name: 'LlmCallConfig',
@@ -3399,6 +3412,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'LlmConfigurableProvider',
     declaration: 'export interface LlmConfigurableProvider {\n    provider: string;\n    displayName: string;\n    settingsNs: string;\n    settingsPath: readonly string[];\n    declared?: boolean;\n}',
+  },
+  {
+    name: 'LlmCountTokensRequest',
+    declaration: 'export interface LlmCountTokensRequest {\n    readonly messages: readonly Message[];\n    readonly system?: string;\n    readonly tools?: readonly ToolSchema[];\n}',
   },
   {
     name: 'LlmDiscoveredModel',
@@ -3438,7 +3455,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'LlmRuntime',
-    declaration: 'export class LlmRuntime extends Service {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
+    declaration: 'export class LlmRuntime extends Service {\n    constructor(ctx: Context);\n    registerAdapter(providers: string[], adapter: LlmAdapter): AdapterRegistrationHandle;\n    listProviders(): LlmProviderInfo[];\n    registerConfigurableProviders(entries: readonly LlmConfigurableProvider[]): DirectoryRegistrationHandle;\n    listConfigurableProviders(): LlmConfigurableProvider[];\n    registerModelDiscovery(settingsNs: string, discover: (request: LlmModelDiscoveryRequest) => Promise<readonly LlmDiscoveredModel[]>): () => void;\n    async discoverModels(settingsNs: string, request: LlmModelDiscoveryRequest): Promise<LlmDiscoveredModel[]>;\n    providerRetryPolicy(provider: string): ResolvedRetryPolicy;\n    async countTokens(provider: string, model: string, request: LlmCountTokensRequest, signal?: AbortSignal): Promise<number | undefined>;\n    async listModels(provider: string): Promise<LlmModelInfo[]>;\n    async resolveModelInfo(provider: string, model: string, signal?: AbortSignal): Promise<LlmResolvedModelInfo>;\n    async resolveCallConfig(config: LlmCallConfig, signal?: AbortSignal): Promise<LlmCallConfig>;\n    async prepareCall(config: LlmCallConfig, signal?: AbortSignal): Promise<PreparedLlmCall>;\n    stream(options: GenerateOptions): AsyncIterable<StreamChunk>;\n}',
   },
   {
     name: 'LspHover',
@@ -4514,7 +4531,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TokenMeasurementBaseline',
-    declaration: 'export type TokenMeasurementBaseline = {\n    readonly kind: \'none\';\n    readonly tokens: 0;\n} | {\n    readonly kind: \'estimated\';\n    readonly tokens: number;\n} | {\n    readonly kind: \'usage\';\n    readonly tokens: number;\n    readonly usage: Readonly<TokenUsage>;\n};',
+    declaration: 'export type TokenMeasurementBaseline = {\n    readonly kind: \'none\';\n    readonly tokens: 0;\n} | {\n    readonly kind: \'estimated\';\n    readonly tokens: number;\n} | {\n    readonly kind: \'reported\';\n    readonly tokens: number;\n} | {\n    readonly kind: \'usage\';\n    readonly tokens: number;\n    readonly usage: Readonly<TokenUsage>;\n};',
   },
   {
     name: 'TokenSurfaceNode',

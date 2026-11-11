@@ -41,6 +41,39 @@ describe('dsh-base bundle', () => {
     expect(manifest.dependencies).not.toHaveProperty('@deepseek-ai/dsh-subagent-claude-code')
   })
 
+  it('mounts the MCP capability as a dormant registry row backed by a real dependency', () => {
+    const root = fileURLToPath(new URL('..', import.meta.url))
+    const manifest = JSON.parse(
+      readFileSync(resolve(root, 'package.json'), 'utf8'),
+    ) as {
+      dependencies?: Record<string, string>
+      dsh?: { bundle?: { patch?: string } }
+    }
+    const parsed = yaml.load(
+      readFileSync(resolve(root, 'cordis.patch.yml'), 'utf8'),
+      { schema: entryListSchema },
+    )
+    if (!Array.isArray(parsed)) throw new TypeError('base patch must parse to a patch list')
+    const rows = parsed.flatMap((patch): Record<string, unknown>[] =>
+      typeof patch === 'object' && patch !== null
+        ? (patch as { insert?: Record<string, unknown>[] }).insert ?? []
+        : [],
+    )
+    // The capability mounts through the registry entry with an empty default
+    // registry: no server process and no mcp__* tool until a later layer
+    // replaces `servers`. The registry is the only MCP row — the base patch
+    // never hardcodes a server list — and the plugin resolves from a declared
+    // dependency of this bundle.
+    const mcpRows = rows.filter(row => row.id === 'mcp')
+    expect(mcpRows).toHaveLength(1)
+    expect(mcpRows[0]).toMatchObject({
+      name: '@deepseek-ai/dsh-mcp-client/registry',
+      config: { servers: [] },
+    })
+    expect(rows.filter(row => row.name === '@deepseek-ai/dsh-mcp-client')).toHaveLength(0)
+    expect(manifest.dependencies).toHaveProperty('@deepseek-ai/dsh-mcp-client')
+  })
+
   it('gates each shell stack by platform with a symmetric disabled expression', () => {
     const root = fileURLToPath(new URL('..', import.meta.url))
     const parsed = yaml.load(

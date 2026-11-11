@@ -302,7 +302,8 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
     name: 'tool:glob',
     order: 103,
     text: 'Use the glob tool — not shell find — to discover files by path pattern. A pattern with no "/" matches basenames at any depth, so "*" matches every file in the tree rather than its top level. '
-      + `Results are files only, never directories, and include hidden and ignored files: a result that fits comes back in modification-time order, ${overCapGuidance}`,
+      + `Results are files only, never directories, and include hidden and ignored files: a result that fits comes back in modification-time order, ${overCapGuidance}`
+      + ' When not to use: an unbounded `**` pattern floods the result cap; scope it to a subtree.',
   })
 
   const overCapDescription = caps.sampleOverCapGlobResults

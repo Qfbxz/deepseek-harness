@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-binding-omitted-args-empty-object.md
+2026-08-19-binding-omitted-args-empty-object.md: 7d0c37f24940af74a0c33d3c6da501966b5dfe3e
+2026-08-19-binding-omitted-args-empty-object.zh.md: d6a23f474620794496cb68a23ac92f1d298188ee

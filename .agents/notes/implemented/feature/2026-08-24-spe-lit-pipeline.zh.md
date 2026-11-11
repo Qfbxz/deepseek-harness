@@ -2,6 +2,8 @@
 
 Status: implemented
 
+[English](2026-08-24-spe-lit-pipeline.md) | 中文
+
 ## Problem
 
 SPE/IADC 类油气文献检索每个会话都要临时拼工具链：源被误判（scihub.net.cn 实为查重引流假站；petrowiki 索引存在但 WAF 拦一切自动化正文）、CF 墙挡 headless 浏览器、没有 agent 知道可用路线；DOI→PDF 无可复现路径。

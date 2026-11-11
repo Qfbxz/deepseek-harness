@@ -50,12 +50,16 @@ type ApprovalPolicy = 'ask' | 'never'
 
 ## 审批请求
 
-`ApprovalRequest` 以足够精确的方式标识 agent 和工具操作，以便路由和审计该问题。它有意省略工具参数：应答者通过 `callId` 将提示附加到已流式输出的工具调用上，而非渲染另一份可能漂移的副本。
+`ApprovalRequest` 以足够精确的方式标识 agent 和工具操作，以便路由和审计该问题。`callId` 让应答者把提示附加到已流式输出的工具调用上，而非渲染另一份可能漂移的副本；`arguments` 只服务于服务自身的缓存与前缀规则匹配，不带它的请求对两者都不可见。
 
 ```ts type-equiv
 /**
  * Readonly same-process permission question. `callId` links to an already
- * presented tool call, so arguments are not duplicated here.
+ * presented tool call, so arguments are not duplicated for PRESENTATION;
+ * `arguments` rides along only for the service's session approval cache and
+ * prefix-rule matching (an answerer renders the streamed call, never this
+ * copy). An ask without `arguments` cannot hit the cache or a prefix rule —
+ * the service refuses to auto-approve what it cannot see.
  */
 interface ApprovalRequest {
   /**
@@ -71,6 +75,13 @@ interface ApprovalRequest {
    * attach the prompt to the tool call it already streamed.
    */
   readonly callId?: CallId
+  /**
+   * The call's parsed arguments, when the asker has them — the raw shape the
+   * {@link approvalShapeKey} normalizes for the session approval cache and
+   * that {@link ApprovalService.persistPrefix} prefix rules match against.
+   * Omitting it keeps the ask cache-transparent and rule-invisible.
+   */
+  readonly arguments?: unknown
   /** The asker's human-readable explanation of WHY it is asking. */
   readonly reason?: string
   /**
@@ -80,6 +91,10 @@ interface ApprovalRequest {
   readonly signal?: AbortSignal
 }
 ```
+
+## 会话审批缓存与前缀规则
+
+在 `ask` 策略下，服务会在分发任何应答者之前自行解析一部分请求。会话审批缓存按归一化请求形态为请求建键——精确工具名加上规范化参数：字符串去除首尾空白并折叠连续空白，引号、大小写与数组顺序保持敏感，对象成员顺序不敏感，`undefined` 成员按 JSON 语义丢弃。同一形态在会话内获批一次后，后续请求直接以 `allowed-once` 解析，不再提示；`cacheMaxEntries` 按会话限制缓存容量，`0` 关闭缓存。`persistPrefix(agent, toolName, tokens)` 存储更窄的授权：该工具后续 `command` 参数恰好以 `tokens` 开头的请求由规则直接应答。遇到禁止形态的持久化请求会抛出且不落任何规则：token 含 heredoc 操作符、任何位置含裸的禁止命令（包括 `timeout 10 rm` 一类带值前置形态）、剥离直通包装命令后未解析出具体命令、或解析出的命令是多字符禁止名的扩展（`python3.11`、`rmdir`）时都会拒绝；禁止清单是固定安全不变量，任何配置都无法放宽。规则只存于会话内存，不跨重启；不带 `arguments` 的请求（例如沙箱提权通道）在缓存之外、也永不匹配规则；`never` 策略仍在两者之前确定性地拒绝。
 
 ## 分发与审计
 
@@ -99,7 +114,7 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.approval` — `ApprovalService`
 
-Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session. It exposes deterministic policy changes to the model through the runtime-context snapshot and switch notices.
+Approval service that applies session policy before answerers and logs every ask/outcome pair to the requesting session. Within the `'ask'` policy it short-circuits the ask when a persisted prefix rule matches or when the same normalized request shape was already approved this session, so a repeated shape interrupts once. It exposes deterministic policy changes to the model through the runtime-context snapshot and switch notices.
 
 ```ts cordis-catalog
 /**
@@ -112,19 +127,38 @@ Approval service that applies session policy before answerers and logs every ask
 setPolicy(agent: Agent, policy: ApprovalPolicy): void
 
 /**
+ * Persist one command-prefix rule for the agent's session: later asks for
+ * `toolName` whose `command` argument begins with exactly `tokens` resolve
+ * `'allowed-once'` without consulting any answerer. Rules live in session
+ * memory only — they do not survive restart — and an exact duplicate
+ * persists as the same rule. The forbidden-shape refusal is unconditional:
+ * `rm`, heredoc, and general-interpreter shapes (see
+ * {@link forbiddenPrefixReason}) throw before any rule is stored, and the
+ * check is not configurable because it is a fixed safety invariant.
+ * @param agent - the agent whose session the rule governs.
+ * @param toolName - the tool whose asks the rule may answer.
+ * @param tokens - the exact leading command tokens, each a non-empty string.
+ * @throws TypeError when `tokens` is empty or carries an empty/non-string token.
+ * @throws Error with the {@link forbiddenPrefixReason} text when the shape is forbidden.
+ */
+persistPrefix(agent: Agent, toolName: string, tokens: readonly string[]): void
+
+/**
  * Ask the composed answerers to decide one readonly same-process request.
  * The service borrows the request, agent, session, and live signal directly.
  * The request requires an open turn because the audit pair must be enclosed
  * by the durable log's commit/replay boundary; an idle ask rejects before
- * appending anything. The answerer phase always produces an outcome: an
- * aborted signal yields `'cancelled'`, a missing or throwing answerer yields
- * `'unavailable'` (fail closed), and a rogue non-vocabulary return value is
- * normalized to `'unavailable'`. A failure that prevents either audit append
- * from committing still rejects because returning an unlogged decision would
- * violate the pair. Session contains post-commit observer failures, so an
- * authoritative append cannot reject the request or suppress its matching
- * audit event.
- * @param req - the pending decision (agent, tool identity, reason, signal).
+ * appending anything. Under the `'ask'` policy, a matching persisted prefix
+ * rule or a shape already approved this session resolves `'allowed-once'`
+ * without dispatching any answerer; otherwise the answerer phase always
+ * produces an outcome: an aborted signal yields `'cancelled'`, a missing or
+ * throwing answerer yields `'unavailable'` (fail closed), and a rogue
+ * non-vocabulary return value is normalized to `'unavailable'`. A failure
+ * that prevents either audit append from committing still rejects because
+ * returning an unlogged decision would violate the pair. Session contains
+ * post-commit observer failures, so an authoritative append cannot reject
+ * the request or suppress its matching audit event.
+ * @param req - the pending decision (agent, tool identity, arguments, reason, signal).
  * @returns the closed outcome; `'allowed-once'` is the only grant.
  * @throws when no turn is open or either audit event fails before the session
  *   append commit point.
@@ -141,7 +175,7 @@ overrideOf(session: Session): ApprovalPolicy | undefined
 
 Types: [Agent](core.md) · [Session](session.md)
 
-Source: [`packages/interaction/user-approval/src/index.ts:192`](../../packages/interaction/user-approval/src/index.ts)
+Source: [`packages/interaction/user-approval/src/index.ts:380`](../../packages/interaction/user-approval/src/index.ts)
 
 <a id="approval-events"></a>
 
@@ -166,5 +200,5 @@ Ask composed answerers for one decision. Return an outcome to claim the request 
 
 Types: [Scoped](scope.md)
 
-Source: [`packages/interaction/user-approval/src/index.ts:30`](../../packages/interaction/user-approval/src/index.ts)
+Source: [`packages/interaction/user-approval/src/index.ts:31`](../../packages/interaction/user-approval/src/index.ts)
 <!-- END GENERATED cordis-surface -->

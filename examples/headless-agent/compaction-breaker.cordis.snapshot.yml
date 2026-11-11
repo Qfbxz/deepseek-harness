@@ -1,0 +1,31 @@
+# WP4 consecutive-failure breaker replay: three automatic pressure compaction
+# attempts fail on the summarizer call, the breaker stops the fourth attempt at
+# the shipped default `maxConsecutiveFailures: 3`, and the turn still completes.
+# Includes cordis.yml directly (a config patch cannot target an entry behind a
+# nested include), restates the compaction-basic row with a small routed window
+# so step-boundary pressure fires from the first request envelope, and disables
+# the key-requiring DeepSeek adapter in favor of the routed replay catalog.
+- id: base
+  name: '@deepseek-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+    patches:
+      - id: llm-deepseek
+        name: '@deepseek-ai/dsh-llm-deepseek'
+        disabled: true
+      - id: compaction-basic
+        name: '@deepseek-ai/dsh-compaction-basic'
+        config:
+          thresholdRatio: 0.99
+          retainTokens: 20
+          maxTokens: 64
+          maxConsecutiveFailures: 3
+      - insert:
+          - id: llm-replay
+            name: '@deepseek-ai/dsh-llm-replay'
+            config:
+              providers:
+                - id: deepseek-official
+                  models:
+                    - id: deepseek-v4-flash
+                      contextWindow: 400

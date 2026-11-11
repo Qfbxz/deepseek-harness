@@ -11,7 +11,7 @@ import type { CompactionResult, CompactionTrigger } from '@deepseek-ai/dsh-compa
 import type { TokenMeter } from '@deepseek-ai/dsh-token-meter'
 import type { Session } from '@deepseek-ai/dsh-session'
 import { CONTEXT_WINDOW_EXCEEDED_CODE, assertNever } from '@deepseek-ai/dsh-llm'
-import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
+import type { LlmCallConfig, Message } from '@deepseek-ai/dsh-llm'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
 // Type-only: makes the optional sibling service available to `ctx.get()`.
@@ -78,6 +78,7 @@ const summarizationModelSchema = z.string()
 const maxTokensSchema = z.number().step(1).min(1)
 const compactionRetriesSchema = z.number().step(1).min(0)
 const maxOverflowRetriesSchema = z.number().step(1).min(0)
+const maxConsecutiveFailuresSchema = z.number().step(1).min(0)
 
 const modelPolicy: z<ModelCompactPolicyConfig> = z.object({
   provider: z.string().required(),
@@ -113,6 +114,7 @@ export class BasicCompactionEngine extends CompactionEngine {
     compactionRetries: compactionRetriesSchema,
     maxOverflowRetries: maxOverflowRetriesSchema,
     modelPolicies: z.array(modelPolicy),
+    maxConsecutiveFailures: maxConsecutiveFailuresSchema,
     auto: z.boolean(),
   })
 
@@ -122,6 +124,8 @@ export class BasicCompactionEngine extends CompactionEngine {
   private readonly warnedPressureConfigTargets = new Set<string>()
   private readonly overflowRetries = new WeakMap<Agent, number>()
   private readonly overflowAgents = new WeakMap<Session, Agent>()
+  /** Failed automatic attempts per session since the last successful compaction. */
+  private readonly compactionFailureStreaks = new WeakMap<Session, number>()
 
   constructor(ctx: Context, config: BasicCompactionConfig = {}) {
     super(ctx)
@@ -250,12 +254,38 @@ export class BasicCompactionEngine extends CompactionEngine {
    * overflow. Both triggers price the latest durable routed request envelope;
    * overflow bypasses the normal threshold and retained-tail policy so it can
    * force one useful balanced reduction.
+   *
+   * The per-session failure breaker (`maxConsecutiveFailures`) gates this
+   * automatic entry point: once the streak of failed attempts reaches the
+   * limit, every call returns `null` without attempting, the trip surfaced an
+   * error, and the session stays usable. Manual `compactNow()` does not pass
+   * through here and remains available; its success clears the streak.
    * @param agent - agent whose latest durable routed request is measured.
    * @param trigger - normal step-boundary pressure or context-overflow recovery.
    * @param signal - live turn cancellation signal forwarded to summarization.
    * @returns the latest summary compaction result, or `null` when no summary ran.
    */
   override async compactIfNeeded(
+    agent: Agent,
+    trigger: CompactionTrigger,
+    signal: AbortSignal,
+  ): Promise<CompactionResult | null> {
+    if (this.breakerTripped(agent.session)) return null
+    try {
+      return await this.attemptCompactIfNeeded(agent, trigger, signal)
+    } catch (error: unknown) {
+      // A target-configuration failure carries its own once-per-target warning
+      // channel and cannot succeed by retrying, so it stays outside the streak;
+      // a failure the signal already won is cancellation, not a compaction
+      // failure.
+      if (error instanceof TargetPressureConfigError || signal.aborted) throw error
+      this.recordAutoCompactionFailure(agent.session, error)
+      throw error
+    }
+  }
+
+  /** Un-gated attempt body of `compactIfNeeded`, after the failure breaker. */
+  private async attemptCompactIfNeeded(
     agent: Agent,
     trigger: CompactionTrigger,
     signal: AbortSignal,
@@ -301,13 +331,26 @@ export class BasicCompactionEngine extends CompactionEngine {
       )
     }
     const spec = resolveCompactSpec(policy, context.contextWindow)
+
+    // Pressure prices every threshold decision from the provider-reported
+    // count when the routed adapter declares the counting capability; the
+    // heuristic estimate prices an undeclared adapter or a failed count.
+    measurement = meter.measure(
+      agent.session,
+      undefined,
+      await this.reportedRequestTokens(agent.session, target, signal),
+    )
     if (measurement.totalTokens < spec.thresholdTokens) return null
 
     // Once pressure qualifies, land the model-free pass before choosing a
     // summary range, then remeasure through the singleton replay fold.
     if (prune !== undefined) {
       prune.pruneSession(agent.session)
-      measurement = meter.measure(agent.session)
+      measurement = meter.measure(
+        agent.session,
+        undefined,
+        await this.reportedRequestTokens(agent.session, target, signal),
+      )
     }
     if (measurement.totalTokens < spec.thresholdTokens) return null
 
@@ -321,19 +364,106 @@ export class BasicCompactionEngine extends CompactionEngine {
         break
       }
       result = await this.compactRegion(range.start, range.end, agent, signal)
-      measurement = meter.measure(agent.session)
+      measurement = meter.measure(
+        agent.session,
+        undefined,
+        await this.reportedRequestTokens(agent.session, target, signal),
+      )
       if (measurement.totalTokens < spec.thresholdTokens) return result
     }
 
     throw new Error(
       `compaction still above threshold after ${spec.compactionRetries + 1} compaction attempts `
-      + `(${measurement.totalTokens} estimated tokens >= threshold ${spec.thresholdTokens})`,
+      + `(${measurement.totalTokens} tokens >= threshold ${spec.thresholdTokens})`,
     )
   }
 
   /**
+   * Provider-reported prompt token count for the current routed request
+   * envelope — the logged header's system and tools plus the fully derived
+   * surface — through the routing adapter's optional counting capability.
+   * An undeclared adapter returns `undefined`, and a failed count warns and
+   * returns `undefined` so pricing falls back to the fixed heuristic estimate;
+   * a count the cancellation signal already won rethrows, because cancellation
+   * precedes pricing.
+   */
+  private async reportedRequestTokens(
+    session: Session,
+    target: Pick<LlmCallConfig, 'provider' | 'model'>,
+    signal: AbortSignal,
+  ): Promise<number | undefined> {
+    try {
+      const header = session.requestHeader()
+      const messages = session.surface.nodes
+        // Surface node seqs are valid log indices.
+        // oxlint-disable-next-line typescript/no-non-null-assertion
+        .map(seq => session.deriveEventMessage(session.events[seq]!))
+        .filter((message): message is Message => message !== null)
+      return await this.ctx.llm.countTokens(
+        target.provider,
+        target.model,
+        {
+          ...header?.system === undefined ? {} : { system: header.system },
+          ...header?.tools === undefined ? {} : { tools: header.tools },
+          messages,
+        },
+        signal,
+      )
+    } catch (error: unknown) {
+      if (signal.aborted) throw error
+      const message = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.warn(
+        `compaction: provider token count failed on ${target.provider}/${target.model}: ${message}; `
+        + 'continuing with the character estimate',
+      )
+      return undefined
+    }
+  }
+
+  /**
+   * Whether the failure breaker has disabled automatic compaction for this
+   * session: the streak of failed automatic attempts has reached
+   * `maxConsecutiveFailures` (which `0` disables entirely).
+   */
+  private breakerTripped(session: Session): boolean {
+    const limit = this.config.maxConsecutiveFailures
+    return limit > 0 && (this.compactionFailureStreaks.get(session) ?? 0) >= limit
+  }
+
+  /**
+   * Advance the session's failed-attempt streak and surface an error once it
+   * reaches `maxConsecutiveFailures`. The error names the breaker, the count,
+   * the recovery path, and the last failure, so the stop is visible instead of
+   * silent; the throw itself still propagates to the caller (the pressure
+   * listener warns and continues the turn, overflow recovery preserves the
+   * original provider error), which keeps the session usable.
+   */
+  private recordAutoCompactionFailure(session: Session, error: unknown): void {
+    const limit = this.config.maxConsecutiveFailures
+    if (limit === 0) return
+    const streak = (this.compactionFailureStreaks.get(session) ?? 0) + 1
+    this.compactionFailureStreaks.set(session, streak)
+    if (streak === limit) {
+      const message = error instanceof Error ? error.message : String(error)
+      this.ctx.logger.error(
+        `compaction circuit breaker: ${streak} consecutive automatic compaction failures `
+        + `on session ${session.id} (limit ${limit}); automatic compaction is disabled for `
+        + 'this session until a compaction succeeds — the session stays usable and manual '
+        + `compactNow() still works. Last failure: ${message}`,
+      )
+    }
+  }
+
+  /** Clear the session's failed-attempt streak after a successful compaction transaction. */
+  private recordCompactionSuccess(session: Session): void {
+    this.compactionFailureStreaks.delete(session)
+  }
+
+  /**
    * Compact one inclusive positional range from the agent-owned surface using
-   * the effective token meter for all retention and shrink pricing.
+   * the effective token meter for all retention and shrink pricing. A committed
+   * transaction proves the summarizer works again and clears the session's
+   * failure-breaker streak.
    * @param start - inclusive first surface-node seq.
    * @param end - inclusive last surface-node seq.
    * @param agent - owner of the target session, used by the summarizer.
@@ -346,7 +476,7 @@ export class BasicCompactionEngine extends CompactionEngine {
     agent: Agent,
     signal?: AbortSignal,
   ): Promise<CompactionResult> {
-    return compactSurfaceRegion(
+    const result = await compactSurfaceRegion(
       this.regionDependencies(),
       agent.session,
       start,
@@ -355,11 +485,16 @@ export class BasicCompactionEngine extends CompactionEngine {
       { owner: 'current-turn', stability: 'whole-surface' },
       signal,
     )
+    this.recordCompactionSuccess(agent.session)
+    return result
   }
 
   /**
    * Force one useful idle-session compaction below the pressure threshold, and
    * resolve only after its standalone marker pair is durably checkpointed.
+   * Manual compaction is deliberately outside the automatic failure breaker: it
+   * always attempts, and a committed transaction clears the session's failure
+   * streak, which re-enables automatic compaction.
    * @param agent - idle agent whose next-turn admission this call reserves.
    * @param signal - cancellation scoped to this compaction request.
    * @param sourceCommandId - initiating command identity for presentation correlation.
@@ -382,7 +517,7 @@ export class BasicCompactionEngine extends CompactionEngine {
             0,
           )
           if (range === null) return null
-          return await compactSurfaceRegion(
+          const result = await compactSurfaceRegion(
             this.regionDependencies(),
             agent.session,
             range.start,
@@ -398,6 +533,8 @@ export class BasicCompactionEngine extends CompactionEngine {
             },
             operationSignal,
           )
+          this.recordCompactionSuccess(agent.session)
+          return result
         } catch (error: unknown) {
           if (agentSignal.aborted && operationSignal.reason === agentSignal.reason) {
             throw new ManualCompactionError(

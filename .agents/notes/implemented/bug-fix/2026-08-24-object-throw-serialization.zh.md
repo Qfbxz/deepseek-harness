@@ -2,6 +2,8 @@
 
 Status: implemented
 
+[English](2026-08-24-object-throw-serialization.md) | 中文
+
 ## Problem
 
 run_code 程序抛出普通对象——`throw { code: 499 }`——模型看到的是：

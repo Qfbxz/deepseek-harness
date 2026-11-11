@@ -6,6 +6,8 @@
 
 patch 在自身上按平台门控两个 shell 栈：`bash-sandbox`/`tool-bash` 携带 `disabled: !!js process.platform === 'win32'`（bash 没有 Windows runner），它们的孪生行 `pwsh-sandbox`/`tool-pwsh` 以取反的表达式仅在 win32 挂载——同一份 patch 文件，每个宿主恰好挂载一个 shell 栈。权限面与 POSIX 完全一致：`sandbox`/`sandbox-policy` 通过 Windows ACL 受限令牌 runner（`dsh-sandbox-local` 的 win32 链 → `@deepseek-ai/dsh-sandbox-windows-acl`）执行文件效果策略，权限切换器与 approval 服务原样运行，`fs-sandbox` 继续围栏 `ctx.fs` 写入——在其旁再挂载 `dsh-fs-local` 会重复注册 `ctx.fs` 并在加载时失败。偏好不受沙盒约束的本地 pwsh 执行器或完整访问的 Windows 主机通过其 profile 或 home 的 `cordis.patch.yml` 覆盖这些行（bash 恢复配方必须完整：禁用 `pwsh-sandbox`/`tool-pwsh` 并重新启用 `bash-sandbox`/`tool-bash`——两个执行器家族注册同一个 `bash` 服务，配方不完整会在加载时直接报错）。POSIX 主机看到的是被禁用的 pwsh 行。
 
+`mcp` 行在每个 profile 中以休眠状态挂载 MCP 能力：[`@deepseek-ai/dsh-mcp-client/registry`](../../mcp/mcp-client/README.md) 行把整个服务器清单作为它的 `config` 携带，默认为空注册表——在后续层替换 `servers` 之前，不启动任何服务器进程，也没有任何 `mcp__*` 工具加入目录。注册表配置错误会在加载期让启动响亮失败——未通过 mcp-client config schema 校验的条目、重复的 `serverName`、或在 `failOnStartupError` 下子项启动失败都会让该行报错拒绝。由 overlay 直接插入的单服务器 `mcp-client` 行（见 [`examples/mcp-memory`](../../../examples/mcp-memory/README.md)）仍是另一条挂载路径。
+
 行集合及其设计依据以行内注释写在 patch 文件里；[生成的组合图](../../../apps/cli/composition.md)负责渲染它。
 
 ## 模型体验

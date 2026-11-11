@@ -1,0 +1,93 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_priority_1",
+        "name": "todo_write",
+        "argumentsDelta": "{\"todos\":[{\"content\":\"Prove the WP4 summarizer retention priority\",\"status\":\"pending\"}]}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_priority_1",
+          "name": "todo_write",
+          "arguments": "{\"todos\":[{\"content\":\"Prove the WP4 summarizer retention priority\",\"status\":\"pending\"}]}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "text"
+      },
+      {
+        "type": "text-delta",
+        "index": 0,
+        "text": "CHECKPOINT PRIORITY ECHO\n- {{fromRequest:Retention priority: when the summary must shrink[^\\n]*}}\n- {{fromRequest:MUST KEEP: exact paths the task still touches[^\\n]*}}\n- {{fromRequest:REMOVE: one-off errors that are fixed and cannot recur[^\\n]*}}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "text",
+          "text": "CHECKPOINT PRIORITY ECHO\n- {{fromRequest:Retention priority: when the summary must shrink[^\\n]*}}\n- {{fromRequest:MUST KEEP: exact paths the task still touches[^\\n]*}}\n- {{fromRequest:REMOVE: one-off errors that are fixed and cannot recur[^\\n]*}}"
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "stop"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "text"
+      },
+      {
+        "type": "text-delta",
+        "index": 0,
+        "text": "PRIORITY_ECHO_OK: the checkpoint above echoes the retention-priority instruction the assembled summarizer request carried."
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "text",
+          "text": "PRIORITY_ECHO_OK: the checkpoint above echoes the retention-priority instruction the assembled summarizer request carried."
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "stop"
+        }
+      }
+    ]
+  }
+]

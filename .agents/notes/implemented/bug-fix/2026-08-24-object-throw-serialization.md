@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-08-24-object-throw-serialization.zh.md)
+
 ## Problem
 
 A run_code program that throws a plain object — `throw { code: 499 }` — surfaced to the model as:

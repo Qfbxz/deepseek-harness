@@ -6,4 +6,4 @@
 
 | 包 | 职责 |
 |---|---|
-| [`mcp-client/`](mcp-client/README.md) | MCP 客户端桥接，将外部服务器工具注册到 `ctx.tools` |
+| [`mcp-client/`](mcp-client/README.md) | MCP 客户端桥接，将外部服务器工具注册到 `ctx.tools`；[`/registry`](mcp-client/README.md#registry-entry) 入口是基础 bundle 的休眠挂载点，默认服务器注册表为空 |

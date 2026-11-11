@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-11-10-wp3-truncation-honesty.md
+2026-11-10-wp3-truncation-honesty.md: 84d209637efc59b3a61558aaa7f5463bc18f5771
+2026-11-10-wp3-truncation-honesty.zh.md: 9d32fcf75e837bb91d225d4fd1aca582f44b7144

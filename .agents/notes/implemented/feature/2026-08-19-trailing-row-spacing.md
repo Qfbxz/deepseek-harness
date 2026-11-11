@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-08-19-trailing-row-spacing.zh.md)
+
 ## Problem
 
 The send-after slot renders its priority-winner panel inline in the composer row (right of the primary Send button, filling the row's slack). Goalbar, queue, and todo panels all drop their standalone-card width/margin in this mode (they fit the row, they do not overrule the card). What they do not do is leave space between the panel's own edge and the Send button on one side, or the card's right wall on the other — the trailing rule set `margin: 0` on the row-mode .dock, which let the bar sit flush against both walls and read as one solid line of figures.

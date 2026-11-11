@@ -38,7 +38,7 @@ Every parent request in this plugin's registration scope receives the workflow g
 ##### Workflow guidance
 
 ```markdown
-Use the <toolName> tool ONLY when the user explicitly asks for a workflow or for large multi-agent orchestration: you write a JavaScript script (the tool description documents the exact format) that fans work out across many subagents with phases and structured results. For one or two delegations, prefer plain subagent calls.
+Use the <toolName> tool only when the user explicitly asks for a workflow or large multi-agent orchestration: you write a JavaScript script (the tool description documents the exact format) that fans work out across many subagents with phases and structured results. When not to use: one or two delegations are plain subagent calls; serially dependent phases belong in your own loop.
 ```
 
 #### Token effect

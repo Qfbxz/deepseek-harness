@@ -209,9 +209,11 @@ Deterministic head/middle/tail pruning for current tool-result surface nodes.
 measureContent(blocks: readonly ContentBlock[]): number
 
 /**
- * Replace an over-budget text middle while retaining rich-block order.
- * Text slicing is by Unicode code point, not UTF-16 code unit, so a retained
- * boundary cannot split a surrogate pair. Grapheme clusters may still split.
+ * Replace an over-budget text middle with the fixed truncation notice while
+ * retaining rich-block order. The notice states the original size, the kept
+ * head and tail sizes, and the paging next step. Text slicing is by Unicode
+ * code point, not UTF-16 code unit, so a retained boundary cannot split a
+ * surrogate pair. Grapheme clusters may still split.
  * @param blocks - original tool-result content.
  * @returns pruned content, or `null` when the text is within budget.
  */

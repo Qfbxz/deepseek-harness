@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-08-20-binding-value-clamp.zh.md)
+
 ## Problem
 
 A binding call whose tool returns a huge payload — a 50 KB bash stdout, a giant file read — flowed into the run's completion value unbounded. The outer output ledger then overflowed and the run surfaced as an opaque abort: the model saw a failed `run_code` with no usable diagnostic, retried blind, and hit the same wall. The dispatch bridge settled every sub-call with the raw `result.value`, so nothing between the tool and the ledger bounded the size.

@@ -1,0 +1,17 @@
+# Snapshot-only overlay for the subagent-parallel scenario: disables the
+# repeat-tool-reminder guard so its same-step duplicate reuse does not serve the
+# scenario's two byte-identical twin delegations from the first call's recorded
+# result. The twin contract stays mandatory — replay binds child scripts by
+# first-call order and the harvester orders children by `createdAt`, and neither
+# is deterministic across concurrent children (XXX(concurrent-subagents) in
+# dsh-llm-replay) — so the guard must step aside here instead of the delegations
+# diverging. The guard injects no prompt section and registers no tools, so the
+# composed request header stays in the default header class.
+- id: base
+  name: '@deepseek-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+    patches:
+      - id: repeat-tool-reminder
+        name: '@deepseek-ai/dsh-repeat-tool-reminder'
+        disabled: true

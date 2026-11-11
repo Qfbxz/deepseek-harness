@@ -15,6 +15,7 @@ export type TokenMeterConfig = Record<string, never>
 export type TokenMeasurementBaseline =
   | { readonly kind: 'none'; readonly tokens: 0 }
   | { readonly kind: 'estimated'; readonly tokens: number }
+  | { readonly kind: 'reported'; readonly tokens: number }
   | { readonly kind: 'usage'; readonly tokens: number; readonly usage: Readonly<TokenUsage> }
 
 /** Detached immutable request-pressure and surface snapshot at one consumed log revision. */

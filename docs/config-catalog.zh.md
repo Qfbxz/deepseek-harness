@@ -148,6 +148,18 @@ export interface Config {
    * omission defaults to {@link DEFAULT_MAX_PARALLEL_TOOL_CALLS}.
    */
   maxParallelToolCalls?: number
+  /**
+   * Tool calls a single turn may admit to the scheduler (default
+   * {@link DEFAULT_MAX_TOOL_CALLS_PER_TURN}; `0` disables the budget). The
+   * count covers every model-issued call in the turn, including calls another
+   * policy denied or cancellation skipped. When a batch crosses the budget,
+   * unstarted calls are committed with `TOOL_CALL_BUDGET_EXHAUSTED` error
+   * results, an injected `agent-loop` context message names the exhausted
+   * budget to the model, and the turn ends through the ordinary conclusion
+   * path once that message is delivered. Fixed at plugin start: not part of
+   * the settings section, so a stored change cannot look effective mid-run.
+   */
+  maxToolCallsPerTurn?: number
   /** Agents created or resumed at plugin startup. */
   agents: (AgentOptions & {
     /** Stable config label used in logs and as the fresh combined-id prefix. */
@@ -212,12 +224,13 @@ export type PresetTrust = 'system' | 'user'
 /**
  * Bundle config: each field forwarded verbatim to the child that owns it —
  * `agents` to the agent loop (an app that pre-creates no agents, like the ACP
- * bridge, simply omits it), `includeHarnessIdentity`, `includeRuntimeContext`,
- * `persona`, and `toolOrder` to the system-prompt plugin (the fixed opener,
- * dynamic-context policy, deployment persona, and explicit model-facing tool
- * order), the `tools` object to the tool registry (its presentation `mode`),
- * `dshHome` to bash environment and local skill discovery, `sessionTitle` to
- * the fallback title service, `skills` to the
+ * bridge, simply omits it), `includeHarnessIdentity`, `includeMethodology`,
+ * `includeRuntimeContext`, `persona`, and `toolOrder` to the system-prompt
+ * plugin (the fixed opener, the methodology section, dynamic-context policy,
+ * deployment persona, and explicit model-facing tool order), the `tools`
+ * object to the tool registry (its presentation `mode`), `dshHome` to bash
+ * environment and local skill discovery, `sessionTitle` to the fallback title
+ * service, `skills` to the
  * skill registry/local provider/tool consumer, `workspaceContext` to the
  * agent-instructions loader, `jobs` to the process-local job provider, and
  * `toolBash`/`toolJobs` to the model-facing tool plugins this bundle owns.
@@ -237,8 +250,16 @@ export interface Config {
   agents?: AgentLoopConfig['agents']
   /** Agent-loop concurrency cap; `1` is serial. */
   maxParallelToolCalls?: AgentLoopConfig['maxParallelToolCalls']
+  /** Per-turn tool-call admission budget; `0` disables (see dsh-agent-loop's `Config`). */
+  maxToolCallsPerTurn?: AgentLoopConfig['maxToolCallsPerTurn']
   /** Whether the system prompt includes the fixed Harness identity (default true). */
   includeHarnessIdentity?: SystemPromptConfig['includeHarnessIdentity']
+  /** Whether the system prompt includes the harness methodology section (default true). */
+  includeMethodology?: SystemPromptConfig['includeMethodology']
+  /** Replacement text for the methodology section (see dsh-system-prompt's `Config`). */
+  methodology?: SystemPromptConfig['methodology']
+  /** Maximum accepted word count for the methodology section (see dsh-system-prompt's `Config`). */
+  methodologyMaxWords?: SystemPromptConfig['methodologyMaxWords']
   /** Whether model history includes dynamic runtime-context snapshots (default true). */
   includeRuntimeContext?: SystemPromptConfig['includeRuntimeContext']
   /** The deployment persona (see dsh-system-prompt's `Config`). */
@@ -294,7 +315,7 @@ export interface GoalConfig {
 
 依赖：[`AgentLoopConfig`](#deepseek-aidsh-agent-loop) · [`GoalDomainConfig`](#deepseek-aidsh-goal) · [`InvariantConfig`](#deepseek-aidsh-invariants) · [`JobsConfig`](#deepseek-aidsh-jobs-local) · [`SessionTitleConfig`](#deepseek-aidsh-session-title) · [`SkillFileSystem`](../packages/skill/skill-filesystem/src/index.ts) · [`SkillRegistryConfig`](#deepseek-aidsh-skill) · [`SystemPromptConfig`](#deepseek-aidsh-system-prompt) · [`toolBash`](../packages/shell/tool-bash/src/index.ts) · [`toolGoal`](../packages/goal/tool-goal/src/index.ts) · [`toolJobs`](../packages/jobs/tool-jobs/src/index.ts) · [`ToolsConfig`](#deepseek-aidsh-tools) · [`toolSkill`](../packages/skill/tool-skill/src/index.ts) · [`workspaceContext`](../packages/context/agent-instructions/src/index.ts)
 
-来源：[`packages/examples/agent-spine-demo/src/index.ts:92`](../packages/examples/agent-spine-demo/src/index.ts)
+来源：[`packages/examples/agent-spine-demo/src/index.ts:93`](../packages/examples/agent-spine-demo/src/index.ts)
 
 <a id="deepseek-aidsh-agent-tool-presentation"></a>
 
@@ -467,7 +488,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/code-runtime/code-runtime-worker-thread/src/index.ts:25`](../packages/code-runtime/code-runtime-worker-thread/src/index.ts)
+来源：[`packages/code-runtime/code-runtime-worker-thread/src/index.ts:26`](../packages/code-runtime/code-runtime-worker-thread/src/index.ts)
 
 <a id="deepseek-aidsh-compaction-basic"></a>
 
@@ -480,6 +501,16 @@ export interface Config {
 export interface BasicCompactionConfig extends CompactionPolicyConfig {
   /** Exact provider/model overrides; duplicate targets fail plugin load. */
   modelPolicies?: ModelCompactPolicyConfig[]
+  /**
+   * Consecutive failed automatic compaction attempts after which automatic
+   * compaction stops for that session and the last failure is surfaced as an
+   * error (default `3`; `0` disables the breaker, so automatic compaction is
+   * attempted on every trigger regardless of earlier failures). Any successful
+   * compaction transaction on the session — including a manual `compactNow()` —
+   * clears the count and re-enables automatic compaction. Must be a
+   * non-negative integer; other values fail plugin load.
+   */
+  maxConsecutiveFailures?: number
   /** Enable automatic step-boundary pressure and overflow-recovery listeners. Defaults to `true`. */
   auto?: boolean
 }
@@ -1334,6 +1365,22 @@ export interface LspLocalServerConfig {
 
 来源：[`packages/lsp/lsp-stdio/src/index.ts:82`](../packages/lsp/lsp-stdio/src/index.ts)
 
+<a id="deepseek-aidsh-market"></a>
+
+## `@deepseek-ai/dsh-market`
+
+```ts config-catalog
+/** Optional cordis.yml configuration; profile defaults to `web`. */
+export type Config = Partial<MarketConfig>
+
+export interface MarketConfig {
+  /** Profile the market installs into; matches the profile serving this UI. */
+  profile: string
+}
+```
+
+来源：[`packages/community/dshmarket/src/index.ts:12`](../packages/community/dshmarket/src/index.ts)
+
 <a id="deepseek-aidsh-mcp-client"></a>
 
 ## `@deepseek-ai/dsh-mcp-client`
@@ -1364,6 +1411,12 @@ export interface StdioConfig {
   cwd: string
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /**
+   * Bound for one connection attempt — the initialize handshake plus the
+   * initial tool synchronization — in milliseconds; also bounds each
+   * reconnect attempt.
+   */
+  connectTimeoutMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -1386,6 +1439,12 @@ export interface StreamableHttpConfig {
   headers: Record<string, string>
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /**
+   * Bound for one connection attempt — the initialize handshake plus the
+   * initial tool synchronization — in milliseconds; also bounds each
+   * reconnect attempt.
+   */
+  connectTimeoutMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -1405,7 +1464,7 @@ export interface ReconnectConfig {
 }
 ```
 
-来源：[`packages/mcp/mcp-client/src/index.ts:98`](../packages/mcp/mcp-client/src/index.ts)
+来源：[`packages/mcp/mcp-client/src/index.ts:110`](../packages/mcp/mcp-client/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 
@@ -1565,11 +1624,13 @@ export type Config = LocalConfig
 /**
  * Plugin config, validated by the same-named schemastery schema plus the
  * load-time checks in `apply` (misconfiguration fails loud: an empty
- * `thresholds` list, a non-integer, a value below 2, or a duplicate throws at
- * plugin load, never a silent fall-back). `include`/`exclude` entries are
- * `*`-wildcard predicates over tool names at call time, not references to
- * registry entries — a pattern matching no currently registered tool is valid
- * (`exclude: [mcp_*]` must stay legal in a deployment that loads no MCP tools).
+ * `thresholds` list, a non-integer, a value below 2, a duplicate, a negative
+ * or fractional `forceStopStreak`, or a non-positive `argumentsPreviewChars`
+ * throws at plugin load, never a silent fall-back). `include`/`exclude`
+ * entries are `*`-wildcard predicates over tool names at call time, not
+ * references to registry entries — a pattern matching no currently registered
+ * tool is valid (`exclude: [mcp_*]` must stay legal in a deployment that
+ * loads no MCP tools).
  */
 export interface Config {
   /** Consecutive-repeat counts that trigger a reminder (default `[3, 5, 8]`). */
@@ -1586,10 +1647,22 @@ export interface Config {
    * always compares the FULL canonical string).
    */
   argumentsPreviewChars?: number
+  /**
+   * Consecutive-repeat count at which the guard force-stops the agent's turn
+   * (default 12; `0` disables the force stop and keeps only the reminder
+   * ladder). Reaching the count injects the stop instruction through the
+   * reminder channel and marks the call's result `concludesTurn`, so the turn
+   * ends once the model has seen the instruction. Because a call denied or
+   * failed at the threshold cannot carry a successful conclusion, every later
+   * repeat of the same chain stays above the threshold and re-arms the force
+   * stop, so the first successful commit at or after the threshold ends the
+   * turn.
+   */
+  forceStopStreak?: number
 }
 ```
 
-来源：[`packages/guard/repeat-tool-reminder/src/index.ts:28`](../packages/guard/repeat-tool-reminder/src/index.ts)
+来源：[`packages/guard/repeat-tool-reminder/src/index.ts:39`](../packages/guard/repeat-tool-reminder/src/index.ts)
 
 <a id="deepseek-aidsh-sandbox-local"></a>
 
@@ -2163,6 +2236,21 @@ export interface Config {
    */
   permission: PermissionPolicy
   /**
+   * Advertise `clientCapabilities.terminal` and serve the child's
+   * `terminal/create · output · wait_for_exit · kill · release` reverse-RPC
+   * family through the subprocess seam. Required for children that route
+   * shell tools through the client instead of self-serving (e.g. `kimi acp`);
+   * self-serving children (the ACP demo agent) ignore it. Defaults to `false`.
+   */
+  terminal?: boolean
+  /**
+   * Retained-output byte cap per child terminal — the create request's
+   * `outputByteLimit` when it sends one, else this default. The emitted
+   * `terminal/output` snapshot is clamped to this bound (tail kept).
+   * Defaults to 1 MB.
+   */
+  terminalOutputByteLimit?: number
+  /**
    * Extra environment variables for the child process — e.g. the child
    * harness's own `DEEPSEEK_API_KEY`. Forwarded on top of a credential-scrubbed
    * copy of the parent env, so an explicit key here reaches the child while
@@ -2184,7 +2272,7 @@ export interface Config {
 export type PermissionPolicy = 'allow' | 'reject'
 ```
 
-来源：[`packages/subagent/subagent-acp/src/index.ts:27`](../packages/subagent/subagent-acp/src/index.ts)
+来源：[`packages/subagent/subagent-acp/src/index.ts:28`](../packages/subagent/subagent-acp/src/index.ts)
 
 <a id="deepseek-aidsh-subagent-claude-code"></a>
 
@@ -2360,6 +2448,13 @@ export interface Config {
 export interface Config {
   /** Include the fixed DeepSeek Harness identity before the deployment persona (default true). */
   includeHarnessIdentity?: boolean
+  /**
+   * Include the harness methodology section — explore before concluding, nested
+   * AGENTS.md checks, verify before claiming, `path:line` citations — after the
+   * persona (default true). Set false when a window-constrained deployment needs
+   * the bytes back.
+   */
+  includeMethodology?: boolean
   /** Include dynamic runtime-context snapshots in model history (default true). */
   includeRuntimeContext?: boolean
   /**
@@ -2367,6 +2462,19 @@ export interface Config {
    * `deployment:persona` shadows it; `{{variable}}` references are strict.
    */
   persona?: string
+  /**
+   * Replacement text for the methodology section, for deployments authoring
+   * their own rules. Omitted means the fixed harness text. Word-budgeted by
+   * {@link Config.methodologyMaxWords}.
+   */
+  methodology?: string
+  /**
+   * Maximum accepted word count for the methodology section (default 300).
+   * The resolved methodology text is counted at load: a count above the cap
+   * throws and the deployment fails to boot, so budget drift is a loud
+   * misconfiguration, not silent prompt growth.
+   */
+  methodologyMaxWords?: number
   /**
    * Model-facing tool names in order, with {@link TOOL_ORDER_REST} exactly once.
    * Invalid fields fail at load and unknown names fail at assembly; known names
@@ -2376,7 +2484,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/core/system-prompt/src/index.ts:186`](../packages/core/system-prompt/src/index.ts)
+来源：[`packages/core/system-prompt/src/index.ts:212`](../packages/core/system-prompt/src/index.ts)
 
 <a id="deepseek-aidsh-terminal-bash"></a>
 
@@ -2808,12 +2916,25 @@ export interface Config {
    * budget belongs to the child runtime or its own deployment.
    */
   maxDepth?: number | 'provider-managed'
+  /**
+   * Minimum accepted length of a `completed` foreground child report, counted
+   * in Unicode code points (default `200`). A shorter report costs bounded
+   * continuation round-trips in the child's own conversation, keeping the
+   * longest result. Runs without a published local child (out-of-process
+   * providers) cannot continue and return the report unchanged.
+   */
+  minReportChars?: number
+  /**
+   * Continuation round-trips the report floor may spend per delegation
+   * (default `1`; `0` disables the floor entirely).
+   */
+  floorContinuationAttempts?: number
 }
 ```
 
-依赖：[`AgentOptions`](subsystems/core.md)
+依赖： [`AgentOptions`](subsystems/core.md)
 
-来源：[`packages/subagent/tool-subagent/src/index.ts:29`](../packages/subagent/tool-subagent/src/index.ts)
+来源: [`packages/subagent/tool-subagent/src/index.ts:43`](../packages/subagent/tool-subagent/src/index.ts)
 
 <a id="deepseek-aidsh-tool-subagent-report"></a>
 
@@ -2957,7 +3078,7 @@ export interface Config {
 export type ToolPresentationMode = 'native' | 'code' | 'both'
 ```
 
-来源：[`packages/core/tools/src/index.ts:654`](../packages/core/tools/src/index.ts)
+来源：[`packages/core/tools/src/index.ts:658`](../packages/core/tools/src/index.ts)
 
 <a id="deepseek-aidsh-typert-loader"></a>
 
@@ -2989,6 +3110,15 @@ export interface Config {
    * prompting (the deterministic CI/unattended stance).
    */
   readonly policy?: ApprovalPolicy
+  /**
+   * Session approval-cache capacity (default 512): the maximum distinct
+   * approved request shapes retained per session. When an ask's normalized
+   * shape was already approved this session, the service resolves
+   * `'allowed-once'` without consulting any answerer. `0` disables the cache
+   * (every ask re-prompts). The forbidden-shape refusal for prefix rules is
+   * NOT configurable — it is a fixed safety invariant.
+   */
+  readonly cacheMaxEntries?: number
 }
 
 /**
@@ -3004,7 +3134,7 @@ export interface Config {
 export type ApprovalPolicy = 'ask' | 'never'
 ```
 
-来源：[`packages/interaction/user-approval/src/index.ts:177`](../packages/interaction/user-approval/src/index.ts)
+来源：[`packages/interaction/user-approval/src/index.ts:341`](../packages/interaction/user-approval/src/index.ts)
 
 <a id="deepseek-aidsh-web"></a>
 
@@ -3253,7 +3383,7 @@ export interface Config {
 - `@deepseek-ai/dsh-subagent`（[`packages/subagent/subagent/src/index.ts`](../packages/subagent/subagent/src/index.ts)）
 - `@deepseek-ai/dsh-subprocess-local`（[`packages/subprocess/subprocess-local/src/index.ts`](../packages/subprocess/subprocess-local/src/index.ts)）
 - `@deepseek-ai/dsh-terminal`（[`packages/terminal/terminal/src/index.ts`](../packages/terminal/terminal/src/index.ts)）
-- `@deepseek-ai/dsh-tool-ask-user` — 需要 `tools` · `userInteraction`（[`packages/interaction/tool-ask-user/src/index.ts`](../packages/interaction/tool-ask-user/src/index.ts)）
+- `@deepseek-ai/dsh-tool-ask-user` — 需要 `tools` · `userQuestions` · `systemPrompt`（[`packages/interaction/tool-ask-user/src/index.ts`](../packages/interaction/tool-ask-user/src/index.ts)）
 - `@deepseek-ai/dsh-tool-call-timeout-policy` — 需要 `tools`（[`packages/guard/timeout-policy/src/index.ts`](../packages/guard/timeout-policy/src/index.ts)）
 - `@deepseek-ai/dsh-tool-cordis` — 需要 `tools` · `systemPrompt` · `dynamicCordisRunner` · `cordisInspect`（[`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts)）
 - `@deepseek-ai/dsh-tool-subagent-control` — 需要 `tools` · `subagents`（[`packages/subagent/tool-subagent-control/src/index.ts`](../packages/subagent/tool-subagent-control/src/index.ts)）

@@ -1,0 +1,11 @@
+# WP7 misconfiguration scenario: two registry entries share a serverName, so
+# the registry must fail the boot at load instead of mounting one of them.
+- id: mcp
+  config:
+    servers:
+      - transport: stdio
+        serverName: dup
+        command: never-spawned
+      - transport: streamable-http
+        serverName: dup
+        url: http://127.0.0.1:9/mcp

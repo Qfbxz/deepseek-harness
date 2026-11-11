@@ -11,12 +11,19 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import '@deepseek-ai/dsh-user-questions'
 
 export const name = 'tool-ask-user'
-export const inject = ['tools', 'userQuestions']
+export const inject = ['tools', 'userQuestions', 'systemPrompt']
 
 const description = 'Ask the user a concise question when you need confirmation, a choice, or missing information before proceeding. '
   + 'Send one or more questions, each with a stable id that will be echoed in the answer.'
 
 export function apply(ctx: Context): void {
+  // Cross-call guidance belongs in the prompt rather than one-call schema prose.
+  ctx.systemPrompt.section({
+    name: 'tool:ask_user_question',
+    order: 117,
+    text: 'When not to use: resolve discoverable facts by inspection; ask_user_question is only for user-owned choices or input you cannot infer.',
+  })
+
   ctx.tools.register(defineTool({
     name: 'ask_user_question',
     description,

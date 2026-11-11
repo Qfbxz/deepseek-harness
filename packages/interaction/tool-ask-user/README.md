@@ -37,6 +37,26 @@ Fixed schema cost on every request where the tool is visible.
 
 Prefix-stable while the definition and visibility are unchanged. Plugin lifecycle or scoped restrictions may invalidate reuse from this schema.
 
+### System prompt
+
+#### What the model sees
+
+The plugin contributes the `tool:ask_user_question` prompt section (order 117) carrying the ask-only-what-you-cannot-infer rule:
+
+##### When-not-to-use guidance
+
+```markdown
+When not to use: resolve discoverable facts by inspection; ask_user_question is only for user-owned choices or input you cannot infer.
+```
+
+#### Token effect
+
+Fixed guidance cost per request while the plugin is active, even when a restriction hides the tool.
+
+#### KV Cache effect
+
+Prefix-stable while the section text is unchanged. Plugin activation or disposal may invalidate reuse from this prompt section.
+
 ### Tool-call history and result
 
 #### What the model sees

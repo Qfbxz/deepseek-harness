@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-09-14-timeout-policy-force-cap.zh.md)
+
 ## Problem
 
 Session `session-a684330e` stalled permanently on 2026-09-14: turn 15 step 24 issued a `run_code` call whose program ran a synchronous `execSync(dotnet build …)`; the `tool/call` event was durably logged, but no `tool/result` ever appeared. Every later user message was spliced into the in-flight turn's inbox and never processed. The only recovery was killing the backend process.

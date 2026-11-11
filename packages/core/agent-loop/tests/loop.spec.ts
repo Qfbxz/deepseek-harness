@@ -4,6 +4,14 @@ import LlmRuntime, { createUserMessage, CallId, LlmError, StreamChunk  } from '@
 import SessionStore, { SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
+
+/** The plugin's fixed methodology section text, appended to every pinned rendered prompt below. */
+const METHODOLOGY = 'Methodology. Explore before concluding: ground every answer in what searches '
+  + 'and reads actually returned, not in what you expect the code to contain. '
+  + 'Before you work in a subdirectory, read the AGENTS.md at its root and follow it. '
+  + 'Verify before claiming: run the check, test, or build that proves a statement, '
+  + 'and say what you did not run. Cite code as path:line so every claim points at its evidence.'
+
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -252,7 +260,7 @@ describe('agent loop', () => {
     await waitForIdle(ctx, agent)
 
     const request = adapter.requests[0]
-    expect(request!.system).toBe('You are an AI agent powered by DeepSeek Harness.\n\nYou are a test agent on mock.\n\nUse the noop tool wisely.')
+    expect(request!.system).toBe(`You are an AI agent powered by DeepSeek Harness.\n\nYou are a test agent on mock.\n\n${METHODOLOGY}\n\nUse the noop tool wisely.`)
     expect(request!.tools?.map(t => t.name)).toEqual(['noop'])
   })
 
@@ -269,7 +277,7 @@ describe('agent loop', () => {
     send(agent, 'hi')
     await waitForIdle(ctx, agent)
 
-    expect(adapter.requests[0]!.system).toBe('You are an AI agent powered by DeepSeek Harness.\n\nWorking in /work/space.')
+    expect(adapter.requests[0]!.system).toBe(`You are an AI agent powered by DeepSeek Harness.\n\nWorking in /work/space.\n\n${METHODOLOGY}`)
   })
 
   it('contains a strict-variable render failure: the turn errors, the loop keeps serving turns', async () => {
@@ -305,7 +313,7 @@ describe('agent loop', () => {
     await waitForIdle(ctx, agent)
 
     expect(adapter.requests).toHaveLength(1)
-    expect(adapter.requests[0]!.system).toBe('You are an AI agent powered by DeepSeek Harness.\n\nIn /rescued.')
+    expect(adapter.requests[0]!.system).toBe(`You are an AI agent powered by DeepSeek Harness.\n\nIn /rescued.\n\n${METHODOLOGY}`)
     const turnEnds = agent.session.events.filter(e => e.type === 'turn/end')
     expect(turnEnds).toHaveLength(2)
     expect(turnEnds[1]?.type === 'turn/end' && turnEnds[1].data.reason.kind).toBe('completed')
@@ -335,7 +343,7 @@ describe('agent loop', () => {
 
     expect(adapter.requests).toHaveLength(1)
     expect(adapter.requests[0]!.model).toBe('mock')
-    expect(adapter.requests[0]!.system).toBe('You are an AI agent powered by DeepSeek Harness.\n\nYou run on mock.')
+    expect(adapter.requests[0]!.system).toBe(`You are an AI agent powered by DeepSeek Harness.\n\nYou run on mock.\n\n${METHODOLOGY}`)
   })
 
   it('omits the system field when system-prompt/assemble short-circuits with an empty assembly', async () => {

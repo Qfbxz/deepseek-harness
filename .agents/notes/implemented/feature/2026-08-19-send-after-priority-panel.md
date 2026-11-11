@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-08-19-send-after-priority-panel.zh.md)
+
 ## Problem
 
 The goal strip, queue panel, and todo strip each rendered as a standalone full-width card stacked in the composer context dock below the input. During an active session the goal — the fact the user most needs in view — sat a full card-height below the input row, and with a goal present the queue and todo were pushed entirely out of the viewport fold. The tool row between the primary Send button and the card's right edge was dead slack.

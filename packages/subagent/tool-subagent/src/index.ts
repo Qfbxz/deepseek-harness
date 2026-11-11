@@ -1,7 +1,9 @@
 /**
  * Model-facing delegation through one configured `ctx.subagents` provider.
  * Provider lifecycle controls tool registration and context-sensitive schema
- * wording. Foreground calls always dispose the run after collection.
+ * wording. Foreground calls always dispose the run after collection; a
+ * `completed` foreground report below the configured floor first costs bounded
+ * continuation round-trips in the child's own conversation.
  * Background policy is selected by this plugin's configuration: one-shot
  * calls own a plain Task, while continuable calls use
  * `ctx.subagents.startContinuable()`.
@@ -11,10 +13,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { AgentOptions } from '@deepseek-ai/dsh-agent'
+import { foldConsumedWork } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
+import { createUserMessage, errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-session'
-import { assertSubagentMaxDepth, settleRun } from '@deepseek-ai/dsh-subagent'
+import { assertSubagentMaxDepth, finalAssistantOutput, settleRun } from '@deepseek-ai/dsh-subagent'
 import type { SubagentProvider, SubagentResult, SubagentRun } from '@deepseek-ai/dsh-subagent'
 import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -24,6 +28,16 @@ export const inject = ['tools', 'subagents', 'systemPrompt']
 
 /** Prompt order after bounded delegation policy and before child reporting. */
 const SUBAGENT_SECTION_ORDER = 116.5
+
+/**
+ * The model-facing continuation demand delivered to a child whose completed
+ * report sits below `minReportChars`. It asks for one complete replacement
+ * report, because the tool keeps whichever message is longer.
+ */
+const FLOOR_CONTINUATION_PROMPT = 'Your last reply is too short to return as this task\'s final report. '
+  + 'Continue the task and reply with the complete final report in one message, covering at least: '
+  + 'the technical details and implementation specifics; your detailed findings and analysis; '
+  + 'and everything important the delegating agent needs to act on your work.'
 
 /** Config: which registered provider this tool delegates to, plus child defaults. */
 export interface Config {
@@ -76,6 +90,19 @@ export interface Config {
    * budget belongs to the child runtime or its own deployment.
    */
   maxDepth?: number | 'provider-managed'
+  /**
+   * Minimum accepted length of a `completed` foreground child report, counted
+   * in Unicode code points (default `200`). A shorter report costs bounded
+   * continuation round-trips in the child's own conversation, keeping the
+   * longest result. Runs without a published local child (out-of-process
+   * providers) cannot continue and return the report unchanged.
+   */
+  minReportChars?: number
+  /**
+   * Continuation round-trips the report floor may spend per delegation
+   * (default `1`; `0` disables the floor entirely).
+   */
+  floorContinuationAttempts?: number
 }
 
 export const Config: z<Config> = z.object({
@@ -96,6 +123,8 @@ export const Config: z<Config> = z.object({
     deny: z.array(z.string()).default(undefined as unknown as string[]),
   }).default(undefined as unknown as { allow: string[]; deny: string[] }),
   maxDepth: z.union([z.natural().max(Number.MAX_SAFE_INTEGER), z.const('provider-managed' as const)]).default(3),
+  minReportChars: z.natural().max(Number.MAX_SAFE_INTEGER).default(200),
+  floorContinuationAttempts: z.natural().max(Number.MAX_SAFE_INTEGER).default(1),
 })
 
 /** Render text blocks from the canonical JSON block array without trusting arbitrary values. */
@@ -169,25 +198,149 @@ type ForegroundToolResult = {
   readonly output: JsonValue[]
 }
 
+/** Resolved report-floor policy for one tool instance. */
+interface ReportFloor {
+  /** A `completed` foreground report shorter than this costs continuation attempts. */
+  readonly minReportChars: number
+  /** Continuation round-trips one delegation may spend; `0` disables the floor. */
+  readonly attempts: number
+}
+
+/**
+ * Resolve the configured floor for direct `apply()` calls, which bypass
+ * Schemastery's validation, and reject an invalid value at plugin load.
+ * @param config - the raw plugin config.
+ * @returns the floor policy with the shipped defaults for omitted keys.
+ */
+function resolveReportFloor(config: Config): ReportFloor {
+  const floor: ReportFloor = {
+    minReportChars: config.minReportChars ?? 200,
+    attempts: config.floorContinuationAttempts ?? 1,
+  }
+  for (const [field, value] of [
+    ['minReportChars', floor.minReportChars],
+    ['floorContinuationAttempts', floor.attempts],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < 0 || Object.is(value, -0)) {
+      throw new Error(`tool-subagent: \`${field}\` must be a non-negative safe integer, got ${String(value)}`)
+    }
+  }
+  return floor
+}
+
+/** Text length of one child report, counted in Unicode code points. */
+function reportLength(output: ContentBlock[]): number {
+  return [...output
+    .filter((block): block is Extract<ContentBlock, { type: 'text' }> => block.type === 'text')
+    .map(block => block.text)
+    .join('')].length
+}
+
+/**
+ * Spend one continuation round-trip in the child's own conversation: deliver
+ * the floor demand as the child's next turn, wait for that turn, and select
+ * its final output. The channel is the same `Agent.followup` / `whenIdle()` /
+ * session-log read the one-shot driver uses for the initial prompt. A turn
+ * that does not end `completed` yields `undefined`, so a cancelled, failed, or
+ * truncated continuation never replaces a completed report with a partial one.
+ * @param child - the published child agent of a settled completed run.
+ * @param signal - the tool call's cancellation; aborting cancels the continuation turn.
+ * @returns the continuation's final output, or `undefined` when the turn did not complete.
+ */
+async function continueChildReport(child: Agent, signal: AbortSignal): Promise<ContentBlock[] | undefined> {
+  const boundary = child.session.events.length
+  const onAbort = (): void => child.cancel({ kind: 'parent' })
+  signal.addEventListener('abort', onAbort, { once: true })
+  try {
+    child.followup(createUserMessage({
+      content: [{ type: 'text', text: FLOOR_CONTINUATION_PROMPT }],
+      source: { kind: 'user' },
+    }))
+    await child.whenIdle()
+    const own = child.session.events.slice(boundary)
+    // `TurnEndReason` is merge-extensible; only the built-in `completed` proves
+    // the continuation finished cleanly.
+    if (foldConsumedWork(own).end?.data.reason.kind !== 'completed') return undefined
+    return finalAssistantOutput(own)
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+  }
+}
+
+/**
+ * Raise a `completed` child report to the configured floor: spend at most
+ * `attempts` continuation round-trips in the child's own conversation while
+ * the report stays short, keeping the longest result. Runs without a published
+ * local child (out-of-process providers) have no continuation channel and keep
+ * their report unchanged. A continuation that fails to run or does not
+ * complete cleanly keeps the report collected so far — the floor is a quality
+ * lift over an already-`completed` delegation, and its failure must not fail
+ * the delegation.
+ * @param run - the settled foreground run.
+ * @param output - the child's completed report.
+ * @param floor - the resolved floor policy for this tool instance.
+ * @param signal - the tool call's cancellation.
+ * @param logger - the plugin context's logger for degradation diagnostics.
+ * @returns the longest collected report.
+ */
+async function raiseReportFloor(
+  run: SubagentRun,
+  output: ContentBlock[],
+  floor: ReportFloor,
+  signal: AbortSignal,
+  logger: Context['logger'],
+): Promise<ContentBlock[]> {
+  const child = run.localAgent
+  if (floor.attempts <= 0 || child === undefined) return output
+  let report = output
+  let length = reportLength(report)
+  for (let spent = 0; spent < floor.attempts && length < floor.minReportChars; spent += 1) {
+    if (signal.aborted) break
+    let continuation: ContentBlock[] | undefined
+    try {
+      continuation = await continueChildReport(child, signal)
+    } catch (error: unknown) {
+      // The child's own session log records why the extra turn failed; failing
+      // the delegation would trade a collected answer for a quality lift.
+      logger.warn(`subagent report floor continuation failed; keeping the collected report: ${errorChain(error)}`)
+      break
+    }
+    if (continuation === undefined) break
+    const continuationLength = reportLength(continuation)
+    if (continuationLength > length) {
+      report = continuation
+      length = continuationLength
+    }
+  }
+  return report
+}
+
 /**
  * Collect and release one foreground run without letting disposal replace an
- * independent result failure.
+ * independent result failure. A `completed` report below the configured floor
+ * first costs bounded continuation round-trips in the child's own conversation.
  */
-async function settleForegroundRun(run: SubagentRun): Promise<ForegroundToolResult> {
+async function settleForegroundRun(
+  run: SubagentRun,
+  floor: ReportFloor,
+  signal: AbortSignal,
+  logger: Context['logger'],
+): Promise<ForegroundToolResult> {
   const [execution] = await Promise.allSettled([
-    run.result.then((result): ForegroundToolResult => {
+    run.result.then(async (result): Promise<ForegroundToolResult> => {
       const error = stopReasonError(result)
       if (error !== undefined) {
         // The registry converts this throw to isError; partial output is not
         // success, but the preserved partial answer still reaches the parent.
         throw new Error(withDiagnosticAndPartialText(error, result))
       }
+      const output = await raiseReportFloor(run, result.output, floor, signal, logger)
       return {
         kind: 'foreground',
         runId: run.id,
         // Content blocks already cross durable JSON boundaries elsewhere;
         // the registry performs the authoritative lossless snapshot here.
-        output: result.output as unknown as JsonValue[],
+        output: output as unknown as JsonValue[],
       }
     }),
   ])
@@ -281,6 +434,7 @@ export function apply(ctx: Context, config: Config): void {
   if (config.toolFilter !== undefined && config.toolFilter.allow === undefined && config.toolFilter.deny === undefined) {
     throw new Error('tool-subagent: `toolFilter` is configured but names neither `allow` nor `deny` — remove the key or fill the filter')
   }
+  const floor = resolveReportFloor(config)
   const backgroundEnabled = config.enableRunInBackground !== false
   const continuable = (config.backgroundMode ?? 'one-shot') === 'continuable'
   const toolName = config.toolName ?? 'subagent'
@@ -435,7 +589,7 @@ export function apply(ctx: Context, config: Config): void {
           ...request,
           signal: exec.signal,
         })
-        return settleForegroundRun(run)
+        return settleForegroundRun(run, floor, exec.signal, ctx.logger)
       },
     }))
   }
@@ -470,7 +624,7 @@ export function apply(ctx: Context, config: Config): void {
       order: SUBAGENT_SECTION_ORDER,
       text: context => disposeTool === undefined || ctx.tools.get(toolName, context.scope) === undefined
         ? ''
-        : `Use ${toolName} in the background by default. Start independent delegations together in one assistant message and continue useful work while they run. Set \`run_in_background: false\` only when your next action depends on that subagent's result. When a background run settles, the runtime sends you a notice containing its outcome and any final assistant message.`,
+        : `Use ${toolName} in the background by default. Start independent delegations together in one assistant message and continue useful work while they run. Set \`run_in_background: false\` only when your next action depends on that subagent's result. When a background run settles, the runtime sends you a notice containing its outcome and any final assistant message. When not to use: work one direct call finishes stays yours; don't delegate to avoid reading your own context.`,
     })
   }
 }

@@ -13,17 +13,20 @@ import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import ToolResultPruner, {
   codePointLength,
   DEFAULTS,
-  PRUNE_MARKER,
   resolveConfig,
+  TRUNCATION_NOTICE_MAX_CHARS,
+  truncationNotice,
 } from '@deepseek-ai/dsh-compaction-tool-result-pruner'
 import type { ToolResultPruneConfig } from '@deepseek-ai/dsh-compaction-tool-result-pruner'
 
 const MODEL = 'test-model'
 const SMALL: ToolResultPruneConfig = {
-  thresholdChars: 50,
+  thresholdChars: 200,
   headChars: 4,
   tailChars: 3,
 }
+/** The verbatim notice the pruner must emit for a 300-char input at SMALL budgets. */
+const NOTICE_300 = '\n\n[truncated] original 300 chars -> kept head 4 + tail 3; re-read specific ranges to page through the middle\n\n'
 
 function service(config: ToolResultPruneConfig = SMALL): ToolResultPruner {
   const ctx = new Context()
@@ -74,13 +77,19 @@ function appendToolStep(
 
 describe('tool-result pruning configuration', () => {
   it('resolves detached immutable defaults and partial overrides', () => {
-    const raw = { thresholdChars: 100, headChars: 20, tailChars: 10 }
+    const raw = { thresholdChars: 300, headChars: 20, tailChars: 10 }
     const resolved = resolveConfig(raw)
     raw.headChars = 1
-    expect(resolved).toEqual({ thresholdChars: 100, headChars: 20, tailChars: 10 })
+    expect(resolved).toEqual({ thresholdChars: 300, headChars: 20, tailChars: 10 })
     expect(Object.isFrozen(resolved)).toBe(true)
     expect(DEFAULTS).toEqual({ thresholdChars: 8192, headChars: 4096, tailChars: 1024 })
     expect(Object.isFrozen(DEFAULTS)).toBe(true)
+  })
+
+  it('sizes the validation bound at the widest notice the convention can emit', () => {
+    const widest = Number.MAX_SAFE_INTEGER
+    expect(TRUNCATION_NOTICE_MAX_CHARS).toBe(codePointLength(truncationNotice(widest, widest, widest)))
+    expect(TRUNCATION_NOTICE_MAX_CHARS).toBeGreaterThan(codePointLength(truncationNotice(1, 1, 1)))
   })
 
   it('rejects stale keys, invalid scalars, and an output budget above threshold', () => {
@@ -88,12 +97,23 @@ describe('tool-result pruning configuration', () => {
       [{ thresholdChars: 0 }, /thresholdChars .* positive integer/],
       [{ headChars: -1 }, /headChars .* non-negative integer/],
       [{ tailChars: 1.5 }, /tailChars .* non-negative integer/],
-      [{ thresholdChars: 50, headChars: 20, tailChars: 20 }, /headChars \+ marker \+ tailChars/],
+      [{ thresholdChars: 160, headChars: 20, tailChars: 10 }, /headChars \+ truncation notice \+ tailChars/],
+      // Valid before the notice carried sizes: the budget now includes the
+      // notice width, so tight legacy budgets fail loud at load.
+      [{ thresholdChars: 100, headChars: 20, tailChars: 10 }, /headChars \+ truncation notice \+ tailChars/],
       [{ threshold: 10 }, /unknown key "threshold"/],
     ] as Array<[unknown, RegExp]>
     for (const [config, pattern] of bad) {
       expect(() => resolveConfig(config as ToolResultPruneConfig)).toThrow(pattern)
     }
+  })
+
+  it('accepts a budget sized exactly at the widest-notice bound', () => {
+    const bound = TRUNCATION_NOTICE_MAX_CHARS
+    expect(resolveConfig({ thresholdChars: bound + 30, headChars: 20, tailChars: 10 }))
+      .toEqual({ thresholdChars: bound + 30, headChars: 20, tailChars: 10 })
+    expect(() => resolveConfig({ thresholdChars: bound + 29, headChars: 20, tailChars: 10 }))
+      .toThrow(/headChars \+ truncation notice \+ tailChars/)
   })
 })
 
@@ -111,14 +131,21 @@ describe('ToolResultPruner content transform', () => {
 
   it('keeps configured head and tail without splitting surrogate pairs', () => {
     const prune = service()
-    const result = prune.pruneContent([{ type: 'text', text: '😀'.repeat(60) }])
+    const result = prune.pruneContent([{ type: 'text', text: '😀'.repeat(210) }])
     expect(result).toEqual([{
       type: 'text',
-      text: `${'😀'.repeat(4)}${PRUNE_MARKER}${'😀'.repeat(3)}`,
+      text: `${'😀'.repeat(4)}${truncationNotice(210, 4, 3)}${'😀'.repeat(3)}`,
     }])
-    expect(prune.measureContent(result!)).toBeLessThanOrEqual(50)
+    expect(prune.measureContent(result!)).toBeLessThanOrEqual(200)
     expect(result![0]).toMatchObject({ type: 'text' })
     expect((result![0] as { text: string }).text).not.toContain('\uFFFD')
+  })
+
+  it('emits the verbatim notice with original and kept sizes on a success result', () => {
+    const prune = service()
+    const result = prune.pruneContent([{ type: 'text', text: 'x'.repeat(300) }])
+    expect(result).toEqual([{ type: 'text', text: `xxxx${NOTICE_300}xxx` }])
+    expect(prune.measureContent(result!)).toBeLessThanOrEqual(200)
   })
 
   it('preserves non-text blocks and their relative ordering across removed text', () => {
@@ -131,30 +158,31 @@ describe('ToolResultPruner content transform', () => {
       arguments: '{}',
     }
     const result = prune.pruneContent([
-      { type: 'text', text: 'A'.repeat(40) },
+      { type: 'text', text: 'A'.repeat(220) },
       reasoning,
       { type: 'text', text: 'B'.repeat(30) },
       call,
-      { type: 'text', text: 'C'.repeat(30) },
+      { type: 'text', text: 'C'.repeat(60) },
     ])
     expect(result).toEqual([
-      { type: 'text', text: `AAAA${PRUNE_MARKER}` },
+      { type: 'text', text: `AAAA${truncationNotice(310, 4, 3)}` },
       reasoning,
       call,
       { type: 'text', text: 'CCC' },
     ])
-    expect(prune.measureContent(result!)).toBeLessThanOrEqual(50)
+    expect(prune.measureContent(result!)).toBeLessThanOrEqual(200)
   })
 
   it('supports zero-sized head and tail while still shrinking', () => {
     const prune = service({
-      thresholdChars: codePointLength(PRUNE_MARKER),
+      thresholdChars: 200,
       headChars: 0,
       tailChars: 0,
     })
-    const result = prune.pruneContent([{ type: 'text', text: 'x'.repeat(100) }])
-    expect(result).toEqual([{ type: 'text', text: PRUNE_MARKER }])
-    expect(prune.measureContent(result!)).toBe(prune.config.thresholdChars)
+    const result = prune.pruneContent([{ type: 'text', text: 'x'.repeat(300) }])
+    expect(result).toEqual([{ type: 'text', text: truncationNotice(300, 0, 0) }])
+    expect(prune.measureContent(result!)).toBe(codePointLength(truncationNotice(300, 0, 0)))
+    expect(prune.measureContent(result!)).toBeLessThanOrEqual(200)
   })
 })
 
@@ -163,7 +191,7 @@ describe('ToolResultPruner session transaction', () => {
     const session = Session.create(SessionId('preserve'))
     const originalSeq = appendToolStep(session, 1, 'one', [{
       type: 'text',
-      text: 'x'.repeat(100),
+      text: 'x'.repeat(300),
     }], {
       isError: true,
       error: { name: 'ExitError', code: 'EXIT_1' },
@@ -178,8 +206,8 @@ describe('ToolResultPruner session transaction', () => {
     expect(result.pruned).toHaveLength(1)
     expect(result.charsRemoved).toBeGreaterThan(0)
     const entry = result.pruned[0]!
-    expect(entry).toMatchObject({ originalSeq, callId: CallId('one'), charsBefore: 100 })
-    expect(entry.charsAfter).toBeLessThanOrEqual(50)
+    expect(entry).toMatchObject({ originalSeq, callId: CallId('one'), charsBefore: 300 })
+    expect(entry.charsAfter).toBeLessThanOrEqual(200)
 
     const original = session.events[originalSeq]!
     const replacement = session.events[entry.replacementSeq]! as SurfaceEvent
@@ -189,11 +217,15 @@ describe('ToolResultPruner session transaction', () => {
         message: {
           content: [{
             type: 'tool-result',
-            content: [{ type: 'text', text: 'x'.repeat(100) }],
+            content: [{ type: 'text', text: 'x'.repeat(300) }],
           }],
         },
       },
     })
+    // Error results carry the same suffix convention as success results: the
+    // identical notice, with the error envelope fields preserved untouched.
+    expect((replacement.data as { message: { content: { content: ContentBlock[] }[] } }).message.content[0]!.content)
+      .toEqual([{ type: 'text', text: `xxxx${NOTICE_300}xxx` }])
     expect(replacement).toMatchObject({
       type: 'tool/result',
       data: {
@@ -225,11 +257,24 @@ describe('ToolResultPruner session transaction', () => {
     })
   })
 
+  it('emits the same verbatim notice on a non-error result', () => {
+    const session = Session.create(SessionId('success-suffix'))
+    appendToolStep(session, 1, 'ok', [{ type: 'text', text: 'x'.repeat(300) }])
+    session.append('turn/start', {
+      turn: 2,
+    })
+
+    const result = service().pruneSession(session)
+    const replacement = session.events[result.pruned[0]!.replacementSeq]! as SurfaceEvent
+    expect((replacement.data as { message: { content: { content: ContentBlock[] }[] } }).message.content[0]!.content)
+      .toEqual([{ type: 'text', text: `xxxx${NOTICE_300}xxx` }])
+  })
+
   it('prunes multiple results, skips short ones, and converges in one pass', () => {
     const session = Session.create(SessionId('multiple'))
-    appendToolStep(session, 1, 'a', [{ type: 'text', text: 'A'.repeat(100) }])
+    appendToolStep(session, 1, 'a', [{ type: 'text', text: 'A'.repeat(300) }])
     appendToolStep(session, 2, 'b', [{ type: 'text', text: 'short' }])
-    appendToolStep(session, 3, 'c', [{ type: 'text', text: 'C'.repeat(80) }])
+    appendToolStep(session, 3, 'c', [{ type: 'text', text: 'C'.repeat(250) }])
     session.append('turn/start', {
       turn: 4,
     })
@@ -245,7 +290,7 @@ describe('ToolResultPruner session transaction', () => {
 
   it('replays to the identical pruned model messages', () => {
     const session = Session.create(SessionId('replay'))
-    appendToolStep(session, 1, 'a', [{ type: 'text', text: 'A'.repeat(100) }])
+    appendToolStep(session, 1, 'a', [{ type: 'text', text: 'A'.repeat(300) }])
     session.append('turn/start', {
       turn: 2,
     })
@@ -263,7 +308,7 @@ describe('ToolResultPruner session transaction', () => {
     await ctx.plugin(TokenMeter)
     const prune = new ToolResultPruner(ctx, SMALL)
     const session = ctx.sessions.create(SessionId('invariants'))
-    appendToolStep(session, 1, 'a', [{ type: 'text', text: 'A'.repeat(100) }])
+    appendToolStep(session, 1, 'a', [{ type: 'text', text: 'A'.repeat(300) }])
     expect(() => prune.pruneSession(session)).toThrow(/outside any open turn/)
     session.append('turn/start', {
       turn: 2,

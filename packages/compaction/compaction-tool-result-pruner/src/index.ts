@@ -13,7 +13,7 @@ import type { Session, SessionEvent, ToolResultMessage } from '@deepseek-ai/dsh-
 import type {} from '@deepseek-ai/dsh-compaction'
 // Type-only: the `ctx.tokenMeter` Context merge for the declared injection.
 import type {} from '@deepseek-ai/dsh-token-meter'
-import { codePointLength, DEFAULTS, PRUNE_MARKER, resolveConfig } from './config.ts'
+import { codePointLength, DEFAULTS, resolveConfig, truncationNotice } from './config.ts'
 import type {
   PrunedEntry,
   PruneResult,
@@ -21,7 +21,7 @@ import type {
   ToolResultPruneConfig,
 } from './types.ts'
 
-export { codePointLength, DEFAULTS, PRUNE_MARKER, resolveConfig } from './config.ts'
+export { codePointLength, DEFAULTS, resolveConfig, TRUNCATION_NOTICE_MAX_CHARS, truncationNotice } from './config.ts'
 export type {
   PrunedEntry,
   PruneResult,
@@ -74,9 +74,11 @@ export class ToolResultPruner extends Service {
   }
 
   /**
-   * Replace an over-budget text middle while retaining rich-block order.
-   * Text slicing is by Unicode code point, not UTF-16 code unit, so a retained
-   * boundary cannot split a surrogate pair. Grapheme clusters may still split.
+   * Replace an over-budget text middle with the fixed truncation notice while
+   * retaining rich-block order. The notice states the original size, the kept
+   * head and tail sizes, and the paging next step. Text slicing is by Unicode
+   * code point, not UTF-16 code unit, so a retained boundary cannot split a
+   * surrogate pair. Grapheme clusters may still split.
    * @param blocks - original tool-result content.
    * @returns pruned content, or `null` when the text is within budget.
    */
@@ -86,9 +88,10 @@ export class ToolResultPruner extends Service {
 
     const removedStart = this.config.headChars
     const removedEnd = totalChars - this.config.tailChars
+    const notice = truncationNotice(totalChars, this.config.headChars, this.config.tailChars)
     const pruned: ContentBlock[] = []
     let consumed = 0
-    let markerInserted = false
+    let noticeInserted = false
 
     for (const block of blocks) {
       if (block.type !== 'text') {
@@ -102,8 +105,8 @@ export class ToolResultPruner extends Service {
       const headEnd = Math.min(points.length, Math.max(0, removedStart - blockStart))
       const tailStart = Math.min(points.length, Math.max(0, removedEnd - blockStart))
       const intersectsRemoved = blockStart < removedEnd && blockEnd > removedStart
-      const marker = intersectsRemoved && !markerInserted ? PRUNE_MARKER : ''
-      if (marker.length > 0) markerInserted = true
+      const marker = intersectsRemoved && !noticeInserted ? notice : ''
+      if (marker.length > 0) noticeInserted = true
       const text = points.slice(0, headEnd).join('')
         + marker
         + points.slice(tailStart).join('')
@@ -112,7 +115,7 @@ export class ToolResultPruner extends Service {
     }
 
     /* v8 ignore next -- totalChars > threshold and valid budgets guarantee a removed text span. */
-    if (!markerInserted) throw new Error('tool-result prune: failed to locate the removed text span')
+    if (!noticeInserted) throw new Error('tool-result prune: failed to locate the removed text span')
     const charsAfter = this.measureContent(pruned)
     /* v8 ignore next -- config validation fixes the emitted head + marker + tail budget. */
     if (charsAfter > this.config.thresholdChars || charsAfter >= totalChars) {

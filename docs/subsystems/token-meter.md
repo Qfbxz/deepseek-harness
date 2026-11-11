@@ -26,7 +26,7 @@ interface TokenMeasurement {
 }
 ```
 
-`baseline.kind === 'usage'` means the latest successful provider call has the same canonical request envelope and its total is no lower than that call's full heuristic anchor. `estimated` means no reusable conservative usage anchor exists, so the service priced the complete envelope and surface with its fixed heuristic. A later successful request replaces the earlier anchor; signed `surfaceDeltaTokens` preserves growth and shrinkage relative to a matching anchor. `totalTokens` remains request-and-response pressure, while `surfaceTokens` is the surface-only heuristic total and equals the sum of the node prices.
+`baseline.kind === 'usage'` means the latest successful provider call has the same canonical request envelope and its total is no lower than that call's full heuristic anchor. `reported` means the caller supplied a provider-counted total for the exact measured envelope through the routing adapter's counting capability, so the anchor is the reported number with no signed surface delta. `estimated` means no reusable conservative usage anchor or reported count exists, so the service priced the complete envelope and surface with its fixed heuristic. A later successful request replaces the earlier anchor; signed `surfaceDeltaTokens` preserves growth and shrinkage relative to a matching anchor. `totalTokens` remains request-and-response pressure, while `surfaceTokens` is the surface-only heuristic total and equals the sum of the node prices.
 
 ## `TokenSurfaceNode`
 
@@ -60,10 +60,13 @@ Replay owner for one service-wide estimator and isolated per-session folds.
 /**
  * Measure current request pressure and surface through the durable tail.
  *
- * Provider usage is reused only when the latest successful call's canonical
- * request envelope matches `requestHeader` and its total is no lower than
- * that call's full heuristic anchor; otherwise the complete envelope and
- * surface are heuristically repriced.
+ * A caller-supplied `reportedTokens` count covers the exact measured
+ * envelope — the provider counted the current system, tools, and surface at
+ * this boundary — so it anchors the measurement directly with no signed
+ * surface delta. Provider usage is reused only when the latest successful
+ * call's canonical request envelope matches `requestHeader` and its total is
+ * no lower than that call's full heuristic anchor; otherwise the complete
+ * envelope and surface are heuristically repriced.
  *
  * `requestHeader` affects request pressure only; surface fields always
  * describe the current session surface. Every call clones those positional
@@ -71,9 +74,11 @@ Replay owner for one service-wide estimator and isolated per-session folds.
  *
  * @param session - session to replay through its current durable tail.
  * @param requestHeader - optional effective request envelope replacing the latest logged header.
+ * @param reportedTokens - optional provider-reported count for the measured envelope, taken through
+ *   the routing adapter's counting capability; it overrides the usage and estimated anchors.
  * @returns a detached deeply immutable pressure and surface measurement.
  */
-measure(session: Session, requestHeader?: EpochHeader): TokenMeasurement
+measure(session: Session, requestHeader?: EpochHeader, reportedTokens?: number): TokenMeasurement
 
 /**
  * Heuristically price one model-visible message (instance face of the pure

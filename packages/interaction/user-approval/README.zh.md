@@ -10,6 +10,8 @@
 
 `ApprovalPolicy` 为 `'ask'` 或 `'never'`。实际值取最后一条 `approval/policy` 事件，并回退到配置；`setApprovalPolicy()` 是写入路径。`'never'` 会在交互式分发之前拒绝请求。两种策略都会将各自完整的当前含义贡献给缓存安全的运行时上下文快照。
 
+在 `'ask'` 下，两个会话级削减器会在任何应答者运行之前减少重复打断。审批缓存按归一化请求形态为每次请求建键——精确工具名加上规范化参数：字符串去除首尾空白并折叠连续空白，引号、大小写与数组顺序保持敏感，对象成员顺序不敏感，`undefined` 成员按 JSON 语义丢弃——同一形态在会话内获批一次后即以 `allowed-once` 解析（`cacheMaxEntries` 限制容量，`0` 关闭）。`persistPrefix(agent, toolName, tokens)` 存储更窄的授权：该工具后续 `command` 参数恰好以 `tokens` 开头的请求由规则直接应答。持久化请求在下列情况被无条件拒绝：token 含 heredoc 操作符；任何位置含裸的禁止命令（包括 `timeout 10 rm` 一类带值前置形态）；剥离直通包装命令（`sudo`、带赋值的 `env`、`nohup`、`command`、`time`）后未解析出具体命令；或解析出的命令是多字符禁止名的扩展（`python3.11`、`rmdir`）。拒绝携带可执行理由（`forbiddenPrefixReason`），禁止清单是固定安全不变量，不是配置字段。规则只存于会话内存，不跨重启。省略 `arguments` 的请求（例如沙箱提权通道）在两个削减器之外，`'never'` 仍在它们之前确定性地拒绝。
+
 工具流水线通过此 seam 路由 `ask` 决定，并在该 seam 缺失时以拒绝方式关闭；沙箱 bash 工具也会将它用于升权重试。ACP 自动化桥接层根据客户端的机器策略，回答其自有 agent 的调用。审计事件仍只写入日志，因此模型只会看到发起请求的消费方所返回的结果。详见[审批 seam Agent Note](../../../.agents/notes/implemented/feature/2026-07-06-approval-seam.md)和[沙箱 Agent Note](../../../.agents/notes/implemented/feature/2026-07-06-sandbox.md)。
 
 ## 模型体验
@@ -57,6 +59,8 @@ Approval prompts are disabled in this session: actions that require approval are
 ## 已知限制与暂缓事项
 
 - **请求只在尚未结束的轮次内有效**：在空闲时或轮次之间发起调用，会在审计前抛出异常；持久化的轮次外审批工作流仍属暂缓事项。
-- **仅存在一次性授权**：结果词汇包含 `allowed-once`，但不含 `allow-always`、已记住的规则、撤销或授权存储；会话策略只有 `ask`／`never`。
-- **请求不携带工具参数**：应答者会看到工具名称、原因和可选调用 id；ACP 机器通道要求调用 id，并会委托不含 id 的请求。
+- **结果词汇保持一次性**：没有 `allow-always` 结果、撤销或授权存储；会话缓存与按工具的前缀规则是常设授权层，两者都以单个会话的内存为界，重启即失效。跨重启持久化是独立的未来决策。
+- **请求的 `arguments` 只服务缓存与前缀匹配**：应答者仍通过 `callId` 渲染已流式输出的工具调用；ACP 机器通道要求调用 id，并会委托不含 id 的请求。
+- **没有内置应答者提供持久化前缀选项**：`persistPrefix` 是公开的 Consumer 扩展点；目前没有任何内置 UI 呈现"此后总是允许该前缀"选项。
+- **沙箱提权请求绕过两个削减器**：结构化的提权通道不携带参数，因此每次提权都会重新提示。
 - **没有内置应答者**：无头或组合不完整的部署会返回 `unavailable` 并以拒绝方式关闭；服务自身绝不会提示人类。

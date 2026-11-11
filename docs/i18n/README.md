@@ -52,6 +52,7 @@ Generated English references and graphs participate in pairing when a reviewed C
 - `docs/i18n/terminology.md` and [style-samples.md](style-samples.md) — both are bilingual by construction.
 - [translation-prompt.md](translation-prompt.md) — the automated pipeline's prompt template; its body is machine-consumed verbatim, so a paired translation would change pipeline behavior.
 - `.agents/notes/archived/` — frozen historical triplets. [`verify-archived-agent-notes`](../../scripts/verify-archived-agent-notes.ts) validates their completeness and content seals; translation maintenance must never rewrite them.
+- `personal-plugins/*/README.md` (eight listed files) and [runtime-patches/README.md](../../runtime-patches/README.md) — user-private working-tree documentation (personal plugin notes and patch-scratch READMEs) outside the release documentation layer. The manifest names exact files rather than the directory so a personal-plugin README that carries a complete pair — `dsh-agent-presets` and `dsh-git-graph` do — stays in scope.
 
 **Universal requirement**: every current or future document in scope must merge as a complete bilingual pair. [scripts/translation-pairing.manifest.json](../../scripts/translation-pairing.manifest.json) contains only explicit exclusions; there is no per-file rollout list, date cutoff, or README-specific policy class.
 

@@ -12,6 +12,14 @@ A model calling `tools.x("name")` with a positional primitive reached the host's
 
 `makeNamespaces` rejects positional primitives before posting, with a message naming the received type, a bounded preview, and the corrective form `tools.${name}({ … })`. Functions, dates, arrays, and objects keep the existing path so lossless-JSON semantics and their tests are unchanged. On the lossless rejection, `describeLossyProperties` lists up to eight top-level properties whose values a JSON snapshot cannot carry (`undefined`, functions, throwing getters), with a `+N more` suffix beyond eight; it stays empty when nothing diagnostic can be said.
 
+## Alternatives considered
+
+**Wrap a single positional primitive into the object form and proceed.** Rejected: guessing the model's intent repeats the failure this note records — opaque rejections left the model guessing; the message teaches the corrective form `tools.${name}({ … })` instead.
+
+**Reject every non-lossless-JSON argument shape uniformly.** Rejected: functions, dates, arrays, and objects keep the existing path so lossless-JSON semantics and their tests are unchanged; only the positional-primitive case is new.
+
+**Leave the lossless-JSON rejection generic.** Rejected: `{ id: undefined }` told the model only that arguments were not lossless JSON, so it repeated the same call; `describeLossyProperties` names up to eight offending top-level properties, staying empty when nothing diagnostic can be said.
+
 ## Consequences
 
 - Correctable failures now carry their fix in the message; observed in the wild as the positional-argument pitfall recorded for `run_code` users.

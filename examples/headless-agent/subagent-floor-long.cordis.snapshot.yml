@@ -1,0 +1,16 @@
+# WP2 subagent report floor, LONG-report arm: the fork child's completed report
+# already clears the default `minReportChars: 200`, so the tool returns it with
+# no continuation round-trip. Includes cordis.yml directly (a config patch cannot
+# target an entry behind a nested include) and disables the key-requiring DeepSeek
+# adapter in favor of the replay catch-all; the fork row keeps its shipped config.
+- id: base
+  name: '@deepseek-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+    patches:
+      - id: llm-deepseek
+        name: '@deepseek-ai/dsh-llm-deepseek'
+        disabled: true
+      - insert:
+          - id: llm-replay
+            name: '@deepseek-ai/dsh-llm-replay'

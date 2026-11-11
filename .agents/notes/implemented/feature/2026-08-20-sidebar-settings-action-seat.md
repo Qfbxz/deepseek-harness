@@ -2,6 +2,8 @@
 
 Status: implemented
 
+English | [中文](2026-08-20-sidebar-settings-action-seat.zh.md)
+
 ## Problem
 
 Every sidebar footer action stacked above the Settings button, one full-width row per button in practice: occupants ship aggressive geometry (inline `width:100%`, `flex:1` layers, and one inline-styles the shell's `footerActions` container to `column`), so a 256px column spent four rows on five buttons. Entries that semantically belong beside Settings — auto-memory's 「记忆」 — had no seat: `sidebar.settings` is `kind: 'single'` (ui-settings owns it), so a second registrant cannot join it.
