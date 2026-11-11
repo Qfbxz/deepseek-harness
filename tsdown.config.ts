@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { defineConfig } from 'tsdown'
 import { typertPlugin } from './packages/typert/generator/lib/types/tsdown-plugin.js'
 
@@ -25,7 +26,18 @@ export default defineConfig(({ env }) => {
       include: ['vendor/*', 'packages/*/*', 'apps/cli'],
       exclude: ['**/node_modules/**', 'packages/community/**'],
     },
-    entry: client ? '' : ['lib/types/{index,invariant,startup}.js'],
+    // The root dsh-root member bundles its lib/types artifacts only when they
+    // exist on disk. No repository source or generator produces them, and
+    // nothing in this repository imports them; their sole historical consumer
+    // was the upstream-only SSH-helper exe build. A clean checkout therefore
+    // carries none, and the member is skipped instead of failing entry
+    // resolution over files that would be stale artifacts anyway.
+    entry: client
+      ? ''
+      : ['index', 'invariant', 'startup']
+          .map((name) => `lib/types/${name}.js`)
+          .filter((file) => existsSync(file))
+          .join(',') || '',
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',
