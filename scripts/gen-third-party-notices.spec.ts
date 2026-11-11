@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
@@ -151,6 +151,9 @@ describe('parseVendoredRows', () => {
     const parsed = new Set(parseVendoredRows(readFileSync(resolve(root, 'vendor/README.md'), 'utf8')).map(row => row.npmName))
     const onDisk = readdirSync(resolve(root, 'vendor'), { withFileTypes: true })
       .filter(entry => entry.isDirectory())
+      // Bare scaffolds without a manifest are not vendored packages; the
+      // generator skips them the same way.
+      .filter(entry => existsSync(resolve(root, 'vendor', entry.name, 'package.json')))
       .map(entry => (JSON.parse(readFileSync(resolve(root, 'vendor', entry.name, 'package.json'), 'utf8')) as Manifest).name)
 
     expect([...onDisk].sort()).toEqual([...parsed].sort())

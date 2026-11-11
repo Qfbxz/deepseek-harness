@@ -421,6 +421,9 @@ function collectVendored(): VendoredRow[] {
   const onDisk = new Map<string, string>()
   for (const entry of readdirSync(resolve(root, 'vendor'), { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
+    // A bare scaffold directory (no package.json) is not a vendored package;
+    // stray tool-created skeletons must not fail the notices generation.
+    if (!existsSync(resolve(root, `vendor/${entry.name}/package.json`))) continue
     const manifest = readManifest(`vendor/${entry.name}/package.json`)
     if (manifest.name !== undefined) onDisk.set(manifest.name, entry.name)
   }
